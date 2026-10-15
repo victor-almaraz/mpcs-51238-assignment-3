@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "../design-systems/industrial/tokens.css";
+
+/*
+ * Semantic theme names. Components use only these utilities
+ * (bg-surface, text-muted, border-border-strong, rounded-ds, outline-focus, ...),
+ * never raw palette classes such as neutral-*.
+ */
+@theme inline {
+  --color-bg: var(--ds-bg);
+  --color-surface: var(--ds-surface);
+  --color-surface-2: var(--ds-surface-2);
+  --color-hover: var(--ds-hover);
+  --color-active: var(--ds-active);
+  --color-fg: var(--ds-fg);
+  --color-muted: var(--ds-muted);
+  --color-border: var(--ds-border);
+  --color-border-strong: var(--ds-border-strong);
+  --color-accent: var(--ds-accent);
+  --color-accent-fg: var(--ds-accent-fg);
+  --color-accent-hover: var(--ds-accent-hover);
+  --color-selected: var(--ds-selected);
+  --color-selected-fg: var(--ds-selected-fg);
+  --color-focus: var(--ds-focus);
+  --color-danger: var(--ds-danger);
+  --color-danger-bg: var(--ds-danger-bg);
+  --color-success: var(--ds-success);
+  --color-success-bg: var(--ds-success-bg);
+  --color-warning: var(--ds-warning);
+  --color-warning-bg: var(--ds-warning-bg);
+
+  /* Level gradients (meters, harmonic bars, progress): low → mid → high. */
+  --color-level-low: var(--ds-level-low);
+  --color-level-mid: var(--ds-level-mid);
+  --color-level-high: var(--ds-level-high);
+
+  /* Instrument windows, indicator lamps, the emergency-stop collar. */
+  --color-window: var(--ds-window);
+  --color-lamp: var(--ds-lamp);
+  --color-lamp-off: var(--ds-lamp-off);
+  --color-collar: var(--ds-collar);
+
+  --radius-ds: var(--ds-radius);
+
+  --font-sans: var(--ds-font-sans);
+  --font-display: var(--ds-font-display);
+  --font-mono: var(--ds-font-mono);
+}
+
+@layer base {
+  html {
+    height: 100%;
+  }
+
+  body {
+    min-height: 100%;
+  }
+}
+
+/* prefers-reduced-motion disables smooth scrolling and animated transitions (accessibility.md). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

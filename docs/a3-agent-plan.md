@@ -12,10 +12,13 @@
 |---|---|
 | Language | JavaScript only. No `.ts`/`.tsx` files, no `tsconfig.json`, no `typescript` package, no `// @ts-check`. `jsconfig.json` defines the `@/` path alias. |
 | Runtime packages | `next`, `react`, `react-dom`, `tailwindcss` and its PostCSS plugin |
-| Dev packages | `eslint`, `eslint-config-next`, `globals`, `@playwright/test`, `@axe-core/playwright`. Any other package needs user approval. |
-| Package manager | `pnpm` only; `pnpm-lock.yaml` is committed. |
+| Dev packages | `eslint` (9.x; the React and accessibility plugins in `eslint-config-next` do not support ESLint 10), `eslint-config-next`, `globals`, `@playwright/test`, `@axe-core/playwright`. Any other package needs user approval. |
+| Package manager | `pnpm` only; `pnpm-lock.yaml` is committed. `pnpm-workspace.yaml` holds pnpm settings only. |
+| Local tooling | Node (`.tools/node`), the pnpm store and cache, and the Playwright browsers live under `.tools/`, which git ignores. Commands run with `.tools/node/bin` first on `PATH`. Nothing is installed or cached outside the project. |
+| Playwright | `@playwright/test` and `playwright-core` (a pnpm override) stay at 1.57.0, the last release with Chromium, Firefox and WebKit builds for macOS 13. Its WebKit build for macOS 13 is frozen and approximates Safari. |
+| Hosting | Static export (`output: 'export'`) to `out/`. `vercel.json` defines the rewrites and headers; `scripts/serve-out.mjs` applies the same file locally, and the development server reads it through `next.config.mjs`. |
 | Storage | `localStorage` through `src/lib/storage/` for projects, working state, presets and settings. IndexedDB for audio sources, only through `src/lib/storage/audio-store.js`. No OPFS, service worker, cookies or sessionStorage. |
-| Network | No external requests, remote fonts, analytics or CDNs. `next/font/local` only. |
+| Network | No external requests, remote fonts, analytics or CDNs. `next/font/local` only. The `dev` and `build` scripts set `NEXT_TELEMETRY_DISABLED=1`. |
 | Headers | No COOP or COEP. No `SharedArrayBuffer`. |
 | Audio | All DSP in `src/dsp`. No native AudioNodes except the two worklet nodes and `destination`. |
 | Errors | No empty `catch`. Every caught error is shown to the user or rethrown with an error code. |
@@ -28,9 +31,11 @@ Check commands, defined in Phase 3:
 | Command | Purpose |
 |---|---|
 | `pnpm lint` | ESLint, including worklet globals for `src/worklet/**` |
-| `pnpm test:dsp` | `node --test tests/dsp/` |
-| `pnpm test:e2e` | Playwright on chromium, firefox, webkit |
-| `pnpm build` | `copy:worklets` + `next build` |
+| `pnpm test:dsp` | `node --test "tests/dsp/**/*.test.js"` |
+| `pnpm test:e2e` | Playwright on chromium, firefox, webkit, against `out/` served by `scripts/serve-out.mjs`, or against `BASE_URL` when set |
+| `pnpm e2e:install` | Installs the three Playwright browsers into `.tools/ms-playwright` |
+| `pnpm build` | `copy:worklets` + `next build` (static export to `out/`) |
+| `pnpm start` | Serves `out/` on port 3100 with the `vercel.json` rewrites and headers |
 
 ## Stop-and-ask conditions
 The agent stops and asks the user when:
@@ -84,20 +89,22 @@ Do not start the next task.
 - **Goal:** project skeleton, scripts and accessible primitives.
 - **Context:** this plan (Global rules), `a3-audio-implementation.md` (File layout, Worklet build and loading), `accessibility.md`.
 - **Files:**
-  - Config: `package.json`, `jsconfig.json`, `next.config.mjs`, `eslint.config.mjs`, `playwright.config.js`, `.gitignore`, `scripts/copy-worklets.mjs`.
-  - App: `src/app/layout.jsx`, `src/app/globals.css`.
+  - Config: `package.json`, `pnpm-workspace.yaml`, `jsconfig.json`, `next.config.mjs`, `postcss.config.mjs`, `vercel.json`, `eslint.config.mjs`, `playwright.config.js`, `.gitignore`, `scripts/copy-worklets.mjs`, `scripts/serve-out.mjs`.
+  - Design system: `src/design-systems/industrial/{tokens.css,classes.js,fonts.js}` and `fonts/` (League Mono, SIL OFL 1.1), ported from assignment 2.
+  - App: `src/app/layout.jsx`, `src/app/globals.css`, `src/app/page.jsx` (placeholder).
   - Components: `src/components/ui/{Button,IconButton,Field,Select,RadioGroup,Dialog,Slider,Toggle,StatusRegion}.jsx`.
   - Placeholders: `src/dsp/core/constants.js`, `src/worklet/main.js` (registers both processors as silent pass-throughs), `tests/dsp/smoke.test.js`, `tests/e2e/smoke.spec.js`.
 - **Tasks:**
-  1. Scaffold Next.js with `pnpm create next-app@latest --js --tailwind --eslint --app --src-dir --import-alias "@/*"`. Remove sample content.
-  2. Write `scripts/copy-worklets.mjs` (copy, and `--watch`) and the scripts table. Add `Cache-Control: no-cache` for `/worklets/:path*`. Add `public/worklets/` to `.gitignore`.
-  3. Configure ESLint: `globals.browser` for app code; worklet globals for `src/worklet/**`; `globals.node` for `scripts/**` and `tests/**`.
-  4. Build the UI primitives:
+  1. Write the configuration that `create-next-app --js --tailwind --eslint --app --src-dir --import-alias "@/*"` produces (JavaScript, Tailwind, ESLint, App Router, `src/`, `@/*` alias), with no sample content.
+  2. Write `scripts/copy-worklets.mjs` (copy, and `--watch`) and the scripts table. Add `Cache-Control: no-cache` for `/worklets/:path*` in `vercel.json`. Add `public/worklets/` to `.gitignore`.
+  3. Configure ESLint: `globals.browser` for app code; worklet globals for `src/worklet/**`; no host globals for `src/dsp/**`; `globals.node` for `scripts/**` and `tests/**`. `no-undef` is on, so each block's globals define its environment.
+  4. Port the industrial design system from assignment 2 (`src/design-systems/industrial/`): tokens, class strings and the League Mono fonts. The root layout sets `data-ds="industrial"` and the font class.
+  5. Build the UI primitives on the industrial classes:
      - `IconButton` requires a `label` prop and throws during development when it is missing.
      - `Slider` is a native `<input type="range">` with a visible label and `aria-valuetext`.
      - `Dialog` uses `<dialog>`, moves focus inside on open, closes on `Escape`, returns focus on close.
      - `StatusRegion` renders `role="status"`.
-  5. Configure Playwright with chromium, firefox and webkit; add an axe check on `/`.
+  6. Configure Playwright with chromium, firefox and webkit against the static export; add an axe check on `/`.
 - **Acceptance:** `pnpm lint && pnpm test:dsp && pnpm build` pass; `pnpm test:e2e` passes in three browsers; `public/worklets/worklet/main.js` exists after build; the repository contains no `.ts` files.
 - **Commit:** `chore: scaffold app, tooling, shared components`
 - **Prohibited:** TypeScript; UI or icon libraries; `new URL(..., import.meta.url)` for workers or worklets; committing `public/worklets/`.
@@ -105,19 +112,20 @@ Do not start the next task.
 ### Phase 4 — Routes and navigation
 - **Goal:** every route renders with landmarks and shared navigation.
 - **Context:** `assignment-3-scope.md` (Routes), `accessibility.md`.
-- **Files:** `src/app/{page,new/page,projects/page,projects/[id]/page,settings/page,not-found}.jsx`, `src/components/nav/{SiteHeader,SkipLink}.jsx`, `src/components/studio/StudioLoader.jsx`.
+- **Files:** `src/app/{page,new/page,projects/page,projects/[id]/page,settings/page,not-found}.jsx`, `src/components/nav/{SiteHeader,SkipLink}.jsx`, `src/components/studio/{StudioLoader,Studio}.jsx`, `tests/e2e/routes.spec.js`.
 - **Tasks:**
   1. Create route files, each with `<main>`, one `<h1>` and a skip link.
   2. Build the header with `aria-current="page"` on the active link.
   3. `StudioLoader.jsx` (`'use client'`) loads the studio with `dynamic(() => import('./Studio'), { ssr: false })`; `/projects/[id]` renders `StudioLoader` with a placeholder studio.
-- **Acceptance:** Playwright visits each route; one `h1` per page; no axe violations; Tab reaches the navigation.
+  4. `/projects/[id]` prerenders one shell: `generateStaticParams()` returns `{ id: '_shell' }` and `dynamicParams` is `false`. The `vercel.json` rewrite serves the shell for every project ID, and `StudioLoader` reads the ID from `window.location.pathname` after mount. An unknown ID shows "Project not found".
+- **Acceptance:** Playwright visits each route; one `h1` per page; no axe violations; Tab reaches the navigation; `/projects/<any id>` serves the shell.
 - **Commit:** `feat: add routes and navigation`
 - **Prohibited:** `localStorage` in Server Components or at module top level; `ssr: false` in a Server Component.
 
 ### Phase 5 — Home and new project form
 - **Goal:** the Home screen and a validated form that creates a project.
 - **Context:** `assignment-3-scope.md` (Home, Examples, New project form), `project-model.md`.
-- **Files:** `src/app/page.jsx`, `src/components/home/{RecentList,CreateCard,LoadCard,ExampleCards}.jsx`, `src/app/new/NewProjectForm.jsx`, `src/lib/project/{model,validate,examples}.js`, `tests/dsp/validate.test.js`, `tests/e2e/home.spec.js`, `tests/e2e/new-project.spec.js`.
+- **Files:** `src/app/page.jsx`, `src/components/home/{RecentList,CreateCard,LoadCard,ExampleCards}.jsx`, `src/components/ui/Card.jsx`, `src/app/new/NewProjectForm.jsx`, `src/lib/project/{model,validate,examples}.js`, `tests/dsp/validate.test.js`, `tests/e2e/home.spec.js`, `tests/e2e/new-project.spec.js`.
 - **Tasks:**
   1. Pure validators that return the exact scope error strings.
   2. The form:
@@ -150,15 +158,17 @@ Do not start the next task.
 - **Prohibited:** audio bytes or base64 in localStorage; `localStorage` outside `src/lib/storage`; silenced quota errors.
 
 ### Phase 7 — Audio engine, safety, instruments
-- **Goal:** the audible engine: transport, five instruments and the safety stage.
+- **Goal:** the audible engine: transport, six instruments and the safety stage.
 - **Context:** `a3-audio-implementation.md` (Architecture through Instruments, Mixer and metering, Safety stage, Performance pitfalls), `audio-safety.md`, `transport-and-timing.md`, `instruments.md`.
-- **Files:** `src/dsp/**`, `src/worklet/main.js`, `src/lib/audio/{engine-client,compile-model}.js`, `src/components/transport/*.jsx`, `src/components/VolumeNotice.jsx`, `tests/dsp/*.test.js`.
+- **Files:** `src/dsp/**`, `src/worklet/main.js`, `src/lib/audio/{engine-client,compile-model}.js`, `src/components/transport/*.jsx`, `src/components/VolumeNotice.jsx`, `src/components/studio/Studio.jsx`, `src/components/instruments/*.jsx`, `src/components/mixer/*.jsx`, `src/components/ui/Meter.jsx`, `tests/dsp/*.test.js`, `tests/e2e/audio.spec.js`.
+- **Reuse:** parameter definitions and scaling from assignment 2 (`src/audio/synths/param-defs.js`, `scaling.js`) and its instrument panels (`src/components/synth/widgets/*`). Assignment 2's DSP uses native nodes and is rewritten as worklet kernels.
+- **Examples:** example effect slots load into the model; until Phase 10 the engine passes their signal through unprocessed.
 - **Sub-steps** (one commit each):
   1. `core`: constants, `ParamDef` and `clampParam`, smoother, `mulberry32`, tables, ring. Tests: clamping; fixed PRNG sequence for seed 1.
   2. `timing`: tempo and meter maps. Test: `tickAt(frameAt(t)) === t` for 10 000 random integer ticks.
   3. `safety`: guard, DC blocker, duck, fade, limiter, `SafetyProcessor`. Tests: no sample above 0.8913 on random input with peaks of 10; NaN input gives 250 ms of silence, then a fade-in.
   4. `engine`, `EngineProcessor`, `engine-client`: silent engine, transport, metronome, volume notice on the first sound-producing action, context creation on confirm, `pos` reporting, rAF playhead, and a worklet-import smoke test in three browsers.
-  5. One instrument per task: Subtractive, FM, Additive, Pluck, Granular, Drum machine. Tests: pitch accuracy, voice caps, Nyquist rules; for the drum machine, the drum tests in `a3-audio-implementation.md` (Testing), the voice selector with five per-voice controls and three kit controls, and piano-roll drum rows (`PR-04`). The sampler is built in Phase 9 (task 7).
+  5. One instrument per task: Subtractive, FM, Additive, Pluck, Granular, Drum machine. Tests: pitch accuracy, voice caps, Nyquist rules; for the drum machine, the drum tests in `a3-audio-implementation.md` (Testing), and the voice selector with five per-voice controls and three kit controls. Piano-roll drum rows (`PR-04`) are built in Phase 8. The sampler is built in Phase 9 (task 7).
   6. Mixer (track gain, pan, mute, solo; master volume and pan), meters, Panic and `Escape`. Tests: centre pan gives equal channels; full left gives silence on the right for mono and stereo sources; master pan applies balance.
 - **Acceptance:**
   - `pnpm test:dsp` passes.
@@ -187,6 +197,7 @@ Do not start the next task.
   3. MIDI clip looping, compiled per the implementation guide.
   4. Computer-keyboard input, ignored while focus is in a text field.
   5. Web MIDI: feature-detect `navigator.requestMIDIAccess`; request on a button click; status text "Web MIDI is not supported in this browser." (Safari) and "Firefox asks to install a site permission add-on. Connect the MIDI device before starting Firefox."; 200 note-ons/s flood limit.
+  6. Drum rows (`PR-04`) on drum machine tracks, labelled with note number, voice and GM name.
 - **Acceptance:** e2e creates, moves and deletes notes by keyboard only; the DOM mirror's note count equals the model; unit tests cover the flood limiter and loop expansion.
 - **Commit:** `feat: add piano roll, MIDI clips and live input`
 - **Prohibited:** fractional ticks; canvas handlers that bypass the command layer; requesting MIDI on page load.
@@ -281,7 +292,7 @@ Do not start the next task.
 - **Context:** `assignment-3-scope.md` (Deliverables, Main flow).
 - **Files:** `README.md`, `docs/first-run-check.md`.
 - **Tasks:**
-  1. Deploy to Vercel with build command `pnpm build`. Confirm `/worklets/worklet/main.js` returns 200 with `Cache-Control: no-cache`.
+  1. Deploy to Vercel with build command `pnpm build`; Vercel serves `out/` with the rewrites and headers in `vercel.json`. Confirm `/worklets/worklet/main.js` returns 200 with `Cache-Control: no-cache`.
   2. First-run check on the production URL in Chrome, Firefox and Safari with empty profiles: no sound on load, Home, an example played after the volume notice, a new project, a saved preset, then a simulated return visit with working state restored, plus export and a `.wrack` round trip. Ask the agent for usability feedback as a brand-new and as a returning user.
   3. README: flows, onboarding research summary, first-run feedback and changes, browser support, limits, scripts.
 - **Acceptance:** `pnpm test:e2e` passes against the deployed URL (`BASE_URL`); DevTools shows zero third-party requests.

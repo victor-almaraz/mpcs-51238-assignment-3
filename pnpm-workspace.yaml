@@ -1,0 +1,26 @@
+# pnpm settings only; this repository is a single package.
+# Every pnpm store, cache and state file stays inside the project.
+storeDir: .tools/pnpm-store
+cacheDir: .tools/pnpm-cache
+minimumReleaseAgeExclude:
+  - '@next/env@16.4.1'
+  - '@next/swc-darwin-arm64@16.4.1'
+  - '@next/swc-darwin-x64@16.4.1'
+  - '@next/swc-linux-arm64-gnu@16.4.1'
+  - '@next/swc-linux-arm64-musl@16.4.1'
+  - '@next/swc-linux-x64-gnu@16.4.1'
+  - '@next/swc-linux-x64-musl@16.4.1'
+  - '@next/swc-win32-arm64-msvc@16.4.1'
+  - '@next/swc-win32-x64-msvc@16.4.1'
+  - next@16.4.1
+  - react-dom@19.3.1
+  - react@19.3.1
+  - '@next/eslint-plugin-next@16.4.1'
+  - eslint-config-next@16.4.1
+allowBuilds:
+  unrs-resolver: false
+updateNotifier: false
+# Playwright 1.57.0 is the last release with Chromium, Firefox and WebKit
+# builds for macOS 13; every package that depends on playwright-core uses it.
+overrides:
+  playwright-core: 1.57.0

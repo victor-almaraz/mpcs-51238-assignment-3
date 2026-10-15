@@ -1,0 +1,12 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/projects/:id", "destination": "/projects/_shell" }
+  ],
+  "headers": [
+    {
+      "source": "/worklets/:path*",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ]
+}

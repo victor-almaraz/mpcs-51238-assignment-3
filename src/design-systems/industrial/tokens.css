@@ -1,0 +1,153 @@
+/*
+ * Industrial design system. A page opts in with data-ds="industrial"
+ * on its root element, together with the class from fonts.js (fontClassName), which
+ * defines --font-ind-display and --font-ind-sans.
+ *
+ * Instrument panels without the instrument: the organisation, labelling and colour
+ * coding of synth panels, control rooms, typewriters and service manuals, drawn flat.
+ * No wood, knurling, bevels or chrome.
+ *   Ground: control-room putty (light), panels a shade lighter, ink-black legends.
+ *   Instrument windows: meters and harmonic bars sit in near-black windows, lit by
+ *     segmented LED ladders, green → amber → red.
+ *   Lamps: a pressed chip, toggle or segment lights a small amber lamp along its top
+ *     edge, like a tab switch's indicator.
+ *   Accent: signal orange (the Unis typewriter, the Jupiter-4 trim), the primary action only.
+ *   Panic: emergency-stop red with a yellow collar.
+ *   Focus: control-room blue, which no other state uses.
+ *
+ * Colour is set in OKLCH (L, C, H) and written as hex. Neutrals: H 125, C 0.008-0.016.
+ *
+ * Contrast (WCAG 2.2):
+ *   fg: 12.4:1 on bg, 14.5:1 on surface, 10.3:1 on active
+ *   muted: 5.6:1 on bg, 5.2:1 on hover, 4.6:1 on active (text >= 4.5:1)
+ *   border-strong: 3.7:1 on bg, 4.2:1 on surface, 3.4:1 on hover (controls >= 3:1)
+ *   focus: 5.1:1 on bg, 5.9:1 on surface
+ *   accent-fg (ink) on accent 5.0:1, on accent-hover 6.1:1; the primary button is
+ *   outlined in ink (12.4:1 on bg) because orange alone is 2.5:1 on the putty
+ *   white on danger (Panic) 5.9:1
+ *   lit lamp 8.6:1 on a pressed (ink) control
+ *   levels in the window: green 9.1:1, amber 9.7:1, red 4.4:1
+ *   danger 4.9:1, warning 5.1:1, success 5.8:1 on their backgrounds
+ *   border is a divider only (1.6:1), never a control boundary. Panic's yellow
+ *   collar sits inside its 44 px box; its boundary is a 1 px ink edge (12.4:1 on bg).
+ * Status meaning never depends on colour: components add a word and glyph.
+ *
+ * Inside @layer base so Tailwind utilities on the same element still win.
+ */
+@layer base {
+  [data-ds="industrial"] {
+    color-scheme: light;
+
+    /* Putty and panel: H 125. */
+    --ds-bg: #dee1d9;
+    --ds-surface: #eff1eb;
+    --ds-surface-2: #e4e8e0;
+    --ds-hover: #d5d9cf;
+    --ds-active: #cacec3;
+
+    /* Ink legends. */
+    --ds-fg: #1e201a;
+    --ds-muted: #53574e;
+
+    --ds-border: #bbbfb6;
+    --ds-border-strong: #70736a;
+
+    /* Signal orange: the primary action only. */
+    --ds-accent: #e36927;
+    --ds-accent-fg: #1e201a;
+    --ds-accent-hover: #eb8145;
+
+    /* Pressed controls: ink fill, light legend, lit lamp. */
+    --ds-selected: var(--ds-fg);
+    --ds-selected-fg: #eff1eb;
+
+    /* Control-room blue. */
+    --ds-focus: #1659b5;
+
+    /* Instrument windows and indicator lamps. */
+    --ds-window: #191c16;
+    --ds-lamp: #f9ad26;
+    --ds-lamp-off: #a3a69e;
+
+    /* LED ladder: green → amber → red. */
+    --ds-level-low: #68d36f;
+    --ds-level-mid: #fab72a;
+    --ds-level-high: #ed4138;
+
+    /* Emergency stop: red cap, yellow collar. */
+    --ds-danger: #c51e21;
+    --ds-danger-bg: #ffe4e0;
+    --ds-collar: #f7d22a;
+    --ds-warning: #895709;
+    --ds-warning-bg: #f8eac6;
+    --ds-success: #1d6835;
+    --ds-success-bg: #d9f3dd;
+
+    --ds-radius: 3px;
+
+    --ds-font-display: var(--font-ind-display), ui-monospace, monospace;
+    --ds-font-sans: var(--font-ind-sans), ui-monospace, monospace;
+    --ds-font-mono: var(--font-ind-sans), ui-monospace, monospace;
+
+    background: var(--ds-bg);
+    color: var(--ds-fg);
+    font-family: var(--ds-font-sans);
+  }
+
+  /*
+   * Range inputs: a slot and a fader cap (a dark rectangle with a light index line).
+   * The input element keeps the 24 px hit height from Slider.
+   */
+  [data-ds="industrial"] input[type="range"] {
+    appearance: none;
+    background: transparent;
+  }
+
+  [data-ds="industrial"] input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--ds-border-strong);
+  }
+
+  [data-ds="industrial"] input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--ds-border-strong);
+  }
+
+  [data-ds="industrial"] input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 22px;
+    margin-top: -9px;
+    border: 0;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--ds-fg) 0 5px, var(--ds-surface) 5px 7px, var(--ds-fg) 7px);
+  }
+
+  [data-ds="industrial"] input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 22px;
+    border: 0;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--ds-fg) 0 5px, var(--ds-surface) 5px 7px, var(--ds-fg) 7px);
+  }
+
+  @media (hover: hover) {
+    [data-ds="industrial"] input[type="range"]:enabled:hover::-webkit-slider-thumb {
+      background: linear-gradient(to right, var(--ds-fg) 0 5px, var(--ds-lamp) 5px 7px, var(--ds-fg) 7px);
+    }
+
+    [data-ds="industrial"] input[type="range"]:enabled:hover::-moz-range-thumb {
+      background: linear-gradient(to right, var(--ds-fg) 0 5px, var(--ds-lamp) 5px 7px, var(--ds-fg) 7px);
+    }
+  }
+
+  [data-ds="industrial"] input[type="range"]:enabled:active::-webkit-slider-thumb {
+    background: linear-gradient(to right, var(--ds-muted) 0 5px, var(--ds-lamp) 5px 7px, var(--ds-muted) 7px);
+  }
+
+  [data-ds="industrial"] input[type="range"]:enabled:active::-moz-range-thumb {
+    background: linear-gradient(to right, var(--ds-muted) 0 5px, var(--ds-lamp) 5px 7px, var(--ds-muted) 7px);
+  }
+}

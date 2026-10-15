@@ -82,10 +82,10 @@ Rules:
 | Script | Command |
 |---|---|
 | `copy:worklets` | `node scripts/copy-worklets.mjs` |
-| `dev` | `pnpm copy:worklets && (node scripts/copy-worklets.mjs --watch & next dev)` |
-| `build` | `pnpm copy:worklets && next build` |
+| `dev` | `pnpm copy:worklets && (node scripts/copy-worklets.mjs --watch & NEXT_TELEMETRY_DISABLED=1 next dev)` |
+| `build` | `pnpm copy:worklets && NEXT_TELEMETRY_DISABLED=1 next build` |
 
-- `next.config.mjs` sets `Cache-Control: no-cache` for `/worklets/:path*` through `headers()`, so the module graph stays fresh between deploys. No COOP or COEP headers are set.
+- `vercel.json` sets `Cache-Control: no-cache` for `/worklets/:path*`, so the module graph stays fresh between deploys. The production build is a static export, which does not support `headers()`; the development server applies the same `vercel.json` rule through `next.config.mjs`, and `scripts/serve-out.mjs` applies it to `out/`. No COOP or COEP headers are set.
 - ESLint declares the AudioWorklet globals (`AudioWorkletProcessor`, `registerProcessor`, `sampleRate`, `currentFrame`, `currentTime`) for `src/worklet/**` only.
 
 ### Loading
@@ -661,7 +661,7 @@ Benchmark: `tests/e2e/perf.spec.js` renders a 20 s stress project (16 tracks, 64
 | Repeated decoding | Decode once per file; cache peaks by `sourceId` |
 
 ## Testing
-- DSP unit tests run with `node --test tests/dsp/`, importing `src/dsp` directly. Coverage:
+- DSP unit tests run with `node --test "tests/dsp/**/*.test.js"`, importing `src/dsp` directly. Coverage:
   - tempo-map round trips
   - PolyBLEP aliasing below a threshold (DFT of a 5 kHz saw)
   - Karplus–Strong pitch error below 1 cent
