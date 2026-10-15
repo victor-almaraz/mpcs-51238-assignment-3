@@ -1,3 +1,5 @@
+import SiteHeader from '@/components/nav/SiteHeader';
+import SkipLink from '@/components/nav/SkipLink';
 import { fontClassName } from '@/design-systems/industrial/fonts';
 import './globals.css';
 
@@ -17,7 +19,11 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" data-ds="industrial" className={fontClassName}>
-      <body className="min-h-dvh bg-bg font-sans text-fg antialiased">{children}</body>
+      <body className="min-h-dvh bg-bg font-sans text-fg antialiased">
+        <SkipLink />
+        <SiteHeader />
+        {children}
+      </body>
     </html>
   );
 }

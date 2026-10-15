@@ -83,3 +83,10 @@ export const fieldLabel = 'w-24 shrink-0 text-[0.6875rem] font-bold uppercase tr
 
 /** A readout window: dark glass, amber digits. */
 export const readout = 'rounded-ds bg-window text-lamp tabular-nums';
+
+/** Page title (h1): the wide display face, like a panel's model legend. */
+export const pageHeading =
+  'font-display text-[1.75rem] leading-none font-bold uppercase tracking-[0.01em] sm:text-5xl';
+
+/** Section heading (h2 and below): compact bold capitals. */
+export const sectionHeading = 'font-sans text-sm leading-tight font-bold uppercase';
