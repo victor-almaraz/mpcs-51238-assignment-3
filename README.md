@@ -250,3 +250,41 @@ flowchart TD
 | `/projects/[id]` | First visit, Create project, Return visit, Save preset, Import audio, Export WAV, Save a .wrack file, Open a .wrack file, Panic |
 | `/settings` | Volume notice, Save preset |
 | Unknown project ID | Return visit |
+
+## Onboarding research
+
+The full study, with sources and confidence labels, is in [`docs/onboarding-research.md`](docs/onboarding-research.md). It compares the first-run experience of BandLab Studio, Chrome Music Lab Song Maker and Ableton Live 12, each researched by an independent agent against official documentation, help-center articles and, for Song Maker, the production code.
+
+### Findings
+
+| ID | Finding | BandLab Studio | Song Maker | Ableton Live 12 |
+|---|---|---|---|---|
+| F1 | Gate before content | Account | None | Account, installation, authorization |
+| F2 | Actions to first sound | 5 after sign-in | 1 (place a note) | 3 on first launch with the demo Set |
+| F3 | Empty-state strategy | New Track pop-up | Playable grid | Demo Set, then an empty Default Set |
+| F4 | Sound starts on | User action | User action | User action |
+| F5 | Fields before work | Track type | None | None |
+| F6 | Learning model | Tutorial from the Help menu | Learning by doing | Lessons beside the work |
+| F7 | Return memory | Cloud Library | Server share link | Recent Sets, crash restore |
+| F8 | Level safety | Red master meter | Fixed −6 dB levels | No default limiter |
+| F9 | Browser audio rule | Gesture required | Resumes on first note | Not applicable |
+| F10 | Permission requests | When a device is used | Web MIDI on load | None |
+| F11 | Unsaved work | Manual save | Lost unless saved | Manual save, crash restore |
+
+### Decisions
+
+| Decision | Findings |
+|---|---|
+| No account, permission request or form before content | F1, F10 |
+| Examples on every visit; Recent first on return visits | F3, F7 |
+| An example reaches first sound in two actions: open the card, press Play | F2 |
+| Examples open stopped, with Play highlighted and the hint "Press Play to hear this example"; cards on Home do not preview sound | F4, F9 |
+| Examples are MIDI-only and open as a copy that saves on first edit | F2, F3 |
+| A volume notice precedes the first sound of a session, and its `Continue` resumes the `AudioContext` | F8, F9 |
+| The master defaults to −12 dB, with a fixed safety limiter last | F8 |
+| `/new` asks for three prefilled fields, with inline errors that keep input | F5 |
+| Empty regions offer the next action, and placing a note previews it | F2, F3, F6 |
+| Help appears in context; there is no modal tour | F6 |
+| Return visits restore the working state with the transport stopped; imported audio persists on the device | F7 |
+| Web MIDI access is requested only from a button | F10 |
+| Edits save locally 500 ms after the last change, with a visible save status | F11 |
