@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import useHydrated from '@/components/ui/useHydrated';
 import { sectionHeading } from '@/design-systems/industrial/classes';
 import { EXAMPLES } from '@/lib/project/examples';
 import { newProjectId } from '@/lib/project/store';
@@ -13,6 +14,7 @@ import { newProjectId } from '@/lib/project/store';
  */
 export default function ExampleCards() {
   const router = useRouter();
+  const hydrated = useHydrated();
 
   function open(slug) {
     router.push(`/projects/${newProjectId()}?example=${slug}`);
@@ -32,7 +34,7 @@ export default function ExampleCards() {
                 <p className="text-sm text-muted">{example.description}</p>
               </div>
               <div>
-                <Button onClick={() => open(example.slug)}>Open {example.title}</Button>
+                <Button disabled={!hydrated} onClick={() => open(example.slug)}>Open {example.title}</Button>
               </div>
             </Card>
           </li>

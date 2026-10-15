@@ -5,6 +5,7 @@ import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Field from '@/components/ui/Field';
 import Select from '@/components/ui/Select';
+import useHydrated from '@/components/ui/useHydrated';
 import { errorText } from '@/design-systems/industrial/classes';
 import { DEFAULT_TEMPO, DEFAULT_TIME_SIGNATURE, TIME_SIGNATURES, nextUntitledName } from '@/lib/project/model';
 import { createProject, getIndexSnapshot, listProjects, subscribeProjects } from '@/lib/project/store';
@@ -20,6 +21,7 @@ const SIGNATURE_OPTIONS = TIME_SIGNATURES.map((s) => ({ value: s.value, label: s
  */
 export default function NewProjectForm() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const indexRaw = useSyncExternalStore(subscribeProjects, getIndexSnapshot, () => null);
   const defaultName = useMemo(() => {
     const listed = indexRaw === null ? { ok: true, value: [] } : listProjects();
@@ -84,6 +86,7 @@ export default function NewProjectForm() {
 
   return (
     <form noValidate onSubmit={submit} className="flex max-w-md flex-col gap-5">
+      <fieldset disabled={!hydrated} className="contents">
       <Field
         ref={nameRef}
         id="project-name"
@@ -127,6 +130,7 @@ export default function NewProjectForm() {
           Create project
         </Button>
       </div>
+      </fieldset>
     </form>
   );
 }

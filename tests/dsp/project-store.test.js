@@ -1,21 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 
-/** In-memory Storage with the same surface localStorage exposes. */
-class MemoryStorage {
-  #map = new Map();
-  quota = Infinity;
-  get length() { return this.#map.size; }
-  key(i) { return [...this.#map.keys()][i] ?? null; }
-  getItem(k) { return this.#map.has(k) ? this.#map.get(k) : null; }
-  setItem(k, v) {
-    const size = [...this.#map].reduce((n, [a, b]) => n + a.length + b.length, 0) + k.length + String(v).length;
-    if (size > this.quota) throw Object.assign(new Error('full'), { name: 'QuotaExceededError' });
-    this.#map.set(k, String(v));
-  }
-  removeItem(k) { this.#map.delete(k); }
-  clear() { this.#map.clear(); }
-}
+import { MemoryStorage } from '../support/memory-storage.js';
 
 globalThis.localStorage = new MemoryStorage();
 const store = await import('../../src/lib/project/store.js');
@@ -49,7 +35,7 @@ test('unreadable JSON is reported, not thrown', () => {
 });
 
 test('a missing project loads as null', () => {
-  assert.deepEqual(store.loadProject('prj_missing'), { ok: true, value: null });
+  assert.deepEqual(store.loadProject('prj_missing'), { ok: true, value: null, readOnly: false });
 });
 
 test('a quota error keeps the previous state and returns the scope message', () => {
@@ -69,8 +55,9 @@ test('an example copy stays unsaved until its first edit', () => {
   assert.equal(hasAnyWrackKey(), false, 'opening writes nothing');
   assert.equal(store.loadProject(id).value, copy);
 
-  const saved = store.commitEdit({ ...copy, name: 'My beat' }, '2026-04-01T00:01:00.000Z');
-  assert.equal(saved.ok, true);
+  store.commitEdit({ ...copy, name: 'My beat' }, '2026-04-01T00:01:00.000Z');
+  assert.equal(store.isUnsavedCopy(id), true, 'the save waits for the debounce');
+  assert.equal(store.flushSaves().status, 'saved');
   assert.equal(store.isUnsavedCopy(id), false);
   assert.deepEqual(store.listProjects().value.map((e) => e.name), ['My beat']);
   assert.equal(EXAMPLES[0].doc.name, 'Beat', 'the example itself never changes');

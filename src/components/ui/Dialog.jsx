@@ -8,12 +8,25 @@ import { cx, focusRing, panelShadow } from '@/design-systems/industrial/classes'
  * `open` drives showModal()/close(). On open, focus moves inside: to
  * `initialFocusRef` when given, otherwise to the browser's default target.
  * Escape is reported through onClose so the parent owns the state. On close,
- * focus returns to the element that had it before the dialog opened.
+ * focus returns to `returnFocusRef` when given, otherwise to the element that
+ * had focus before the dialog opened. (Safari does not focus buttons on click,
+ * so callers opening a dialog from a button pass it as `returnFocusRef`.)
  * `ref` exposes the <dialog> element.
  */
-export default function Dialog({ open, onClose, title, children, actions, initialFocusRef, className, ref, ...rest }) {
+export default function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  actions,
+  initialFocusRef,
+  returnFocusRef,
+  className,
+  ref,
+  ...rest
+}) {
   const dialogRef = useRef(null);
-  const returnFocusRef = useRef(null);
+  const restoreFocusRef = useRef(null);
   const openRef = useRef(open);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -29,13 +42,13 @@ export default function Dialog({ open, onClose, title, children, actions, initia
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (open && !dialog.open) {
-      returnFocusRef.current = document.activeElement;
+      restoreFocusRef.current = returnFocusRef?.current ?? document.activeElement;
       dialog.showModal();
       initialFocusRef?.current?.focus();
     } else if (!open && dialog.open) {
       dialog.close();
     }
-  }, [open, initialFocusRef]);
+  }, [open, initialFocusRef, returnFocusRef]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -45,8 +58,8 @@ export default function Dialog({ open, onClose, title, children, actions, initia
       onCloseRef.current?.();
     }
     function handleClose() {
-      const target = returnFocusRef.current;
-      returnFocusRef.current = null;
+      const target = restoreFocusRef.current;
+      restoreFocusRef.current = null;
       if (target?.isConnected) target.focus();
       if (openRef.current) onCloseRef.current?.();
     }

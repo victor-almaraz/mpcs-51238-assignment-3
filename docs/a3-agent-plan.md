@@ -144,7 +144,8 @@ Do not start the next task.
 ### Phase 6 — Persistence and coming back
 - **Goal:** localStorage persistence, the return experience, working state and saved settings.
 - **Context:** `assignment-3-scope.md` (Persistence, Coming back: Resume where you left off, Saved settings), `a3-audio-implementation.md` (Versioning).
-- **Files:** `src/lib/storage/{keys,storage,migrate,schema}.js`, `src/lib/project/{store,view-state}.js`, `src/lib/settings/store.js`, `src/components/home/RecentList.jsx`, `src/app/projects/page.jsx`, `src/app/settings/page.jsx`, `tests/e2e/persistence.spec.js`.
+- **Files:** `src/lib/storage/{keys,storage,migrate,schema}.js`, `src/lib/project/{store,view-state}.js`, `src/lib/settings/store.js`, `src/components/home/RecentList.jsx`, `src/app/projects/{page,ProjectList}.jsx`, `src/app/settings/{page,SettingsPanel}.jsx`, `src/components/studio/{StudioLoader,Studio}.jsx`, `src/components/ui/{Dialog,useHydrated}.js(x)`, `tests/dsp/persistence.test.js`, `tests/support/memory-storage.js`, `tests/e2e/persistence.spec.js`.
+- **Placeholder controls:** until the timeline exists, the editor placeholder selects tracks and zooms, so working-state saving is testable end to end. `/projects` deletes projects (index maintenance; the storage-full message asks for it).
 - **Tasks:**
   1. Storage API (extends the Phase 5 modules):
      - `readJson(key)`: parse inside a guard, check the schema, return `{ ok, value }` or `{ ok: false, error }`.

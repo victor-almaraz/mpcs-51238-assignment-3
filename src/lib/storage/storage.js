@@ -101,3 +101,108 @@ export function subscribe(onChange) {
     globalThis.removeEventListener?.('storage', onChange);
   };
 }
+
+/** Keys of every W-Rack entry, in storage order. Empty when storage is unavailable. */
+export function listWrackKeys() {
+  const storage = getStorage();
+  if (!storage) return [];
+  const keys = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (isWrackKey(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/** localStorage stores strings as UTF-16: 2 bytes per code unit. */
+export const BYTES_PER_CODE_UNIT = 2;
+
+/** Origin quota assumed for the usage display, in bytes (5 MiB). */
+export const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
+
+/** Usage above which /settings warns, in bytes (4 MiB, project limit). */
+export const STORAGE_WARNING_BYTES = 4 * 1024 * 1024;
+
+/** Estimated bytes used by W-Rack keys and values. */
+export function estimateUsage() {
+  const storage = getStorage();
+  if (!storage) return 0;
+  let units = 0;
+  for (const key of listWrackKeys()) units += key.length + (storage.getItem(key)?.length ?? 0);
+  return units * BYTES_PER_CODE_UNIT;
+}
+
+/**
+ * Returns a writer that coalesces values and calls `write(value)` once
+ * `delayMs` after the last schedule() (assignment-3-scope.md: 500 ms).
+ * `write` returns { ok } or { ok: false, error }. A failed value stays pending,
+ * so the next flush retries it. A value for a different `keyOf` flushes the
+ * pending one first.
+ *
+ * State: { status: 'idle' | 'pending' | 'saved' | 'error', error }.
+ */
+export function createDebouncedWriter({ write, delayMs, keyOf = () => '' }) {
+  let pending = null;
+  let timer = null;
+  let state = { status: 'idle', error: null };
+  const stateListeners = new Set();
+
+  function setState(next) {
+    state = next;
+    for (const listener of stateListeners) listener();
+  }
+
+  function flush() {
+    clearTimeout(timer);
+    timer = null;
+    if (pending === null) return state;
+    const value = pending;
+    const result = write(value);
+    if (result.ok) {
+      if (pending === value) pending = null;
+      setState({ status: 'saved', error: null });
+    } else {
+      setState({ status: 'error', error: result.error });
+    }
+    return state;
+  }
+
+  function schedule(value) {
+    if (pending !== null && keyOf(pending) !== keyOf(value)) flush();
+    pending = value;
+    clearTimeout(timer);
+    timer = setTimeout(flush, delayMs);
+    if (state.status !== 'error') setState({ status: 'pending', error: null });
+  }
+
+  return {
+    schedule,
+    flush,
+    getState: () => state,
+    hasPending: () => pending !== null,
+    subscribe(listener) {
+      stateListeners.add(listener);
+      return () => stateListeners.delete(listener);
+    },
+  };
+}
+
+const hideHandlers = new Set();
+
+function runHideHandlers() {
+  for (const handler of hideHandlers) handler();
+}
+
+/**
+ * Runs `handler` when the page is hidden or unloaded (pagehide, and
+ * visibilitychange to hidden). Registering the same function twice has no effect.
+ */
+export function onPageHide(handler) {
+  if (hideHandlers.size === 0 && typeof document !== 'undefined') {
+    globalThis.addEventListener('pagehide', runHideHandlers);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') runHideHandlers();
+    });
+  }
+  hideHandlers.add(handler);
+}

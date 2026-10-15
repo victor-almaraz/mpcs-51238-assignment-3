@@ -39,7 +39,7 @@ export function projectIdFromPath(pathname) {
 
 /**
  * Resolves what the editor route shows for `location` (path plus query):
- * { kind: 'project', doc } | { kind: 'missing' } | { kind: 'error', message }.
+ * { kind: 'project', doc, readOnly } | { kind: 'missing' } | { kind: 'error', message }.
  * A missing project with ?example=<slug> opens an unsaved copy of that example.
  */
 function resolve(location, shellId) {
@@ -48,7 +48,7 @@ function resolve(location, shellId) {
   if (id === null || id === shellId) return { kind: 'missing' };
   const loaded = loadProject(id);
   if (!loaded.ok) return { kind: 'error', message: loaded.error };
-  if (loaded.value) return { kind: 'project', doc: loaded.value };
+  if (loaded.value) return { kind: 'project', doc: loaded.value, readOnly: loaded.readOnly };
   const slug = url.searchParams.get('example');
   const copy = slug ? openExampleCopy(slug, id) : null;
   return copy ? { kind: 'project', doc: copy } : { kind: 'missing' };
@@ -85,5 +85,5 @@ export default function StudioLoader({ shellId }) {
   if (state === null) return <Opening />;
   if (state.kind === 'missing') return <Problem title="Project not found" />;
   if (state.kind === 'error') return <Problem title={state.message} />;
-  return <Studio project={state.doc} unsavedCopy={isUnsavedCopy(state.doc.id)} />;
+  return <Studio key={state.doc.id} project={state.doc} unsavedCopy={isUnsavedCopy(state.doc.id)} readOnly={state.readOnly === true} />;
 }
