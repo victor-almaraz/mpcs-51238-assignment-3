@@ -128,6 +128,7 @@ export function ensureModule(ctx) {
 | `sampler-zones` | `deviceId`, `selection`, `zones` | No sample data; sent whole on change |
 | `panic` | — | Every voice, drum instance, preview and audition fades over 5 ms (project limit), effect state clears, transport stops |
 | `metronome` | `on`, `gainDb` | — |
+| `master` | `volumeDb` | Clamped to the master volume ParamDef (−60 to 0 dB, default −12) and smoothed |
 
 ### Engine to main
 | `t` | Payload | Rate |

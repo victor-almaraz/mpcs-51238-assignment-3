@@ -5,11 +5,13 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
+import Transport from '@/components/transport/Transport';
 import { errorText, pageHeading, sectionHeading } from '@/design-systems/industrial/classes';
 import { ticksPerBar, trackLabel } from '@/lib/project/model';
 import {
   PROJECT_NEWER,
   STORAGE_FULL,
+  commitEdit,
   flushSaves,
   getSaveState,
   hasUnsavedEdits,
@@ -57,8 +59,9 @@ function saveStatusText(unsavedCopy, state) {
  * `unsavedCopy` marks an example copy not edited yet; `readOnly` a project
  * saved by a newer build.
  */
-export default function Studio({ project, unsavedCopy, readOnly }) {
-  const [view, setView] = useState(() => readView(project));
+export default function Studio({ project: initialProject, unsavedCopy, readOnly }) {
+  const [project, setProject] = useState(initialProject);
+  const [view, setView] = useState(() => readView(initialProject));
   const saveState = useSyncExternalStore(subscribeSaveState, getSaveState, getSaveState);
   const viewSaveState = useSyncExternalStore(subscribeViewSaveState, getViewSaveState, getViewSaveState);
 
@@ -71,6 +74,12 @@ export default function Studio({ project, unsavedCopy, readOnly }) {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  /** Applies an edited document: it saves after 500 ms and reaches the engine at once. */
+  function edit(next) {
+    if (readOnly) return;
+    setProject(commitEdit(next));
+  }
 
   function changeView(changes) {
     const next = { ...view, ...changes };
@@ -107,18 +116,14 @@ export default function Studio({ project, unsavedCopy, readOnly }) {
         </div>
       ) : null}
 
-      <section aria-labelledby="studio-transport" className="flex flex-col gap-2">
-        <h2 id="studio-transport" className={sectionHeading}>
-          Transport
-        </h2>
-        <p>Stopped</p>
-        <p>Playhead: {barBeat(view.playhead, meter)}</p>
-        <p>
-          Loop {view.loopEnabled ? 'on' : 'off'}
-          {view.loop ? `: ${barRange(view.loop, meter)}` : null}
-        </p>
-        {unsavedCopy ? <p>Press Play to hear this example</p> : null}
-      </section>
+      <Transport
+        project={project}
+        view={view}
+        onViewChange={changeView}
+        onEdit={edit}
+        readOnly={readOnly}
+        showExampleHint={unsavedCopy}
+      />
 
       <section aria-labelledby="studio-view" className="flex flex-col gap-2">
         <h2 id="studio-view" className={sectionHeading}>
@@ -135,6 +140,11 @@ export default function Studio({ project, unsavedCopy, readOnly }) {
             Zoom in
           </Button>
         </div>
+        <p>Playhead: {barBeat(view.playhead, meter)}</p>
+        <p>
+          Loop {view.loopEnabled ? 'on' : 'off'}
+          {view.loop ? `: ${barRange(view.loop, meter)}` : null}
+        </p>
         <p>Open panel: {view.openPanel ? PANEL_NAMES[view.openPanel] : 'none'}</p>
       </section>
 

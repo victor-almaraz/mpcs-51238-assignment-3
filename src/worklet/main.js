@@ -1,18 +1,111 @@
 /*
  * AudioWorklet module: registers the engine and safety processors
- * (a3-audio-implementation.md, Node graph). The engine is a placeholder that
- * renders silence; the safety processor runs the full SafetyKernel.
+ * (a3-audio-implementation.md, Node graph). Message handlers validate and
+ * build structures (they may allocate); process() swaps them in at the next
+ * quantum and allocates nothing.
  */
 import { BLOCK, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../dsp/core/constants.js';
-import { PROTOCOL_VERSION, validateSafetyMessage } from '../dsp/protocol.js';
+import { Engine } from '../dsp/engine/engine.js';
+import { buildEngineModel } from '../dsp/engine/model.js';
+import { PROTOCOL_VERSION, reportQuanta, validateEngineMessage, validateSafetyMessage } from '../dsp/protocol.js';
 import { SafetyKernel } from '../dsp/safety/safety.js';
 
 /** Frames of the mono-output scratch channel; larger than any render quantum. */
 const SCRATCH_FRAMES = 8192;
 
+/** Transport operations queued between quanta, applied in order. */
+const MAX_PENDING_OPS = 64;
+
 class EngineProcessor extends AudioWorkletProcessor {
-  /** Outputs arrive zero-filled, so leaving them untouched renders silence. */
-  process() {
+  constructor() {
+    super();
+    this.engine = new Engine(sampleRate);
+    this.scratch = new Float32Array(SCRATCH_FRAMES);
+    this.pendingModel = null;
+    this.pendingRev = -1;
+    this.ops = [];
+    this.quanta = 0;
+    this.reportEvery = 0;
+    // Reused for every post: process() allocates nothing.
+    this.posMessage = { t: 'pos', v: PROTOCOL_VERSION, playFrame: 0, ctxFrame: 0, playing: false };
+    this.ackMessage = { t: 'ack', v: PROTOCOL_VERSION, rev: 0 };
+    this.port.onmessage = (event) => this.onMessage(event.data);
+  }
+
+  error(code, detail) {
+    this.port.postMessage({ t: 'error', v: PROTOCOL_VERSION, code, detail });
+  }
+
+  onMessage(msg) {
+    const invalid = validateEngineMessage(msg);
+    if (invalid) {
+      this.error(invalid, msg?.t ?? null);
+      return;
+    }
+    switch (msg.t) {
+      case 'init':
+        this.port.postMessage({ t: 'ready', v: PROTOCOL_VERSION, fs: sampleRate, blockSize: BLOCK });
+        break;
+      case 'model':
+        if (msg.model.fs !== sampleRate) {
+          this.error('fs-mismatch', `${msg.model.fs} ≠ ${sampleRate}`);
+          return;
+        }
+        this.pendingModel = buildEngineModel(msg.model);
+        this.pendingRev = msg.rev;
+        break;
+      case 'transport':
+      case 'metronome':
+      case 'master':
+        if (this.ops.length >= MAX_PENDING_OPS) this.ops.shift();
+        this.ops.push(msg);
+        break;
+      default:
+        break;
+    }
+  }
+
+  applyOps() {
+    const engine = this.engine;
+    for (let i = 0; i < this.ops.length; i++) {
+      const op = this.ops[i];
+      if (op.t === 'transport') {
+        if (op.op === 'play') engine.play(op.frame);
+        else if (op.op === 'stop') engine.stop();
+        else if (op.op === 'locate') engine.locate(op.frame);
+        else engine.setLoop(op.loopOn, op.loopStart, op.loopEnd);
+      } else if (op.t === 'metronome') {
+        engine.setMetronome(op.on, op.gainDb);
+      } else {
+        engine.setMasterVolume(op.volumeDb);
+      }
+    }
+    this.ops.length = 0;
+  }
+
+  process(_inputs, outputs) {
+    const out = outputs[0];
+    const outL = out[0];
+    const outR = out.length > 1 ? out[1] : this.scratch;
+    const frames = outL.length;
+    const ctxFrame = currentFrame;
+    if (this.pendingModel !== null) {
+      this.engine.setModel(this.pendingModel);
+      this.pendingModel = null;
+      this.ackMessage.rev = this.pendingRev;
+      this.port.postMessage(this.ackMessage);
+    }
+    if (this.ops.length > 0) this.applyOps();
+    this.engine.process(outL, outR, 0, frames);
+    if (this.reportEvery === 0) this.reportEvery = reportQuanta(sampleRate, frames);
+    if (++this.quanta >= this.reportEvery) {
+      this.quanta = 0;
+      const pos = this.posMessage;
+      pos.playFrame = this.engine.playFrame;
+      pos.ctxFrame = ctxFrame + frames;
+      pos.playing = this.engine.playing;
+      this.port.postMessage(pos);
+    }
     return true;
   }
 }
@@ -22,7 +115,6 @@ class SafetyProcessor extends AudioWorkletProcessor {
     super();
     this.kernel = new SafetyKernel(sampleRate);
     this.scratch = new Float32Array(SCRATCH_FRAMES);
-    // Reused for every post: process() allocates nothing.
     this.guardMessage = { t: 'guard', v: PROTOCOL_VERSION, muted: true };
     this.duckMessage = { t: 'duck', v: PROTOCOL_VERSION, active: false };
     this.port.onmessage = (event) => this.onMessage(event.data);

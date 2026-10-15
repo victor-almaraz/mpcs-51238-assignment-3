@@ -174,3 +174,15 @@ export function trackLabel(doc, trackId, position) {
   const kind = instrument ? (INSTRUMENT_LABELS[instrument.type] ?? instrument.type) : 'Audio';
   return `Track ${position}: ${track.name}, ${kind}`;
 }
+
+/** Returns `doc` with a constant tempo of `bpm` (the transport edits the first tempo point only). */
+export function setTempo(doc, bpm) {
+  return { ...doc, tempo: [{ ...doc.tempo[0], bpm }, ...doc.tempo.slice(1)] };
+}
+
+/** Returns `doc` with time signature `value` (a TIME_SIGNATURES value) from bar 1. */
+export function setTimeSignature(doc, value) {
+  const sig = TIME_SIGNATURES.find((s) => s.value === value);
+  if (!sig) throw new Error(`Unknown time signature: ${value}`);
+  return { ...doc, meter: [{ tick: 0, numerator: sig.numerator, denominator: sig.denominator }] };
+}

@@ -1,5 +1,6 @@
 import SiteHeader from '@/components/nav/SiteHeader';
 import SkipLink from '@/components/nav/SkipLink';
+import VolumeNotice from '@/components/VolumeNotice';
 import { fontClassName } from '@/design-systems/industrial/fonts';
 import './globals.css';
 
@@ -23,6 +24,7 @@ export default function RootLayout({ children }) {
         <SkipLink />
         <SiteHeader />
         {children}
+        <VolumeNotice />
       </body>
     </html>
   );
