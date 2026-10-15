@@ -1,15 +1,21 @@
 /*
  * Engine kernel (a3-audio-implementation.md, Engine block loop): transport,
- * loop wrap, metronome and master volume. Instruments, clips and the mixer
- * join in later sub-steps. EngineProcessor is a thin wrapper; Node tests run
+ * loop wrap, sequenced instrument tracks, metronome and master volume. Tracks
+ * mix at centre with constant-power gain until the mixer stage exists. EngineProcessor is a thin wrapper; Node tests run
  * this class directly. process() allocates nothing.
  */
 import { BLOCK } from '../core/constants.js';
 import { dbToGain } from '../core/math.js';
 import { clampParam, defineParam } from '../core/params.js';
 import { Smoother } from '../core/smoother.js';
+import { GlobalVoices } from '../instruments/voice-pool.js';
+import { instrumentFor } from '../instruments/registry.js';
 import { Metronome } from './metronome.js';
 import { buildEngineModel, emptyModel } from './model.js';
+import { renderTrack, reseek } from './sequencer.js';
+
+/** Constant-power centre gain, cos(π/4). */
+const CENTRE = Math.SQRT1_2;
 
 /** Master volume, dB: default −12, maximum 0 (assignment-3-scope.md, Mixer). */
 export const MASTER_VOLUME = defineParam({ id: 'masterVolume', min: -60, max: 0, default: -12, unit: 'dB', scale: 'lin' });
@@ -21,6 +27,10 @@ export class Engine {
   /** @param {number} fs sample rate, Hz */
   constructor(fs) {
     this.fs = fs;
+    this.globalVoices = new GlobalVoices();
+    this.kernels = new Map(); // deviceId → kernel, reused across models
+    this.generation = 0;
+    this.trackBuf = new Float32Array(BLOCK);
     this.model = buildEngineModel(emptyModel(fs));
     this.metronome = new Metronome(fs);
     this.metronomeOn = false;
@@ -36,15 +46,65 @@ export class Engine {
     this.nextBeatAccent = false;
   }
 
-  /** Swaps in a compiled model (from buildEngineModel). The playhead and loop stay. */
+  /**
+   * Builds a compiled model from a validated payload (allocates; call from
+   * onmessage or a test, never from process()). Kernels are reused by device
+   * ID, so sound continues across edits; payload params are applied to them.
+   */
+  prepareModel(payload) {
+    const generation = ++this.generation;
+    const next = new Map();
+    const compiled = buildEngineModel(payload, (track) => {
+      const entry = instrumentFor(track.type);
+      if (!entry) return null;
+      let kernel = this.kernels.get(track.deviceId);
+      if (!kernel || kernel.type !== track.type) {
+        kernel = new entry.Kernel(this.fs, this.globalVoices);
+        kernel.type = track.type;
+      }
+      for (const [id, value] of Object.entries(track.params ?? {})) kernel.setParam(id, value);
+      kernel.generation = generation;
+      next.set(track.deviceId, kernel);
+      return kernel;
+    });
+    compiled.generation = generation;
+    this.kernels = next;
+    return compiled;
+  }
+
+  /**
+   * Swaps in a compiled model. The playhead and loop stay; sequenced notes are
+   * released (note IDs change with the model) and kernels the new model no
+   * longer uses give back their voices.
+   */
   setModel(compiled) {
+    const old = this.model.tracks;
+    for (let i = 0; i < old.length; i++) {
+      const k = old[i].kernel;
+      if (k !== null && k.generation !== compiled.generation) k.pool.clear();
+    }
     this.model = compiled;
+    this.releaseNotes();
+    this.reseekTracks(this.playFrame);
     this.beatDirty = true;
+  }
+
+  /** Releases every sequenced note (live notes are unaffected once they exist). */
+  releaseNotes() {
+    const tracks = this.model.tracks;
+    for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.allNotesOff(false);
+  }
+
+  reseekTracks(frame) {
+    const tracks = this.model.tracks;
+    for (let i = 0; i < tracks.length; i++) reseek(tracks[i], frame);
   }
 
   /** Starts playback at `frame`. */
   play(frame) {
+    this.releaseNotes();
     this.playFrame = frame;
+    this.reseekTracks(frame);
     this.playing = true;
     this.beatDirty = true;
   }
@@ -52,11 +112,14 @@ export class Engine {
   /** Stops playback in place; tails (the metronome click) finish. */
   stop() {
     this.playing = false;
+    this.releaseNotes();
   }
 
   /** Moves the playhead to `frame`. */
   locate(frame) {
+    if (this.playing) this.releaseNotes();
     this.playFrame = frame;
+    this.reseekTracks(frame);
     this.beatDirty = true;
   }
 
@@ -114,7 +177,9 @@ export class Engine {
     if (this.playing && this.loopOn && this.playFrame < this.loopEnd && this.playFrame + n >= this.loopEnd) {
       const a = this.loopEnd - this.playFrame;
       this.renderSpan(bufL, bufR, off, a);
+      this.releaseNotes();
       this.playFrame = this.loopStart;
+      this.reseekTracks(this.loopStart);
       this.beatDirty = true;
       this.renderSpan(bufL, bufR, off + a, n - a);
     } else {
@@ -126,6 +191,16 @@ export class Engine {
   renderSpan(bufL, bufR, off, n) {
     if (n <= 0) return;
     const end = off + n;
+    const tracks = this.model.tracks;
+    const tb = this.trackBuf;
+    for (let t = 0; t < tracks.length; t++) {
+      renderTrack(tracks[t], tb, n, this.playFrame, this.playing);
+      for (let i = 0; i < n; i++) {
+        const x = tb[i] * CENTRE;
+        bufL[off + i] += x;
+        bufR[off + i] += x;
+      }
+    }
     if (this.playing) {
       if (this.beatDirty) this.findNextBeat(this.playFrame);
       let pos = off;

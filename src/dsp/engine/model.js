@@ -1,16 +1,18 @@
 /*
  * EngineModel on the audio thread: the validated message model with its tempo
- * and meter maps built. Building allocates, so it runs in onmessage (or a
- * test), and process() swaps the result in with one assignment.
+ * and meter maps and sequencer tracks built. Building allocates, so it runs in
+ * onmessage (or a test); process() swaps the result in with one assignment.
  */
 import { TempoMap } from '../timing/tempo-map.js';
 import { MeterMap } from '../timing/meter-map.js';
+import { createTrack } from './sequencer.js';
 
 /**
- * Returns the compiled model for a validated EngineModel message payload:
- * { fs, tempo: TempoMap, meter: MeterMap, loopStartFrame, loopEndFrame, endFrame }.
+ * Returns the compiled model for a validated EngineModel payload:
+ * { fs, tempo, meter, loopStartFrame, loopEndFrame, endFrame, tracks }.
+ * `kernelFor(track)` returns the instrument kernel for a payload track, or null.
  */
-export function buildEngineModel(model) {
+export function buildEngineModel(model, kernelFor = () => null) {
   return {
     fs: model.fs,
     tempo: new TempoMap(model.tempo, model.fs),
@@ -18,10 +20,11 @@ export function buildEngineModel(model) {
     loopStartFrame: model.loopStartFrame,
     loopEndFrame: model.loopEndFrame,
     endFrame: model.endFrame,
+    tracks: (model.tracks ?? []).map((t) => createTrack(kernelFor(t), t.notes)),
   };
 }
 
-/** EngineModel payload for an empty project at `fs`: 120 BPM, 4/4, a four-bar loop. */
+/** EngineModel payload for an empty project at `fs`: 120 BPM, 4/4, a four-bar loop, no tracks. */
 export function emptyModel(fs) {
   const bar = 2 * fs; // one 4/4 bar at 120 BPM, in frames
   return {
@@ -32,5 +35,6 @@ export function emptyModel(fs) {
     loopStartFrame: 0,
     loopEndFrame: 4 * bar,
     endFrame: 4 * bar,
+    tracks: [],
   };
 }

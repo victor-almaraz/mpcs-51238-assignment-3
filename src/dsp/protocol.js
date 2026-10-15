@@ -49,9 +49,37 @@ function validateMeterPoints(points) {
   return points.every((p) => isObject(p) && isFrame(p.tick) && isPositiveInt(p.numerator) && isPositiveInt(p.denominator));
 }
 
+/** Maximum expanded notes per track (project limit). */
+export const MAX_NOTES_PER_TRACK = 20000;
+
+/** Maximum tracks (project limit). */
+export const MAX_TRACKS = 16;
+
+/**
+ * Validates one model track: { deviceId, type, params, notes: { start, end,
+ * pitch, vel } } with Int32Array frames sorted by start, end > start, pitch
+ * 0–127 and velocity 1–127 in Uint8Arrays.
+ */
+export function validateModelTrack(track) {
+  if (!isObject(track) || typeof track.deviceId !== 'string' || typeof track.type !== 'string') return 'bad-track';
+  if (!isObject(track.params) || !Object.values(track.params).every(Number.isFinite)) return 'bad-params';
+  const n = track.notes;
+  if (!isObject(n) || !(n.start instanceof Int32Array) || !(n.end instanceof Int32Array)) return 'bad-notes';
+  if (!(n.pitch instanceof Uint8Array) || !(n.vel instanceof Uint8Array)) return 'bad-notes';
+  const count = n.start.length;
+  if (count > MAX_NOTES_PER_TRACK || n.end.length !== count || n.pitch.length !== count || n.vel.length !== count) {
+    return 'bad-notes';
+  }
+  for (let i = 0; i < count; i++) {
+    if (n.start[i] < 0 || n.end[i] <= n.start[i] || n.pitch[i] > 127 || n.vel[i] < 1 || n.vel[i] > 127) return 'bad-note';
+    if (i > 0 && n.start[i] < n.start[i - 1]) return 'unsorted-notes';
+  }
+  return null;
+}
+
 /**
  * Validates an EngineModel: { schema, fs, tempo, meter, loopStartFrame,
- * loopEndFrame, endFrame }.
+ * loopEndFrame, endFrame, tracks }.
  */
 export function validateModel(model) {
   if (!isObject(model)) return 'model-not-an-object';
@@ -63,6 +91,11 @@ export function validateModel(model) {
     return 'bad-loop';
   }
   if (!isFrame(model.endFrame)) return 'bad-end';
+  if (!Array.isArray(model.tracks) || model.tracks.length > MAX_TRACKS) return 'bad-tracks';
+  for (const track of model.tracks) {
+    const invalid = validateModelTrack(track);
+    if (invalid) return invalid;
+  }
   return null;
 }
 

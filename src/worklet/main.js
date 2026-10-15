@@ -6,7 +6,6 @@
  */
 import { BLOCK, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../dsp/core/constants.js';
 import { Engine } from '../dsp/engine/engine.js';
-import { buildEngineModel } from '../dsp/engine/model.js';
 import { PROTOCOL_VERSION, reportQuanta, validateEngineMessage, validateSafetyMessage } from '../dsp/protocol.js';
 import { SafetyKernel } from '../dsp/safety/safety.js';
 
@@ -51,7 +50,7 @@ class EngineProcessor extends AudioWorkletProcessor {
           this.error('fs-mismatch', `${msg.model.fs} ≠ ${sampleRate}`);
           return;
         }
-        this.pendingModel = buildEngineModel(msg.model);
+        this.pendingModel = this.engine.prepareModel(msg.model);
         this.pendingRev = msg.rev;
         break;
       case 'transport':

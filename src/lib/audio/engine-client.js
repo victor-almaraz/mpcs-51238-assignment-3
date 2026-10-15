@@ -62,8 +62,19 @@ function createClient() {
     engine?.port.postMessage({ v: PROTOCOL_VERSION, ...msg });
   }
 
+  let modelFrame = 0; // pending requestAnimationFrame for a coalesced model message
+
   function sendModel() {
     if (compiled) send({ t: 'model', rev: ++rev, model: compiled.model });
+  }
+
+  /** Sends the model at most once per animation frame (a3-audio-implementation.md, Main to engine). */
+  function scheduleModel() {
+    if (!engine || modelFrame) return;
+    modelFrame = requestAnimationFrame(() => {
+      modelFrame = 0;
+      sendModel();
+    });
   }
 
   function sendLoop() {
@@ -181,7 +192,7 @@ function createClient() {
     setProject(project) {
       doc = project;
       compile();
-      sendModel();
+      scheduleModel();
       sendLoop();
     },
 

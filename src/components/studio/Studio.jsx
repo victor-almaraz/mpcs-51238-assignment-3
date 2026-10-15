@@ -6,8 +6,9 @@ import Card from '@/components/ui/Card';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import Transport from '@/components/transport/Transport';
+import InstrumentPanel from '@/components/instruments/InstrumentPanel';
 import { errorText, pageHeading, sectionHeading } from '@/design-systems/industrial/classes';
-import { ticksPerBar, trackLabel } from '@/lib/project/model';
+import { setDeviceParam, ticksPerBar, trackLabel } from '@/lib/project/model';
 import {
   PROJECT_NEWER,
   STORAGE_FULL,
@@ -92,6 +93,9 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const clips = Object.values(project.clips);
   const audioClips = clips.filter((c) => c.kind === 'audio');
   const failure = [saveState, viewSaveState].find((s) => s.status === 'error');
+  const panelTrackId = view.selectedTrackId ?? project.trackOrder.find((id) => project.tracks[id].kind === 'instrument');
+  const panelTrack = panelTrackId ? project.tracks[panelTrackId] : null;
+  const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
 
   return (
     <>
@@ -191,6 +195,15 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           </div>
         )}
       </Card>
+
+      {panelDevice ? (
+        <InstrumentPanel
+          track={panelTrack}
+          device={panelDevice}
+          disabled={readOnly}
+          onParamChange={(deviceId, id, value) => edit(setDeviceParam(project, deviceId, id, value))}
+        />
+      ) : null}
     </>
   );
 }

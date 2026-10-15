@@ -43,3 +43,18 @@ export function readTable(table, x) {
   const frac = pos - i;
   return table[i] + (table[i + 1] - table[i]) * frac;
 }
+
+/** Entries in the sine table (project limit); one guard entry follows for interpolation. */
+export const SINE_TABLE_SIZE = 4096;
+
+/** sin(2π·i/4096) for i in 0–4096 (the last entry repeats the first). */
+export const SINE_TABLE = new Float32Array(SINE_TABLE_SIZE + 1);
+for (let i = 0; i <= SINE_TABLE_SIZE; i++) SINE_TABLE[i] = Math.sin((2 * Math.PI * i) / SINE_TABLE_SIZE);
+
+/** sin(2π·phase) for phase ∈ [0, 1), by linear interpolation in SINE_TABLE. */
+export function sineAt(phase) {
+  const pos = phase * SINE_TABLE_SIZE;
+  const i = pos | 0;
+  const frac = pos - i;
+  return SINE_TABLE[i] + (SINE_TABLE[i + 1] - SINE_TABLE[i]) * frac;
+}

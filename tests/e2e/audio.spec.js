@@ -171,3 +171,45 @@ test('an invalid tempo shows the form error and changes nothing', async ({ page 
   await expect(page.getByText('100 BPM · 4/4')).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes(':project:')))).toEqual([]);
 });
+
+test('the Subtractive panel shows labelled controls with units, and an edit saves', async ({ page }) => {
+  await openExample(page);
+  await page.getByRole('button', { name: 'Track 2: Bass, Subtractive synth' }).click();
+  const panel = page.getByRole('region', { name: 'Subtractive synth: Bass' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('group', { name: 'Waveform' }).getByRole('radio', { name: 'Saw' })).toBeChecked();
+  const cutoff = panel.getByRole('slider', { name: 'Cutoff' });
+  await expect(cutoff).toHaveAttribute('aria-valuetext', '2.0 kHz');
+  await expect(panel.getByRole('slider', { name: 'Attack' })).toHaveAttribute('aria-valuetext', '10 ms');
+  await expect(panel.getByRole('slider', { name: 'Resonance' })).toHaveAttribute('aria-valuetext', '1.0 dB');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+
+  await cutoff.focus();
+  await page.keyboard.press('PageUp');
+  await expect(cutoff).not.toHaveAttribute('aria-valuetext', '2.0 kHz');
+  await panel.getByRole('group', { name: 'Waveform' }).getByText('Square').click();
+  await expect(panel.getByRole('radio', { name: 'Square' })).toBeChecked();
+  await expect(page.getByText('Saved on this device')).toBeVisible();
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+  const bass = Object.values(saved.devices).find((d) => d.type === 'subtractive');
+  expect(bass.params.waveform).toBe(1);
+  expect(bass.params.cutoff).toBeGreaterThan(2000);
+});
+
+test('playing an example with Subtractive tracks runs without engine errors', async ({ page }) => {
+  const errors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(err.message));
+  await openExample(page, 'Pluck melody');
+  await playButton(page).click();
+  await notice(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
+  await page.waitForTimeout(1500);
+  await playButton(page).click();
+  expect(errors).toEqual([]);
+});

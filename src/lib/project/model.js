@@ -186,3 +186,12 @@ export function setTimeSignature(doc, value) {
   if (!sig) throw new Error(`Unknown time signature: ${value}`);
   return { ...doc, meter: [{ tick: 0, numerator: sig.numerator, denominator: sig.denominator }] };
 }
+
+/** Returns `doc` with parameter `paramId` of device `deviceId` set to `value` (a plain value). */
+export function setDeviceParam(doc, deviceId, paramId, value) {
+  const device = doc.devices[deviceId];
+  return {
+    ...doc,
+    devices: { ...doc.devices, [deviceId]: { ...device, params: { ...device.params, [paramId]: value } } },
+  };
+}

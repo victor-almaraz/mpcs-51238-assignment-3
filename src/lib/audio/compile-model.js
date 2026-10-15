@@ -3,9 +3,11 @@
  * the frame-domain EngineModel the engine receives. Pure; runs on the main
  * thread before every model message.
  */
-import { MODEL_SCHEMA } from '../../dsp/protocol.js';
-import { TempoMap } from '../../dsp/timing/tempo-map.js';
+import { clampParams } from '../../dsp/core/params.js';
+import { instrumentFor } from '../../dsp/instruments/registry.js';
+import { MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
+import { TempoMap } from '../../dsp/timing/tempo-map.js';
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
@@ -17,6 +19,56 @@ function contentEndTick(doc) {
     if (clip.kind === 'midi') end = Math.max(end, clip.start + clip.length);
   }
   return end;
+}
+
+/**
+ * Note arrays for one instrument track, sorted by start frame then pitch.
+ * Notes are placed at clip start + note tick and cropped at the clip end;
+ * muted clips are skipped. At most MAX_NOTES_PER_TRACK notes.
+ */
+function compileNotes(doc, track, tempo) {
+  const notes = [];
+  for (const clipId of track.clipIds) {
+    const clip = doc.clips[clipId];
+    if (!clip || clip.kind !== 'midi' || clip.muted) continue;
+    const clipEnd = clip.start + clip.length;
+    for (const note of clip.notes) {
+      const tick = clip.start + note.tick;
+      if (tick >= clipEnd) continue;
+      const endTick = Math.min(clipEnd, tick + note.length);
+      const start = tempo.frameAt(tick);
+      const end = tempo.frameAt(endTick);
+      if (end > start) notes.push({ start, end, pitch: note.pitch, vel: note.velocity });
+    }
+  }
+  notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  if (notes.length > MAX_NOTES_PER_TRACK) notes.length = MAX_NOTES_PER_TRACK;
+  return {
+    start: Int32Array.from(notes, (n) => n.start),
+    end: Int32Array.from(notes, (n) => n.end),
+    pitch: Uint8Array.from(notes, (n) => n.pitch),
+    vel: Uint8Array.from(notes, (n) => n.vel),
+  };
+}
+
+/** Model tracks for the document's instrument tracks, in track order. */
+function compileTracks(doc, tempo) {
+  const tracks = [];
+  for (const trackId of doc.trackOrder) {
+    const track = doc.tracks[trackId];
+    if (!track || track.kind !== 'instrument') continue;
+    const device = doc.devices[track.deviceIds[0]];
+    if (!device) continue;
+    const entry = instrumentFor(device.type);
+    tracks.push({
+      trackId,
+      deviceId: device.id,
+      type: device.type,
+      params: entry ? clampParams(entry.params, device.params) : {},
+      notes: compileNotes(doc, track, tempo),
+    });
+  }
+  return tracks;
 }
 
 /**
@@ -41,6 +93,7 @@ export function compileModel(doc, fs) {
       loopStartFrame: tempo.frameAt(loop.start),
       loopEndFrame: tempo.frameAt(loop.end),
       endFrame: tempo.frameAt(endTick),
+      tracks: compileTracks(doc, tempo),
     },
   };
 }
