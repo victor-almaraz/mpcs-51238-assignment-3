@@ -559,16 +559,16 @@ Every sound W-Rack produces renders inside `EngineProcessor` and reaches `destin
 - Offline export renders through the same path.
 
 ### Stage order
-Order per sample: guard → DC blocker → duck → fade → limiter → final clamp.
+Order per sample: guard → DC blocker → duck → limiter → fade → final clamp. The fade follows the limiter (audio-safety.md, Position), so the onset bound holds for any input level.
 
 | Stage | Algorithm |
 |---|---|
-| Non-finite guard | If either channel is NaN or ±∞: output 0, mute 250 ms, fade in over 50 ms, post `guard`. |
+| Non-finite guard | If either channel is NaN, ±∞ or above 1e4 in magnitude: output 0, mute 250 ms, fade in over 50 ms (`g = x³`), post `guard`. The DC blocker and limiter reset at the faulty frame, so look-ahead samples cannot reach the muted output. |
 | DC blocker | `y = x − x1 + R·y1`, `R = exp(−2π·10/fs)` (0.99869 at 48 kHz). |
 | Sustained-level duck | A ring of block mean-squares covering 3 s (`ceil(3·fs/BLOCK)` entries) with a running sum. When `√mean > 0.2512` (−12 dBFS), gain ramps to 0.5 (−6 dB) over 50 ms and `duck` is posted. Gain returns only after `ack-duck`. |
-| Fade | On `resume-fade` (transport start, context resume), gain ramps 0 → 1 over 50 ms. |
 | Look-ahead limiter | Ceiling `c = 0.8913` (−1 dBFS); look-ahead `L = ceil(0.0015·fs)` (72 frames at 48 kHz). |
-| Final clamp | `y = max(−c, min(c, y))`. |
+| Fade | On `resume-fade` (transport start, context resume) and at node creation, gain ramps 0 → 1 over 50 ms along `g = x³`, which keeps the first 10 ms below 0.8 % of the ceiling. |
+| Final clamp | `y = max(−c32, min(c32, y))`, where `c32` is the largest float32 ≤ `c` (0.8913 rounds up in a `Float32Array`). |
 
 Limiter:
 1. Required gain `r[n] = min(1, c/max(|l|, |r|, 1e-12))`.

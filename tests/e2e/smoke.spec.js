@@ -27,3 +27,39 @@ test('the worklet module registers in an AudioContext', async ({ page }) => {
   });
   expect(registered).toBe(true);
 });
+
+test('the safety processor limits a loud input and fades it in', async ({ page }) => {
+  await page.goto('/');
+  const result = await page.evaluate(async () => {
+    const fs = 48000;
+    const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: fs / 2, sampleRate: fs });
+    await ctx.audioWorklet.addModule('/worklets/worklet/main.js');
+    const safety = new AudioWorkletNode(ctx, 'wrack-safety', { outputChannelCount: [2] });
+    // Test input only: app code never uses native source nodes.
+    const loud = new ConstantSourceNode(ctx, { offset: 10 });
+    const wobble = new OscillatorNode(ctx, { frequency: 1000, type: 'square' });
+    const wobbleGain = new GainNode(ctx, { gain: 5 });
+    wobble.connect(wobbleGain).connect(safety);
+    loud.connect(safety).connect(ctx.destination);
+    loud.start();
+    wobble.start();
+    const buffer = await ctx.startRendering();
+    let peak = 0;
+    let onset = 0;
+    let finite = true;
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        const a = Math.abs(data[i]);
+        if (!Number.isFinite(data[i])) finite = false;
+        if (a > peak) peak = a;
+        if (i < 0.01 * fs && a > onset) onset = a;
+      }
+    }
+    return { peak, onset, finite };
+  });
+  expect(result.finite).toBe(true);
+  expect(result.peak).toBeLessThanOrEqual(0.8913);
+  expect(result.peak).toBeGreaterThan(0.5);
+  expect(result.onset).toBeLessThanOrEqual(0.02);
+});
