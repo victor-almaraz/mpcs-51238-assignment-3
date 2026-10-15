@@ -183,9 +183,8 @@ The returned function is created once per kernel at construction, never in `proc
 
 ## Timing and sequencing
 ### Tempo map
-- Segments `{ startTick, bpm }` are sorted; segment 0 starts at tick 0.
-- Per segment: `framesPerTick = fs·60/(bpm·PPQ)`; `startFrame` is a Float64 cumulative sum.
-- `frameAt(tick) = floor(seg.startFrame + (tick − seg.startTick)·seg.framesPerTick)`, with the segment found by binary search. `tickAt(frame)` is the inverse, floored to an integer.
+- Segments start at sorted tempo points; segment 0 starts at tick 0. A segment is constant (`step`) or ramps linearly in ticks to the next point (`linear`), with the seconds formulas in `transport-and-timing.md`. Segment start seconds are a Float64 cumulative sum.
+- `frameAt(tick) = floor(secondsAt(tick)·fs)`, with the segment found by binary search. `tickAt(frame)` is the largest integer tick whose frame is ≤ `frame`, so `tickAt(frameAt(t)) === t` whenever frames per tick ≥ 1 (fs ≥ 16 kHz at 999 BPM).
 - Meter map entries `{ bar, numerator, denominator }`; ticks per bar = `numerator·PPQ·4/denominator`.
 
 ### Compile step

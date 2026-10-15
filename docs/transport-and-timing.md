@@ -12,7 +12,7 @@ Seconds at tick x within a segment starting at tick x₀, second s₀, tempo b�
 | Linear (b₁ ≠ b₀) | s = s₀ + 60·L/(960·(b₁ − b₀)) · ln(b(x)/b₀), with b(x) = b₀ + (b₁ − b₀)·(x − x₀)/L |
 
 - Seconds to ticks uses the closed-form inverse within each segment.
-- Event frame = floor(s·fs + 0.5), computed in float64.
+- Event frame = floor(s·fs), computed in float64 (a3-audio-implementation.md, Tempo map).
 - `CompiledTempoMap` stores per-segment s₀ and coefficients; lookup is O(log n).
 - Time signature: `MeterPoint { tick, numerator, denominator }`, placed at bar boundaries only.
 
