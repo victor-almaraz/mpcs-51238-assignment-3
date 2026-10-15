@@ -74,8 +74,8 @@ Home is the first screen on every visit. It never shows an empty workspace.
 ## Examples
 | Example | Content |
 |---|---|
-| Beat | Drum machine (GM notes 36, 38, 42, 46, 49), Subtractive bass, FM lead stab; compressor on the drums |
-| Ambient | Granular texture, Additive pad; reverb and delay |
+| Beat | Drum machine (GM notes 36, 38, 42, 46, 49), Subtractive bass, FM lead stab; compressor on the drums, saturation on the bass |
+| Ambient | Granular texture, Additive pad; filter and reverb on the texture, delay on the pad |
 | Pluck melody | Pluck lead with delay, Subtractive bass, EQ on the master |
 
 - Together the examples use the six synthesized instruments and every effect type. The sampler appears in no example, because examples contain no audio.

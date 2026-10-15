@@ -125,7 +125,9 @@ Do not start the next task.
 ### Phase 5 — Home and new project form
 - **Goal:** the Home screen and a validated form that creates a project.
 - **Context:** `assignment-3-scope.md` (Home, Examples, New project form), `project-model.md`.
-- **Files:** `src/app/page.jsx`, `src/components/home/{RecentList,CreateCard,LoadCard,ExampleCards}.jsx`, `src/components/ui/Card.jsx`, `src/app/new/NewProjectForm.jsx`, `src/lib/project/{model,validate,examples}.js`, `tests/dsp/validate.test.js`, `tests/e2e/home.spec.js`, `tests/e2e/new-project.spec.js`.
+- **Files:** `src/app/page.jsx`, `src/app/new/page.jsx`, `src/components/home/{HomeSections,RecentList,CreateCard,LoadCard,ExampleCards}.jsx`, `src/components/ui/Card.jsx`, `src/app/new/NewProjectForm.jsx`, `src/lib/project/{model,validate,examples,store}.js`, `src/lib/storage/{keys,storage}.js`, `src/components/studio/{StudioLoader,Studio}.jsx`, `tests/dsp/{validate,project-store}.test.js`, `tests/e2e/home.spec.js`, `tests/e2e/new-project.spec.js`.
+- **Storage:** saving a new project, Recent and example copies need storage, so this phase builds the guarded `readJson`/`writeJson`, the key names and a basic project store (create, load, index, in-memory example copies, save). Phase 6 extends them.
+- **Routing:** an example opens at `/projects/<new id>?example=<slug>`; the editor creates the unsaved copy from the query, so a reload reopens it. The first edit of a copy is covered by a unit test until editing exists (Phase 7).
 - **Tasks:**
   1. Pure validators that return the exact scope error strings.
   2. The form:
@@ -144,7 +146,7 @@ Do not start the next task.
 - **Context:** `assignment-3-scope.md` (Persistence, Coming back: Resume where you left off, Saved settings), `a3-audio-implementation.md` (Versioning).
 - **Files:** `src/lib/storage/{keys,storage,migrate,schema}.js`, `src/lib/project/{store,view-state}.js`, `src/lib/settings/store.js`, `src/components/home/RecentList.jsx`, `src/app/projects/page.jsx`, `src/app/settings/page.jsx`, `tests/e2e/persistence.spec.js`.
 - **Tasks:**
-  1. Storage API:
+  1. Storage API (extends the Phase 5 modules):
      - `readJson(key)`: parse inside a guard, check the schema, return `{ ok, value }` or `{ ok: false, error }`.
      - `writeJson(key, value)`: catch `QuotaExceededError` (`name === 'QuotaExceededError'`, `code === 22`, or `name === 'NS_ERROR_DOM_QUOTA_REACHED'`).
      - Size estimate: 2 bytes per string code unit.

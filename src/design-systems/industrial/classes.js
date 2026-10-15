@@ -81,6 +81,9 @@ export const secondaryLabelLook =
 /** Field labels beside sliders, selects and segmented controls: small silkscreened capitals. */
 export const fieldLabel = 'w-24 shrink-0 text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-muted';
 
+/** Field labels above their control (one-column forms). */
+export const fieldLabelStacked = 'text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-muted';
+
 /** A readout window: dark glass, amber digits. */
 export const readout = 'rounded-ds bg-window text-lamp tabular-nums';
 
@@ -90,3 +93,6 @@ export const pageHeading =
 
 /** Section heading (h2 and below): compact bold capitals. */
 export const sectionHeading = 'font-sans text-sm leading-tight font-bold uppercase';
+
+/** Error text: danger ink on the danger tint (4.9:1); danger ink on the page ground is 4.4:1. */
+export const errorText = 'flex items-start gap-1 rounded-ds bg-danger-bg px-2 py-1 text-sm text-danger';

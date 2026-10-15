@@ -1,14 +1,26 @@
-import { cx, fieldLabel, focusRing } from '@/design-systems/industrial/classes';
+import { cx, fieldLabel, fieldLabelStacked, focusRing } from '@/design-systems/industrial/classes';
 
 /**
  * Visible label and native <select>. `options` is a list of { value, label }.
  * onChange receives the string value. `className` goes on the row, other props
- * on the <select>.
+ * on the <select>. `layout`: inline (label beside, default) or stacked (label above).
  */
-export default function Select({ id, label, value, onChange, options, labelClassName, className, ref, ...rest }) {
+export default function Select({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+  layout = 'inline',
+  labelClassName,
+  className,
+  ref,
+  ...rest
+}) {
+  const stacked = layout === 'stacked';
   return (
-    <div className={cx('flex min-w-0 items-center gap-2', className)}>
-      <label htmlFor={id} className={cx(fieldLabel, labelClassName)}>
+    <div className={cx('flex min-w-0', stacked ? 'flex-col gap-1' : 'items-center gap-2', className)}>
+      <label htmlFor={id} className={cx(stacked ? fieldLabelStacked : fieldLabel, labelClassName)}>
         {label}
       </label>
       <select

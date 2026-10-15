@@ -6,7 +6,7 @@ const ROUTES = [
   { path: '/new', heading: 'New project', current: 'New project' },
   { path: '/projects', heading: 'Projects', current: 'Projects' },
   { path: '/settings', heading: 'Settings', current: 'Settings' },
-  { path: '/projects/prj_routes-test', heading: 'Project editor', current: null },
+  { path: '/projects/prj_routes-test', heading: 'Project not found', current: null },
   { path: '/projects/_shell', heading: 'Project not found', current: null },
   { path: '/no-such-page', heading: 'Page not found', current: null, status: 404 },
 ];
@@ -65,10 +65,10 @@ test('an unknown project links to Projects and New project', async ({ page }) =>
   await expect(main.getByRole('link', { name: 'New project' })).toHaveAttribute('href', '/new');
 });
 
-test('the editor shell opens for any project ID', async ({ page }) => {
-  await page.goto('/projects/prj_another-id');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Project editor');
-  await expect(page.getByRole('main')).toContainText('prj_another-id');
+test('any /projects/<id> serves the editor shell', async ({ page }) => {
+  const response = await page.goto('/projects/prj_another-id');
+  expect(response.status()).toBe(200);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Project not found');
 });
 
 test('header links navigate between routes', async ({ page }) => {

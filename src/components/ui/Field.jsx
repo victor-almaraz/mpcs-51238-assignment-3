@@ -1,4 +1,4 @@
-import { cx, focusRing } from '@/design-systems/industrial/classes';
+import { cx, errorText, fieldLabelStacked, focusRing } from '@/design-systems/industrial/classes';
 
 /**
  * Stacked text or number field: visible label, input, optional description and
@@ -21,7 +21,7 @@ export default function Field({
 
   return (
     <div className={cx('flex min-w-0 flex-col gap-1', className)}>
-      <label htmlFor={id} className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-muted">
+      <label htmlFor={id} className={fieldLabelStacked}>
         {label}
       </label>
       {description ? (
@@ -43,7 +43,7 @@ export default function Field({
         {...rest}
       />
       {error ? (
-        <p id={errorId} className="flex items-start gap-1 text-sm text-danger">
+        <p id={errorId} className={errorText}>
           <span aria-hidden="true">▲</span>
           <span>{error}</span>
         </p>
