@@ -163,7 +163,7 @@ Do not start the next task.
 ### Phase 7 — Audio engine, safety, instruments
 - **Goal:** the audible engine: transport, six instruments and the safety stage.
 - **Context:** `a3-audio-implementation.md` (Architecture through Instruments, Mixer and metering, Safety stage, Performance pitfalls), `audio-safety.md`, `transport-and-timing.md`, `instruments.md`.
-- **Files:** `src/dsp/**`, `src/worklet/main.js`, `src/lib/audio/{engine-client,compile-model}.js`, `src/components/transport/*.jsx`, `src/components/VolumeNotice.jsx`, `src/components/studio/Studio.jsx`, `src/components/instruments/*.jsx`, `src/components/mixer/*.jsx`, `src/components/ui/Meter.jsx`, `tests/dsp/*.test.js`, `tests/e2e/audio.spec.js`.
+- **Files:** `src/dsp/**` (instruments share `poly-kernel.js`, `registry.js` and `drum-voices/shared.js`), `src/worklet/main.js`, `src/lib/audio/{engine-client,compile-model}.js`, `src/components/transport/*.jsx`, `src/components/VolumeNotice.jsx`, `src/components/studio/Studio.jsx`, `src/components/instruments/{InstrumentPanel,ParamControl,DrumMachinePanel}.jsx` (one panel generated from ParamDefs; the drum machine has its own), `src/components/mixer/*.jsx`, `src/components/ui/Meter.jsx`, `tests/dsp/*.test.js`, `tests/e2e/audio.spec.js`.
 - **Reuse:** parameter definitions and scaling from assignment 2 (`src/audio/synths/param-defs.js`, `scaling.js`) and its instrument panels (`src/components/synth/widgets/*`). Assignment 2's DSP uses native nodes and is rewritten as worklet kernels.
 - **Examples:** example effect slots load into the model; until Phase 10 the engine passes their signal through unprocessed.
 - **Sub-steps** (one commit each):

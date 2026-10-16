@@ -47,14 +47,22 @@ export function reseek(track, frame) {
   track.offCursor = lowerBound(track.endSorted, track.count, frame + 1);
 }
 
+/** Renders [from, to) of `kernel` into one buffer (mono) or two (stereo kernels). */
+function renderRange(kernel, bufL, bufR, from, to) {
+  if (kernel.stereo) kernel.render(bufL, bufR, from, to);
+  else kernel.render(bufL, from, to);
+}
+
 /**
- * Renders `n` frames of the track into `buf[0..n)`, applying the note events
- * whose frames fall in [spanFrame, spanFrame + n) when `playing`.
+ * Renders `n` frames of the track into `bufL[0..n)` (and `bufR` for stereo
+ * kernels), applying the note events whose frames fall in
+ * [spanFrame, spanFrame + n) when `playing`.
  */
-export function renderTrack(track, buf, n, spanFrame, playing) {
+export function renderTrack(track, bufL, bufR, n, spanFrame, playing) {
   const kernel = track.kernel;
   if (kernel === null) {
-    buf.fill(0, 0, n);
+    bufL.fill(0, 0, n);
+    bufR.fill(0, 0, n);
     return;
   }
   let pos = 0;
@@ -68,7 +76,7 @@ export function renderTrack(track, buf, n, spanFrame, playing) {
       if (frame >= spanEnd) break;
       const at = frame - spanFrame;
       if (at > pos) {
-        kernel.render(buf, pos, at);
+        renderRange(kernel, bufL, bufR, pos, at);
         pos = at;
       }
       if (isOff) {
@@ -81,5 +89,5 @@ export function renderTrack(track, buf, n, spanFrame, playing) {
       }
     }
   }
-  if (pos < n) kernel.render(buf, pos, n);
+  if (pos < n) renderRange(kernel, bufL, bufR, pos, n);
 }

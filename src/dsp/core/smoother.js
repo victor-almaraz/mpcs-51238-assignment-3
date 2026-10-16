@@ -53,3 +53,17 @@ export class Smoother {
     if (d < SETTLE && d > -SETTLE) this.y = this.target;
   }
 }
+
+/**
+ * Snaps every Smoother held by `owner` (directly or in an array property) to
+ * its target. A kernel built for a model calls this after its parameters are
+ * applied, so the first sound starts at the project's values instead of
+ * gliding from the defaults. Allocation-free but not for process(): it visits
+ * every property.
+ */
+export function settleSmoothers(owner) {
+  for (const value of Object.values(owner)) {
+    if (value instanceof Smoother) value.snap(value.target);
+    else if (Array.isArray(value)) for (const item of value) if (item instanceof Smoother) item.snap(item.target);
+  }
+}

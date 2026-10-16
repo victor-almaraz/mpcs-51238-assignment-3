@@ -264,3 +264,52 @@ test('the Granular panel shows source, grain size, density and spray', async ({ 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 });
+
+test('the drum machine panel: a voice selector with five voice controls and three kit controls', async ({ page }) => {
+  await openExample(page);
+  await page.getByRole('button', { name: 'Track 1: Drums, Drum machine' }).click();
+  const panel = page.getByRole('region', { name: 'Drum machine: Drums' });
+  const voice = panel.getByRole('combobox', { name: 'Voice' });
+  await expect(voice).toHaveValue('kick');
+  await expect(voice.locator('option')).toHaveCount(14);
+  const kick = panel.getByRole('group', { name: 'Kick' });
+  await expect(kick.getByRole('slider')).toHaveCount(5);
+  await expect(kick.getByRole('slider', { name: 'Level', exact: true })).toHaveAttribute('aria-valuetext', '0.0 dB');
+  await expect(kick.getByRole('slider', { name: 'Tune' })).toHaveAttribute('aria-valuetext', '0.0 st');
+  await expect(kick.getByRole('slider', { name: 'Decay' })).toHaveAttribute('aria-valuetext', '1.0×');
+  await expect(kick.getByRole('slider', { name: 'Click level' })).toHaveAttribute('aria-valuetext', '50 %');
+  await expect(kick.getByRole('slider', { name: 'Pan' })).toHaveAttribute('aria-valuetext', 'C');
+  const kit = panel.getByRole('group', { name: 'Kit' });
+  await expect(kit.getByRole('slider', { name: 'Kit level', exact: true })).toHaveAttribute('aria-valuetext', '0.0 dB');
+  await expect(kit.getByRole('slider', { name: 'Velocity sensitivity' })).toHaveAttribute('aria-valuetext', '100 %');
+  await expect(kit.getByRole('group', { name: 'Choke' }).getByRole('radio', { name: 'On' })).toBeChecked();
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+
+  await voice.selectOption('closedHat');
+  const hat = panel.getByRole('group', { name: 'Closed hat' });
+  await expect(hat.getByRole('slider', { name: 'Highpass' })).toBeVisible();
+  const pan = hat.getByRole('slider', { name: 'Pan' });
+  await pan.focus();
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowLeft');
+  await expect(pan).toHaveAttribute('aria-valuetext', 'L20');
+  await expect(page.getByText('Saved on this device')).toBeVisible();
+});
+
+test('the Beat example plays with every instrument without engine errors', async ({ page }) => {
+  const errors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(err.message));
+  for (const title of ['Beat', 'Ambient']) {
+    await openExample(page, title);
+    await playButton(page).click();
+    if (await notice(page).isVisible()) await notice(page).getByRole('button', { name: 'Continue' }).click();
+    await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
+    await page.waitForTimeout(1500);
+    await playButton(page).click();
+  }
+  expect(errors).toEqual([]);
+});

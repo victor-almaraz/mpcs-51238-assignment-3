@@ -41,6 +41,8 @@ Every kernel class provides:
 
 - Hot state is struct-of-arrays: `Float32Array` and `Float64Array` fields indexed by voice or grain. Arrays of objects are not used in hot paths.
 - `EngineProcessor` is a thin wrapper around `Engine` (`src/dsp/engine/engine.js`), which is itself a kernel. Node tests run `Engine` directly.
+- The engine reuses kernels by device ID across models. A kernel created for a model snaps its smoothers to the model's parameter values, so the first sound starts at those values.
+- Instrument kernels render mono, except the drum machine, which renders stereo for its per-voice pan.
 
 ### Node splitting
 The design uses one engine node. Browsers render all AudioWorklet nodes of a context on one audio thread, so splitting adds graph overhead without parallelism. A split is justified only by a measured profile that shows one quantum over budget.

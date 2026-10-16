@@ -8,7 +8,7 @@ import { BLOCK } from '../core/constants.js';
 import { dbToGain } from '../core/math.js';
 import { hash32 } from '../core/prng.js';
 import { clampParam, defineParam } from '../core/params.js';
-import { Smoother } from '../core/smoother.js';
+import { Smoother, settleSmoothers } from '../core/smoother.js';
 import { GlobalVoices } from '../instruments/voice-pool.js';
 import { instrumentFor } from '../instruments/registry.js';
 import { Metronome } from './metronome.js';
@@ -33,6 +33,7 @@ export class Engine {
     this.kernels = new Map(); // deviceId → kernel, reused across models
     this.generation = 0;
     this.trackBuf = new Float32Array(BLOCK);
+    this.trackBufR = new Float32Array(BLOCK);
     this.model = buildEngineModel(emptyModel(fs));
     this.metronome = new Metronome(fs);
     this.metronomeOn = false;
@@ -62,11 +63,13 @@ export class Engine {
       const entry = instrumentFor(track.type);
       if (!entry) return null;
       let kernel = this.kernels.get(track.deviceId);
-      if (!kernel || kernel.type !== track.type) {
+      const created = !kernel || kernel.type !== track.type;
+      if (created) {
         kernel = new entry.Kernel(this.fs, this.globalVoices);
         kernel.type = track.type;
       }
       for (const [id, value] of Object.entries(track.params ?? {})) kernel.setParam(id, value);
+      if (created) settleSmoothers(kernel);
       kernel.seed = hash32(this.seed, index, 0);
       kernel.generation = generation;
       next.set(track.deviceId, kernel);
@@ -198,12 +201,20 @@ export class Engine {
     const end = off + n;
     const tracks = this.model.tracks;
     const tb = this.trackBuf;
+    const tbR = this.trackBufR;
     for (let t = 0; t < tracks.length; t++) {
-      renderTrack(tracks[t], tb, n, this.playFrame, this.playing);
-      for (let i = 0; i < n; i++) {
-        const x = tb[i] * CENTRE;
-        bufL[off + i] += x;
-        bufR[off + i] += x;
+      renderTrack(tracks[t], tb, tbR, n, this.playFrame, this.playing);
+      if (tracks[t].kernel !== null && tracks[t].kernel.stereo) {
+        for (let i = 0; i < n; i++) {
+          bufL[off + i] += tb[i];
+          bufR[off + i] += tbR[i];
+        }
+      } else {
+        for (let i = 0; i < n; i++) {
+          const x = tb[i] * CENTRE;
+          bufL[off + i] += x;
+          bufR[off + i] += x;
+        }
       }
     }
     if (this.playing) {
