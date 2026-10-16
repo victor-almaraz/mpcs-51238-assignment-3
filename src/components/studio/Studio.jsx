@@ -13,6 +13,8 @@ import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
 import Timeline from '@/components/timeline/Timeline';
 import EffectChain from '@/components/effects/EffectChain';
+import OpenArchive from '@/components/archive/OpenArchive';
+import SaveArchive from '@/components/archive/SaveArchive';
 import { effectFor } from '@/dsp/effects/registry';
 import { setEffectBypass } from '@/lib/project/effect-commands';
 import { sourceStatus } from '@/components/timeline/layout';
@@ -27,6 +29,7 @@ import { setDeviceParam, setTrack, ticksPerBar, trackLabel } from '@/lib/project
 import {
   PROJECT_NEWER,
   SAVE_DELAY_MS,
+  archiveState,
   STORAGE_FULL,
   commitEdit,
   flushSaves,
@@ -88,7 +91,9 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     function handleBeforeUnload(e) {
       flushView();
       flushSaves();
-      if (hasUnsavedEdits()) e.preventDefault();
+      // Loaded audio missing from the last .wrack save would be lost with session-only storage.
+      const unarchived = archiveState(projectRef.current, (id) => Boolean(getSource(id))).unarchived;
+      if (hasUnsavedEdits() || unarchived.length > 0) e.preventDefault();
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -198,11 +203,10 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         ) : null}
       </div>
 
-      {anyMissing ? (
-        <div role="toolbar" aria-label="Project" className="flex flex-wrap gap-2">
-          <Button disabled>Open .wrack file to restore audio</Button>
-        </div>
-      ) : null}
+      <div role="toolbar" aria-label="Project" className="flex flex-wrap items-start gap-4">
+        <SaveArchive project={project} disabled={readOnly} />
+        {anyMissing ? <OpenArchive label="Open .wrack file to restore audio" currentId={project.id} /> : null}
+      </div>
 
       <Transport
         project={project}

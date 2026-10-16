@@ -1,5 +1,7 @@
 # Project file format
 
+This document describes the full archive design. The `.wrack` files this build writes and reads follow the STORE-only subset in `assignment-3-scope.md` (`.wrack` archive): `project.json` and `audio/<sourceId>.<ext>`, no compression, manifest or ZIP64, and the limits listed there.
+
 ## Archive layout (`.wrack`)
 ```
 manifest.json               # { "format": "w-rack.archive", "version": 1, "createdBy": "...", "projectFile": "project.json" }

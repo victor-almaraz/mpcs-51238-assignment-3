@@ -73,7 +73,13 @@ export function saveProject(doc) {
   const written = writeJson(projectKey(doc.id), doc);
   if (!written.ok) return { ok: false, error: writeError(written.error) };
   const previous = index.value.find((e) => e.id === doc.id);
-  const entry = { id: doc.id, name: doc.name, modifiedAt: doc.modifiedAt, archiveSavedAt: previous?.archiveSavedAt ?? null };
+  const entry = {
+    id: doc.id,
+    name: doc.name,
+    modifiedAt: doc.modifiedAt,
+    archiveSavedAt: previous?.archiveSavedAt ?? null,
+    archivedSources: previous?.archivedSources ?? [],
+  };
   const indexed = writeJson(INDEX_KEY, [...index.value.filter((e) => e.id !== doc.id), entry]);
   if (!indexed.ok) {
     if (!previous) removeKey(projectKey(doc.id));
@@ -169,6 +175,34 @@ export function openExampleCopy(slug, id, now = new Date().toISOString()) {
 /** True while `id` is an example copy that has not been saved. */
 export function isUnsavedCopy(id) {
   return unsaved.has(id);
+}
+
+/**
+ * Records that `doc` was saved to a .wrack file: the index entry keeps the
+ * document's modifiedAt and the sources the file carries. Returns { ok } or
+ * { ok: false, error }.
+ */
+export function markArchiveSaved(doc, sourceIds) {
+  const index = readIndex();
+  if (!index.ok) return index;
+  const entries = index.value.map((e) => (e.id === doc.id ? { ...e, archiveSavedAt: doc.modifiedAt, archivedSources: [...sourceIds] } : e));
+  const written = writeJson(INDEX_KEY, entries);
+  return written.ok ? { ok: true } : { ok: false, error: writeError(written.error) };
+}
+
+/**
+ * Archive state of `doc` for the "Not saved to file" indicator:
+ * { saved: false } while edits or loaded sources are newer than the last
+ * .wrack save, plus `unarchived`, the loaded sourceIds the file lacks.
+ * `isLoaded(sourceId)` says whether a source is in memory.
+ */
+export function archiveState(doc, isLoaded) {
+  const index = readIndex();
+  const entry = index.ok ? index.value.find((e) => e.id === doc.id) : null;
+  const archived = new Set(entry?.archivedSources ?? []);
+  const unarchived = Object.keys(doc.sources).filter((id) => isLoaded(id) && !archived.has(id));
+  const editsNewer = !entry?.archiveSavedAt || entry.archiveSavedAt !== doc.modifiedAt;
+  return { saved: !editsNewer && unarchived.length === 0, unarchived };
 }
 
 /** Returns a new project ID. */

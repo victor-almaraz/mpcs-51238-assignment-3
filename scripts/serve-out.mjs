@@ -30,17 +30,29 @@ const CONTENT_TYPES = {
   '.woff': 'font/woff',
 };
 
-/** Compiles a Vercel source pattern (`:name`, `:name*`) to an anchored RegExp. */
+/**
+ * Compiles a Vercel source pattern to an anchored RegExp with named groups:
+ * `:name*` matches the rest of the path, `:name` one segment (or the part of
+ * a segment before a literal such as `.txt`).
+ */
 function compile(pattern) {
   const body = pattern
     .split('/')
     .map((part) => {
-      if (/^:\w+\*$/.test(part)) return '.*';
-      if (/^:\w+$/.test(part)) return '[^/]+';
-      return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rest = /^:(\w+)\*$/.exec(part);
+      if (rest) return `(?<${rest[1]}>.*)`;
+      return part
+        .split(/(:\w+)/)
+        .map((piece) => (/^:\w+$/.test(piece) ? `(?<${piece.slice(1)}>[^/]+?)` : piece.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+        .join('');
     })
     .join('/');
   return new RegExp(`^${body}$`);
+}
+
+/** `destination` with `:name` replaced by the groups `match` captured. */
+function substitute(destination, match) {
+  return destination.replace(/:(\w+)/g, (token, name) => match.groups?.[name] ?? token);
 }
 
 const rewrites = (vercel.rewrites ?? []).map((r) => ({ test: compile(r.source), destination: r.destination }));
@@ -81,8 +93,13 @@ const server = createServer((req, res) => {
     if (rule.test.test(urlPath)) for (const { key, value } of rule.headers) headers[key] = value;
   }
   const direct = resolveFile(urlPath);
-  const rewrite = direct ? null : rewrites.find((r) => r.test.test(urlPath));
-  const file = direct ?? (rewrite ? resolveFile(rewrite.destination) : null);
+  let file = direct;
+  for (const r of direct ? [] : rewrites) {
+    const match = r.test.exec(urlPath);
+    if (!match) continue;
+    file = resolveFile(substitute(r.destination, match));
+    if (file) break;
+  }
   if (file) {
     send(res, 200, file, headers);
     return;

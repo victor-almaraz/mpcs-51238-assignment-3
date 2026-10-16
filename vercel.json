@@ -1,12 +1,28 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/projects/:id", "destination": "/projects/_shell" }
+    {
+      "source": "/projects/:id/:file",
+      "destination": "/projects/_shell/:file"
+    },
+    {
+      "source": "/projects/:id.txt",
+      "destination": "/projects/_shell.txt"
+    },
+    {
+      "source": "/projects/:id",
+      "destination": "/projects/_shell"
+    }
   ],
   "headers": [
     {
       "source": "/worklets/:path*",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
   ]
 }

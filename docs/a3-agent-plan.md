@@ -117,7 +117,7 @@ Do not start the next task.
   1. Create route files, each with `<main>`, one `<h1>` and a skip link.
   2. Build the header with `aria-current="page"` on the active link.
   3. `StudioLoader.jsx` (`'use client'`) loads the studio with `dynamic(() => import('./Studio'), { ssr: false })`; `/projects/[id]` renders `StudioLoader` with a placeholder studio.
-  4. `/projects/[id]` prerenders one shell: `generateStaticParams()` returns `{ id: '_shell' }` and `dynamicParams` is `false`. The `vercel.json` rewrite serves the shell for every project ID, and `StudioLoader` reads the ID from `window.location.pathname` after mount. An unknown ID shows "Project not found".
+  4. `/projects/[id]` prerenders one shell: `generateStaticParams()` returns `{ id: '_shell' }` and `dynamicParams` is `false`. The `vercel.json` rewrites serve the shell for every project ID: `/projects/:id` → `/projects/_shell`, and the shell's client-navigation payloads (`/projects/:id.txt`, `/projects/:id/:file`) → their `_shell` files, so opening a project by client navigation keeps in-memory state. `StudioLoader` reads the ID from `window.location.pathname` after mount. An unknown ID shows "Project not found".
 - **Acceptance:** Playwright visits each route; one `h1` per page; no axe violations; Tab reaches the navigation; `/projects/<any id>` serves the shell.
 - **Commit:** `feat: add routes and navigation`
 - **Prohibited:** `localStorage` in Server Components or at module top level; `ssr: false` in a Server Component.
@@ -255,7 +255,7 @@ Do not start the next task.
 ### Phase 12 — `.wrack` archive
 - **Goal:** save and open STORE-only ZIP archives.
 - **Context:** `assignment-3-scope.md` (`.wrack` archive), `project-file-format.md`.
-- **Files:** `src/lib/archive/{crc32,zip-writer,zip-reader,validate}.js`, `src/components/archive/{SaveArchive,OpenArchive,RestoreDialog}.jsx`, `tests/dsp/zip.test.js`.
+- **Files:** `src/lib/archive/{crc32,zip-writer,zip-reader,validate,paths,archive}.js`, `src/components/archive/{SaveArchive,OpenArchive,RestoreDialog}.jsx`, `src/lib/files/save-file.js`, `vercel.json`, `scripts/serve-out.mjs`, `tests/dsp/zip.test.js`, `tests/e2e/archive.spec.js`.
 - **Tasks:**
   1. CRC-32 with a reflected table, polynomial `0xEDB88320`. Test: `crc32("123456789") === 0xCBF43926`.
   2. Writer: per entry a local file header (signature `0x04034b50`, 30 bytes + name) and data; then central directory headers (`0x02014b50`, 46 bytes + name); then the end-of-central-directory record (`0x06054b50`, 22 bytes). Method 0, flag bit 11 (UTF-8), fixed DOS time 0 and date `0x0021` for deterministic output. CRC and sizes in the local header. Output `new Blob(parts)`.

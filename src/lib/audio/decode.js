@@ -224,6 +224,45 @@ export async function redecodeAll(rate) {
   changed();
 }
 
+/**
+ * Loads sources carried by a .wrack file: `audio` maps sourceId → Blob of the
+ * original bytes (already checked against their SHA-256), `refs` are the
+ * archive project's SourceRefs. Each source not yet in memory is decoded at
+ * `rate`, stored on the device when possible and registered. Resolves to
+ * { loaded: [sourceId], failed: [message] }.
+ */
+export async function loadArchiveSources(audio, refs, rate = DEFAULT_DECODE_RATE) {
+  const loaded = [];
+  const failed = [];
+  for (const [sourceId, blob] of audio) {
+    const ref = refs?.[sourceId];
+    const name = ref?.name ?? sourceId;
+    if (sources.has(sourceId)) {
+      loaded.push(sourceId);
+      continue;
+    }
+    try {
+      const decoded = await decodeBytes(await blob.arrayBuffer(), rate);
+      await store({
+        sourceId,
+        name,
+        mimeType: ref?.format || blob.type || 'application/octet-stream',
+        size: blob.size,
+        bytes: blob,
+        rate: decoded.rate,
+        frames: decoded.frames,
+        channels: decoded.channels,
+        stored: 'session',
+      });
+      loaded.push(sourceId);
+    } catch (err) {
+      console.error(err);
+      failed.push(decodeFailed(name));
+    }
+  }
+  return { loaded, failed };
+}
+
 /** Registers an already decoded source (archives, tests). */
 export function addDecodedSource(entry) {
   return register(entry);
