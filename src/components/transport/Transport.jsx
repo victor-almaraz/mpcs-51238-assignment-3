@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
+import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import { errorText } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -12,8 +13,11 @@ import MetronomeToggle from './MetronomeToggle';
 import Position from './Position';
 import TempoField from './TempoField';
 
-const SERVER_STATE = { status: 'idle', noticeOpen: false, playing: false, metronome: false, error: null };
-const IGNORED_TARGETS = 'input, textarea, select, button, [contenteditable], [contenteditable="true"]';
+const SERVER_STATE = { status: 'idle', noticeOpen: false, playing: false, metronome: false, ducked: false, error: null };
+/** Space and Home keep their own meaning on these (TRN-02). */
+const CONTROL_TARGETS = 'input, textarea, select, button, [contenteditable], [contenteditable="true"]';
+/** Escape keeps its own meaning in text entry (SAFE-03: Panic outside text fields). */
+const TEXT_TARGETS = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable], [contenteditable="true"]';
 
 /** Default loop when none is stored: the first four bars. */
 function loopRange(project, view) {
@@ -33,6 +37,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
   const engine = getEngine();
   const state = useSyncExternalStore(engine.subscribe, engine.getState, () => SERVER_STATE);
   const [played, setPlayed] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const [initialPlayhead] = useState(view.playhead);
   const loop = loopRange(project, view);
 
@@ -61,6 +66,15 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     onViewChange({ playhead: engine.stop() });
   }
 
+  /** Panic (SAFE-03): stops the transport and every sound; announces "All sound stopped". */
+  function panic() {
+    const wasRunning = engine.panic();
+    onViewChange({ playhead: engine.positionTick() });
+    // A repeated announcement needs a changed text to be read again.
+    setAnnouncement((prev) => (prev === 'All sound stopped' ? 'All sound stopped.' : 'All sound stopped'));
+    return wasRunning;
+  }
+
   function locate(tick) {
     engine.locate(tick);
     if (!engine.getState().playing) onViewChange({ playhead: tick });
@@ -69,7 +83,14 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
   const keyHandler = useRef(null);
   useEffect(() => {
     keyHandler.current = (e) => {
-      if (e.defaultPrevented || e.target.closest?.(IGNORED_TARGETS) || document.querySelector('dialog[open]')) return;
+      if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
+      if (e.key === 'Escape') {
+        if (e.target.closest?.(TEXT_TARGETS)) return;
+        e.preventDefault();
+        panic();
+        return;
+      }
+      if (e.target.closest?.(CONTROL_TARGETS)) return;
       if (e.key === ' ' && !e.repeat) {
         e.preventDefault();
         if (engine.getState().playing) stop();
@@ -113,7 +134,19 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
           disabled={readOnly}
           onChange={(value) => onEdit(setTimeSignature(project, value))}
         />
+        <Button variant="danger" size="lg" onClick={panic} className="ml-auto">
+          Panic
+        </Button>
       </div>
+      <StatusRegion visuallyHidden>{announcement}</StatusRegion>
+      {state.ducked ? (
+        <div role="alert" className={errorText}>
+          <span>The output was loud for a long time, so W-Rack lowered it by 6 dB.</span>{' '}
+          <Button size="sm" onClick={() => engine.ackDuck()}>
+            Restore the level
+          </Button>
+        </div>
+      ) : null}
       <p className="text-sm">{state.playing ? 'Playing' : 'Stopped'}</p>
       {hint ? (
         <p id="transport-play-hint" className="text-sm font-bold">

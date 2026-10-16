@@ -7,8 +7,13 @@ import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import Transport from '@/components/transport/Transport';
 import InstrumentPanel from '@/components/instruments/InstrumentPanel';
+import MasterStrip from '@/components/mixer/MasterStrip';
+import TrackStrip from '@/components/mixer/TrackStrip';
+import { getEngine } from '@/lib/audio/engine-client';
+import { engineTrackIds } from '@/lib/audio/param-changes';
+import { METER_FIELDS } from '@/dsp/mixer/meter';
 import { errorText, pageHeading, sectionHeading } from '@/design-systems/industrial/classes';
-import { setDeviceParam, ticksPerBar, trackLabel } from '@/lib/project/model';
+import { setDeviceParam, setTrack, ticksPerBar, trackLabel } from '@/lib/project/model';
 import {
   PROJECT_NEWER,
   STORAGE_FULL,
@@ -93,6 +98,13 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const clips = Object.values(project.clips);
   const audioClips = clips.filter((c) => c.kind === 'audio');
   const failure = [saveState, viewSaveState].find((s) => s.status === 'error');
+  const engine = getEngine();
+  const engineState = useSyncExternalStore(engine.subscribe, engine.getState, engine.getState);
+  const mixerTrackIds = engineTrackIds(project);
+  const meterFor = (index) => () => {
+    const m = engine.getMeters();
+    return m ? [m[METER_FIELDS * index], m[METER_FIELDS * index + 1]] : null;
+  };
   const panelTrackId = view.selectedTrackId ?? project.trackOrder.find((id) => project.tracks[id].kind === 'instrument');
   const panelTrack = panelTrackId ? project.tracks[panelTrackId] : null;
   const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
@@ -195,6 +207,32 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           </div>
         )}
       </Card>
+
+      <section aria-labelledby="studio-mixer" className="flex flex-col gap-2">
+        <h2 id="studio-mixer" className={sectionHeading}>
+          Mixer
+        </h2>
+        <div className="flex flex-wrap items-start gap-2">
+          <ul aria-label="Track strips" className="flex flex-wrap gap-2">
+            {mixerTrackIds.map((id, index) => (
+              <TrackStrip
+                key={id}
+                track={project.tracks[id]}
+                readMeter={meterFor(index)}
+                disabled={readOnly}
+                onChange={(changes) => edit(setTrack(project, id, changes))}
+              />
+            ))}
+          </ul>
+          <MasterStrip
+            volumeDb={engineState.masterVolumeDb}
+            pan={project.tracks[project.masterTrackId].pan}
+            disabled={readOnly}
+            onVolume={(db) => engine.setMasterVolume(db)}
+            onPan={(pan) => edit(setTrack(project, project.masterTrackId, { pan }))}
+          />
+        </div>
+      </section>
 
       {panelDevice ? (
         <InstrumentPanel

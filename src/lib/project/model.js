@@ -195,3 +195,8 @@ export function setDeviceParam(doc, deviceId, paramId, value) {
     devices: { ...doc.devices, [deviceId]: { ...device, params: { ...device.params, [paramId]: value } } },
   };
 }
+
+/** Returns `doc` with track `trackId` updated by `changes` (gainDb, pan, mute, solo, name …). */
+export function setTrack(doc, trackId, changes) {
+  return { ...doc, tracks: { ...doc.tracks, [trackId]: { ...doc.tracks[trackId], ...changes } } };
+}

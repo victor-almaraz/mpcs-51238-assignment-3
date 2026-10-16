@@ -212,6 +212,7 @@ test('engine: a drum track renders in stereo', () => {
       ...emptyModel(FS),
       tracks: [
         {
+          trackId: 'trk_drums', gainDb: 0, pan: 0, mute: false, solo: false,
           deviceId: 'dev_drums',
           type: 'drums',
           params: { 'kick.pan': -1 },

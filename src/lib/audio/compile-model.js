@@ -3,7 +3,8 @@
  * the frame-domain EngineModel the engine receives. Pure; runs on the main
  * thread before every model message.
  */
-import { clampParams } from '../../dsp/core/params.js';
+import { clampParam, clampParams } from '../../dsp/core/params.js';
+import { PAN, TRACK_GAIN } from '../../dsp/mixer/mixer.js';
 import { instrumentFor } from '../../dsp/instruments/registry.js';
 import { MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
@@ -65,6 +66,10 @@ function compileTracks(doc, tempo) {
       deviceId: device.id,
       type: device.type,
       params: entry ? clampParams(entry.params, device.params) : {},
+      gainDb: clampParam(TRACK_GAIN, track.gainDb),
+      pan: clampParam(PAN, track.pan),
+      mute: track.mute === true,
+      solo: track.solo === true,
       notes: compileNotes(doc, track, tempo),
     });
   }
@@ -93,6 +98,7 @@ export function compileModel(doc, fs) {
       loopStartFrame: tempo.frameAt(loop.start),
       loopEndFrame: tempo.frameAt(loop.end),
       endFrame: tempo.frameAt(endTick),
+      masterPan: clampParam(PAN, doc.tracks[doc.masterTrackId]?.pan ?? 0),
       tracks: compileTracks(doc, tempo),
     },
   };

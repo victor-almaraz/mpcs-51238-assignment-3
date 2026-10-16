@@ -10,9 +10,10 @@ import { createTrack } from './sequencer.js';
 /**
  * Returns the compiled model for a validated EngineModel payload:
  * { fs, tempo, meter, loopStartFrame, loopEndFrame, endFrame, tracks }.
- * `kernelFor(track)` returns the instrument kernel for a payload track, or null.
+ * `kernelFor(track)` returns the instrument kernel for a payload track, or null;
+ * `stripFor(track)` returns its channel strip.
  */
-export function buildEngineModel(model, kernelFor = () => null) {
+export function buildEngineModel(model, kernelFor = () => null, stripFor = () => null) {
   return {
     fs: model.fs,
     tempo: new TempoMap(model.tempo, model.fs),
@@ -20,7 +21,11 @@ export function buildEngineModel(model, kernelFor = () => null) {
     loopStartFrame: model.loopStartFrame,
     loopEndFrame: model.loopEndFrame,
     endFrame: model.endFrame,
-    tracks: (model.tracks ?? []).map((t) => createTrack(kernelFor(t), t.notes)),
+    tracks: (model.tracks ?? []).map((t) => {
+      const track = createTrack(kernelFor(t), t.notes);
+      track.strip = stripFor(t);
+      return track;
+    }),
   };
 }
 
@@ -35,6 +40,7 @@ export function emptyModel(fs) {
     loopStartFrame: 0,
     loopEndFrame: 4 * bar,
     endFrame: 4 * bar,
+    masterPan: 0,
     tracks: [],
   };
 }

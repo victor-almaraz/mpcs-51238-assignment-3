@@ -313,3 +313,93 @@ test('the Beat example plays with every instrument without engine errors', async
   }
   expect(errors).toEqual([]);
 });
+
+async function startPlaying(page) {
+  await playButton(page).click();
+  if (await notice(page).isVisible()) await notice(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+}
+
+/** Largest post-limiter master peak seen over `ms` milliseconds. */
+async function masterPeakOver(page, ms) {
+  return page.evaluate(async (duration) => {
+    const engine = window.__wrackEngine;
+    let most = 0;
+    const until = performance.now() + duration;
+    while (performance.now() < until) {
+      const level = engine.getMasterLevel();
+      most = Math.max(most, level.peakL, level.peakR);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return most;
+  }, ms);
+}
+
+test('the mixer: named strips with volume, pan, mute and solo, and a master strip', async ({ page }) => {
+  await openExample(page);
+  const mixer = page.getByRole('region', { name: 'Mixer' });
+  await expect(mixer.getByRole('slider', { name: 'Drums volume' })).toHaveAttribute('aria-valuetext', '0.0 dB');
+  await expect(mixer.getByRole('slider', { name: 'Bass pan' })).toHaveAttribute('aria-valuetext', 'Centre');
+  await expect(mixer.getByRole('button', { name: 'Mute Bass' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(mixer.getByRole('button', { name: 'Solo Lead stab' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(mixer.getByRole('slider', { name: 'Master volume' })).toHaveAttribute('aria-valuetext', '−12.0 dB');
+  await expect(mixer.getByRole('slider', { name: 'Master pan' })).toHaveAttribute('aria-valuetext', 'Centre');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+
+  await mixer.getByRole('button', { name: 'Mute Bass' }).click();
+  await expect(mixer.getByRole('button', { name: 'Mute Bass' })).toHaveAttribute('aria-pressed', 'true');
+  const pan = mixer.getByRole('slider', { name: 'Bass pan' });
+  await pan.focus();
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowLeft');
+  await expect(pan).toHaveAttribute('aria-valuetext', 'Left 20');
+  await page.keyboard.press('Delete');
+  await expect(pan).toHaveAttribute('aria-valuetext', 'Centre');
+  await expect(page.getByText('Saved on this device')).toBeVisible();
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+  expect(Object.values(saved.tracks).find((t) => t.name === 'Bass').mute).toBe(true);
+
+  const master = mixer.getByRole('slider', { name: 'Master volume' });
+  await master.focus();
+  await page.keyboard.press('PageDown');
+  await expect(master).toHaveAttribute('aria-valuetext', '−18.0 dB');
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  expect(settings.masterVolumeDb).toBe(-18);
+});
+
+for (const title of ['Beat', 'Ambient', 'Pluck melody']) {
+  test(`the ${title} example plays audibly through the safety stage`, async ({ page }) => {
+    await openExample(page, title);
+    await startPlaying(page);
+    const most = await masterPeakOver(page, 2500);
+    expect(most).toBeGreaterThan(0.005);
+    expect(most).toBeLessThanOrEqual(0.8913);
+  });
+}
+
+test('Panic stops playback and all sound, and is announced', async ({ page }) => {
+  await openExample(page);
+  await startPlaying(page);
+  expect(await masterPeakOver(page, 1500)).toBeGreaterThan(0.005);
+  await page.getByRole('button', { name: 'Panic' }).click();
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('status').filter({ hasText: 'All sound stopped' })).toHaveCount(1);
+  await page.waitForTimeout(300);
+  expect(await masterPeakOver(page, 500)).toBeLessThan(1e-4);
+});
+
+test('Escape is Panic outside text fields, including on a focused button', async ({ page }) => {
+  await openExample(page);
+  await startPlaying(page);
+  await page.getByRole('button', { name: 'Go to start' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await startPlaying(page);
+  await page.getByRole('textbox', { name: 'Tempo (BPM)' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.press('Escape');
+  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+});

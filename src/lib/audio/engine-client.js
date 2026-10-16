@@ -13,6 +13,7 @@ import { CHANNELS, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../../dsp/core/con
 import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
+import { paramChanges } from './param-changes.js';
 
 export const WORKLET_URL = '/worklets/worklet/main.js';
 
@@ -46,7 +47,18 @@ function createClient() {
   let loop = { on: false, startTick: 0, endTick: 0 };
   let stoppedTick = 0; // playhead while stopped
   let last = { playFrame: 0, ctxFrame: 0 }; // latest engine report while playing
-  let state = { status: 'idle', noticeOpen: false, playing: false, metronome: getSettings().metronome, error: null };
+  let state = {
+    status: 'idle',
+    noticeOpen: false,
+    playing: false,
+    metronome: getSettings().metronome,
+    masterVolumeDb: getSettings().masterVolumeDb,
+    ducked: false,
+    error: null,
+  };
+  let meters = null; // latest engine meters (Float32Array)
+  let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
+  const pendingParams = new Map(); // "target:paramId" → value, sent once per frame
   const listeners = new Set();
 
   function setState(changes) {
@@ -68,12 +80,33 @@ function createClient() {
     if (compiled) send({ t: 'model', rev: ++rev, model: compiled.model });
   }
 
-  /** Sends the model at most once per animation frame (a3-audio-implementation.md, Main to engine). */
-  function scheduleModel() {
+  let modelPending = false;
+
+  /**
+   * Sends model and params changes at most once per animation frame
+   * (a3-audio-implementation.md, Main to engine). A pending model carries
+   * every param, so pending params are dropped when one is sent.
+   */
+  function scheduleFlush() {
     if (!engine || modelFrame) return;
     modelFrame = requestAnimationFrame(() => {
       modelFrame = 0;
-      sendModel();
+      if (modelPending) {
+        modelPending = false;
+        pendingParams.clear();
+        sendModel();
+      } else if (pendingParams.size > 0) {
+        const values = new Float64Array(3 * pendingParams.size);
+        let i = 0;
+        for (const [key, value] of pendingParams) {
+          const [target, paramId] = key.split(':').map(Number);
+          values[i++] = target;
+          values[i++] = paramId;
+          values[i++] = value;
+        }
+        pendingParams.clear();
+        send({ t: 'params', rev: ++rev, values });
+      }
     });
   }
 
@@ -98,8 +131,17 @@ function createClient() {
 
   function onEngineMessage(event) {
     const msg = event.data;
-    if (msg.t === 'pos' && msg.playing) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
-    else if (msg.t === 'error') console.error(`Engine error: ${msg.code}`, msg.detail);
+    if (msg.t === 'pos') {
+      meters = msg.meters;
+      if (msg.playing) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
+    } else if (msg.t === 'error') console.error(`Engine error: ${msg.code}`, msg.detail);
+  }
+
+  function onSafetyMessage(event) {
+    const msg = event.data;
+    if (msg.t === 'level') level = msg;
+    else if (msg.t === 'duck') setState({ ducked: msg.active });
+    else if (msg.t === 'error') console.error(`Safety error: ${msg.code}`, msg.detail);
   }
 
   function reportFailure(err) {
@@ -131,6 +173,7 @@ function createClient() {
       });
       engine.connect(safety).connect(ctx.destination);
       engine.port.onmessage = onEngineMessage;
+      safety.port.onmessage = onSafetyMessage;
       send({ t: 'init', seed: 1 });
       compile();
       sendModel();
@@ -190,11 +233,49 @@ function createClient() {
 
     /** Compiles `project` and sends it to the engine (now, or when audio starts). */
     setProject(project) {
+      const changes = paramChanges(doc, project);
       doc = project;
-      compile();
-      scheduleModel();
-      sendLoop();
+      if (changes) {
+        for (let i = 0; i < changes.length; i += 3) pendingParams.set(`${changes[i]}:${changes[i + 1]}`, changes[i + 2]);
+      } else {
+        compile();
+        modelPending = true;
+        sendLoop();
+      }
+      scheduleFlush();
     },
+
+    /**
+     * Panic: stops the transport and fades every sound in the engine; the
+     * safety stage restarts its fade-in. Returns true when audio was running.
+     */
+    panic() {
+      if (!engine) return false;
+      stoppedTick = this.positionTick();
+      send({ t: 'panic' });
+      safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
+      setState({ playing: false });
+      return true;
+    },
+
+    /** Releases a sustained-level duck (the user acknowledged it). */
+    ackDuck() {
+      safety?.port.postMessage({ t: 'ack-duck', v: PROTOCOL_VERSION });
+      setState({ ducked: false });
+    },
+
+    /** Sets master volume in dB and saves it in settings. */
+    setMasterVolume(db) {
+      updateSettings({ masterVolumeDb: db });
+      send({ t: 'master', volumeDb: db });
+      setState({ masterVolumeDb: db });
+    },
+
+    /** Latest engine meters: [peakL, peakR, meanSquareL, meanSquareR] per track slot, master last; or null. */
+    getMeters: () => meters,
+
+    /** Latest post-limiter master level: { peakL, peakR, reduction (linear gain) }. */
+    getMasterLevel: () => level,
 
     /** Meter map of the current project, or null. */
     meter: () => compiled?.meter ?? null,

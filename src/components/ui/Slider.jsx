@@ -10,6 +10,7 @@ function clamp(v, min, max) {
  * Native range input with a visible label and a value readout.
  * `valueText` is required: it is the aria-valuetext with units ("−6.0 dB") and
  * the readout text; a missing valueText throws outside production builds.
+ * `display` replaces the readout text when it should be shorter ("L20" for "Left 20").
  * PageUp/PageDown jump by `pageStep` (default 10 % of the range). With `onReset`,
  * Delete and double-click reset the value. `className` goes on the row, other
  * props on the <input>.
@@ -23,6 +24,7 @@ export default function Slider({
   step = 1,
   onChange,
   valueText,
+  display,
   onReset,
   pageStep,
   disabled = false,
@@ -87,7 +89,7 @@ export default function Slider({
         {...rest}
       />
       <output htmlFor={id} aria-hidden="true" className={cx('min-h-6 w-20 shrink-0 px-1 text-right text-sm leading-6', readout)}>
-        {valueText}
+        {display ?? valueText}
       </output>
       {onReset ? (
         <span id={helpId} className="sr-only">

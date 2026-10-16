@@ -175,6 +175,7 @@ function engineWithNotes(notes) {
     ...emptyModel(FS),
     tracks: [
       {
+        trackId: 'trk_a', gainDb: 0, pan: 0, mute: false, solo: false,
         deviceId: 'dev_a',
         type: 'subtractive',
         params: { waveform: wave('sine'), cutoff: 16000, attack: 0.002, release: 0.01 },
@@ -243,7 +244,7 @@ test('engine: kernels persist across model swaps by device ID and release their 
   const before = e.model.tracks[0].kernel;
   const same = engineWithNotes([[0, 40000, 60]]);
   e.setModel(e.prepareModel({ ...emptyModel(FS), tracks: [same.model.tracks.length ? {
-    deviceId: 'dev_a', type: 'subtractive', params: {},
+    trackId: 'trk_a', gainDb: 0, pan: 0, mute: false, solo: false, deviceId: 'dev_a', type: 'subtractive', params: {},
     notes: { start: new Int32Array(0), end: new Int32Array(0), pitch: new Uint8Array(0), vel: new Uint8Array(0) },
   } : null] }));
   assert.equal(e.model.tracks[0].kernel, before);

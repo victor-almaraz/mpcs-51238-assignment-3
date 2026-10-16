@@ -14,8 +14,12 @@ export const MODEL_SCHEMA = 1;
 /** Messages the safety processor accepts. */
 export const SAFETY_IN = Object.freeze(['resume-fade', 'ack-duck']);
 
-/** Messages the safety processor posts: guard { muted }, duck { active }, error { code, detail }. */
-export const SAFETY_OUT = Object.freeze(['guard', 'duck', 'error']);
+/**
+ * Messages the safety processor posts: guard { muted }, duck { active },
+ * level { peakL, peakR, reduction } (post-limiter, every report period),
+ * error { code, detail }.
+ */
+export const SAFETY_OUT = Object.freeze(['guard', 'duck', 'level', 'error']);
 
 /** Transport operations, applied at the next quantum boundary. */
 export const TRANSPORT_OPS = Object.freeze(['play', 'stop', 'locate', 'loop']);
@@ -56,12 +60,15 @@ export const MAX_NOTES_PER_TRACK = 20000;
 export const MAX_TRACKS = 16;
 
 /**
- * Validates one model track: { deviceId, type, params, notes: { start, end,
- * pitch, vel } } with Int32Array frames sorted by start, end > start, pitch
- * 0–127 and velocity 1–127 in Uint8Arrays.
+ * Validates one model track: { trackId, deviceId, type, params, gainDb, pan,
+ * mute, solo, notes: { start, end, pitch, vel } } with Int32Array frames sorted
+ * by start, end > start, pitch 0–127 and velocity 1–127 in Uint8Arrays.
  */
 export function validateModelTrack(track) {
   if (!isObject(track) || typeof track.deviceId !== 'string' || typeof track.type !== 'string') return 'bad-track';
+  if (typeof track.trackId !== 'string') return 'bad-track';
+  if (!Number.isFinite(track.gainDb) || !Number.isFinite(track.pan)) return 'bad-mixer';
+  if (typeof track.mute !== 'boolean' || typeof track.solo !== 'boolean') return 'bad-mixer';
   if (!isObject(track.params) || !Object.values(track.params).every(Number.isFinite)) return 'bad-params';
   const n = track.notes;
   if (!isObject(n) || !(n.start instanceof Int32Array) || !(n.end instanceof Int32Array)) return 'bad-notes';
@@ -91,6 +98,7 @@ export function validateModel(model) {
     return 'bad-loop';
   }
   if (!isFrame(model.endFrame)) return 'bad-end';
+  if (!Number.isFinite(model.masterPan)) return 'bad-master-pan';
   if (!Array.isArray(model.tracks) || model.tracks.length > MAX_TRACKS) return 'bad-tracks';
   for (const track of model.tracks) {
     const invalid = validateModelTrack(track);
@@ -126,12 +134,26 @@ const ENGINE_VALIDATORS = {
     if (!Number.isFinite(msg.volumeDb)) return 'bad-volume';
     return null;
   },
+  params(msg) {
+    if (!Number.isInteger(msg.rev) || msg.rev < 0) return 'bad-rev';
+    if (!(msg.values instanceof Float64Array) || msg.values.length % 3 !== 0) return 'bad-params';
+    for (const x of msg.values) if (!Number.isFinite(x)) return 'bad-params';
+    return null;
+  },
+  panic() {
+    return null;
+  },
 };
 
 /** Messages the engine processor accepts. */
 export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
 
-/** Messages the engine posts: ready { fs, blockSize }, ack { rev }, pos { playFrame, ctxFrame, playing }, error { code, detail }. */
+/**
+ * Messages the engine posts: ready { fs, blockSize }, ack { rev },
+ * pos { playFrame, ctxFrame, playing, meters }, error { code, detail }.
+ * meters: Float32Array of [peakL, peakR, meanSquareL, meanSquareR] for 16
+ * track slots in model order, then the master.
+ */
 export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error']);
 
 /** Validates a message sent to the engine processor. */

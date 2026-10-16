@@ -26,7 +26,7 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.quanta = 0;
     this.reportEvery = 0;
     // Reused for every post: process() allocates nothing.
-    this.posMessage = { t: 'pos', v: PROTOCOL_VERSION, playFrame: 0, ctxFrame: 0, playing: false };
+    this.posMessage = { t: 'pos', v: PROTOCOL_VERSION, playFrame: 0, ctxFrame: 0, playing: false, meters: null };
     this.ackMessage = { t: 'ack', v: PROTOCOL_VERSION, rev: 0 };
     this.port.onmessage = (event) => this.onMessage(event.data);
   }
@@ -54,9 +54,15 @@ class EngineProcessor extends AudioWorkletProcessor {
         this.pendingModel = this.engine.prepareModel(msg.model);
         this.pendingRev = msg.rev;
         break;
+      case 'params':
+        this.engine.applyParams(msg.values, this.pendingModel ?? this.engine.model);
+        this.ackMessage.rev = msg.rev;
+        this.port.postMessage(this.ackMessage);
+        break;
       case 'transport':
       case 'metronome':
       case 'master':
+      case 'panic':
         if (this.ops.length >= MAX_PENDING_OPS) this.ops.shift();
         this.ops.push(msg);
         break;
@@ -76,6 +82,8 @@ class EngineProcessor extends AudioWorkletProcessor {
         else engine.setLoop(op.loopOn, op.loopStart, op.loopEnd);
       } else if (op.t === 'metronome') {
         engine.setMetronome(op.on, op.gainDb);
+      } else if (op.t === 'panic') {
+        engine.panic();
       } else {
         engine.setMasterVolume(op.volumeDb);
       }
@@ -104,6 +112,7 @@ class EngineProcessor extends AudioWorkletProcessor {
       pos.playFrame = this.engine.playFrame;
       pos.ctxFrame = ctxFrame + frames;
       pos.playing = this.engine.playing;
+      pos.meters = this.engine.readMeters();
       this.port.postMessage(pos);
     }
     return true;
@@ -117,6 +126,11 @@ class SafetyProcessor extends AudioWorkletProcessor {
     this.scratch = new Float32Array(SCRATCH_FRAMES);
     this.guardMessage = { t: 'guard', v: PROTOCOL_VERSION, muted: true };
     this.duckMessage = { t: 'duck', v: PROTOCOL_VERSION, active: false };
+    this.levelMessage = { t: 'level', v: PROTOCOL_VERSION, peakL: 0, peakR: 0, reduction: 1 };
+    this.peakL = 0;
+    this.peakR = 0;
+    this.quanta = 0;
+    this.reportEvery = 0;
     this.port.onmessage = (event) => this.onMessage(event.data);
   }
 
@@ -145,6 +159,27 @@ class SafetyProcessor extends AudioWorkletProcessor {
     }
     for (let off = 0; off < frames; off += BLOCK) {
       this.kernel.process(outL, outR, off, off + BLOCK < frames ? off + BLOCK : frames);
+    }
+    let pl = this.peakL;
+    let pr = this.peakR;
+    for (let i = 0; i < frames; i++) {
+      const l = outL[i] < 0 ? -outL[i] : outL[i];
+      const r = outR[i] < 0 ? -outR[i] : outR[i];
+      if (l > pl) pl = l;
+      if (r > pr) pr = r;
+    }
+    this.peakL = pl;
+    this.peakR = pr;
+    if (this.reportEvery === 0) this.reportEvery = reportQuanta(sampleRate, frames);
+    if (++this.quanta >= this.reportEvery) {
+      this.quanta = 0;
+      const level = this.levelMessage;
+      level.peakL = pl;
+      level.peakR = pr;
+      level.reduction = this.kernel.limiter.readReduction();
+      this.port.postMessage(level);
+      this.peakL = 0;
+      this.peakR = 0;
     }
     if (this.kernel.takeGuardTrip()) this.port.postMessage(this.guardMessage);
     if (this.kernel.takeDuckChange()) {

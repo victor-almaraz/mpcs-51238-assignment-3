@@ -121,7 +121,7 @@ export function ensureModule(ctx) {
 |---|---|---|
 | `init` | `fs`, `seed`, `limits` | Once, after node creation |
 | `model` | `rev`, EngineModel (typed arrays) | Full snapshot on structural edits; at most one per animation frame |
-| `params` | `rev`, `Float64Array` of triples `[target, paramId, value]` | At most one per animation frame; one message per slider event is not allowed |
+| `params` | `rev`, `Float64Array` of triples `[target, paramId, value]` | At most one per animation frame; one message per slider event is not allowed. `target` is a model track index, or −1 for the master. `paramId` 0–3 are gain (dB), pan, mute and solo; 100 + i is parameter i of the track instrument's ParamDefs. The main thread sends `params` instead of `model` when an edit changes only these values |
 | `transport` | `op` (`play`, `stop`, `locate`, `loop`), `frame`, `loopStart`, `loopEnd`, `loopOn` | Applied at the next quantum boundary |
 | `live` | `Uint8Array` of `[status, data1, data2]` triples | Keyboard and Web MIDI notes; applied at offset 0 of the next quantum |
 | `source-add` | `sourceId`, `channels` (array of `Float32Array`) | Transfer list: each channel's `buffer` |
@@ -145,7 +145,8 @@ export function ensureModule(ctx) {
 | `error` | `code`, `detail` | On protocol errors |
 
 - Meters are a `Float32Array` of `[peakL, peakR, rmsL, rmsR]` per track plus master, combined into `pos`.
-- The safety port carries `duck` (`active`) and `guard` (`muted`) to the main thread, and `ack-duck` and `resume-fade` to the safety processor.
+- The safety port carries `duck` (`active`), `guard` (`muted`) and `level` (`peakL`, `peakR` and the limiter's smallest gain `reduction`, post-limiter, every `REPORT_QUANTA` quanta) to the main thread, and `ack-duck` and `resume-fade` to the safety processor. The master meter and the limiter readout use `level`.
+- Model tracks carry `trackId`, `gainDb`, `pan`, `mute` and `solo`; the model carries `masterPan`. Master volume is a saved setting sent with `master`.
 
 ### Transfer and memory
 - **Source upload:** after `decodeAudioData`, each channel is copied with `audioBuffer.getChannelData(c).slice()` and the copy's `buffer` is transferred. The main thread keeps its own channel data for peaks and export.

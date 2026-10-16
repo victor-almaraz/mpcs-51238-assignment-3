@@ -1,8 +1,12 @@
 /*
- * Engine kernel (a3-audio-implementation.md, Engine block loop): transport,
- * loop wrap, sequenced instrument tracks, metronome and master volume. Tracks
- * mix at centre with constant-power gain until the mixer stage exists. EngineProcessor is a thin wrapper; Node tests run
- * this class directly. process() allocates nothing.
+ * Engine kernel (a3-audio-implementation.md, Engine block loop; Mixer and
+ * metering): transport, loop wrap, sequenced instrument tracks through channel
+ * strips, metronome, master volume and pan, meters and Panic.
+ * EngineProcessor is a thin wrapper; Node tests run this class directly.
+ * process() allocates nothing.
+ *
+ * Signal order: track source → strip (gain, pan, mute/solo gate) → master bus
+ * → metronome click → master volume → master pan (balance) → safety node.
  */
 import { BLOCK } from '../core/constants.js';
 import { dbToGain } from '../core/math.js';
@@ -11,18 +15,31 @@ import { clampParam, defineParam } from '../core/params.js';
 import { Smoother, settleSmoothers } from '../core/smoother.js';
 import { GlobalVoices } from '../instruments/voice-pool.js';
 import { instrumentFor } from '../instruments/registry.js';
+import { MeterBank } from '../mixer/meter.js';
+import { ChannelStrip, PAN } from '../mixer/mixer.js';
+import { balance } from '../mixer/pan.js';
+import { MAX_TRACKS } from '../protocol.js';
 import { Metronome } from './metronome.js';
 import { buildEngineModel, emptyModel } from './model.js';
 import { renderTrack, reseek } from './sequencer.js';
-
-/** Constant-power centre gain, cos(π/4). */
-const CENTRE = Math.SQRT1_2;
 
 /** Master volume, dB: default −12, maximum 0 (assignment-3-scope.md, Mixer). */
 export const MASTER_VOLUME = defineParam({ id: 'masterVolume', min: -60, max: 0, default: -12, unit: 'dB', scale: 'lin' });
 
 /** Metronome level relative to its −12 dB click, dB. */
 export const METRONOME_GAIN = defineParam({ id: 'metronomeGain', min: -60, max: 0, default: 0, unit: 'dB', scale: 'lin' });
+
+/** `params` targets and parameter IDs (a3-audio-implementation.md, Main to engine). */
+export const MASTER_TARGET = -1;
+export const PARAM_GAIN = 0;
+export const PARAM_PAN = 1;
+export const PARAM_MUTE = 2;
+export const PARAM_SOLO = 3;
+/** Instrument parameter i of a track's kernel is paramId INSTRUMENT_PARAM_BASE + i. */
+export const INSTRUMENT_PARAM_BASE = 100;
+
+/** Meter index of the master: after the track slots. */
+export const MASTER_METER = MAX_TRACKS;
 
 export class Engine {
   /** @param {number} fs sample rate, Hz */
@@ -31,14 +48,21 @@ export class Engine {
     this.seed = 1; // project seed for per-track noise (init message)
     this.globalVoices = new GlobalVoices();
     this.kernels = new Map(); // deviceId → kernel, reused across models
+    this.strips = new Map(); // trackId → ChannelStrip, reused across models
     this.generation = 0;
     this.trackBuf = new Float32Array(BLOCK);
     this.trackBufR = new Float32Array(BLOCK);
+    this.stripL = new Float32Array(BLOCK);
+    this.stripR = new Float32Array(BLOCK);
+    this.meters = new MeterBank(MAX_TRACKS + 1);
     this.model = buildEngineModel(emptyModel(fs));
     this.metronome = new Metronome(fs);
     this.metronomeOn = false;
     this.metronomeGain = 1;
     this.master = new Smoother(fs, dbToGain(MASTER_VOLUME.default));
+    this.masterPan = new Smoother(fs, 0);
+    this.masterPanGains = new Float64Array(2);
+    this.hasProject = false;
     this.playing = false;
     this.playFrame = 0;
     this.loopOn = false;
@@ -52,31 +76,55 @@ export class Engine {
   /**
    * Builds a compiled model from a validated payload (allocates; call from
    * onmessage or a test, never from process()). Kernels are reused by device
-   * ID, so sound continues across edits; payload params are applied to them.
+   * ID and strips by track ID, so sound and smoothing continue across edits.
+   * Objects created for this model snap their smoothers to the payload values.
    */
   prepareModel(payload) {
     const generation = ++this.generation;
-    const next = new Map();
+    const kernels = new Map();
+    const strips = new Map();
     let trackIndex = 0;
-    const compiled = buildEngineModel(payload, (track) => {
-      const index = trackIndex++;
-      const entry = instrumentFor(track.type);
-      if (!entry) return null;
-      let kernel = this.kernels.get(track.deviceId);
-      const created = !kernel || kernel.type !== track.type;
-      if (created) {
-        kernel = new entry.Kernel(this.fs, this.globalVoices);
-        kernel.type = track.type;
-      }
-      for (const [id, value] of Object.entries(track.params ?? {})) kernel.setParam(id, value);
-      if (created) settleSmoothers(kernel);
-      kernel.seed = hash32(this.seed, index, 0);
-      kernel.generation = generation;
-      next.set(track.deviceId, kernel);
-      return kernel;
-    });
+    const compiled = buildEngineModel(
+      payload,
+      (track) => {
+        const index = trackIndex++;
+        const entry = instrumentFor(track.type);
+        if (!entry) return null;
+        let kernel = this.kernels.get(track.deviceId);
+        const created = !kernel || kernel.type !== track.type;
+        if (created) {
+          kernel = new entry.Kernel(this.fs, this.globalVoices);
+          kernel.type = track.type;
+        }
+        for (const [id, value] of Object.entries(track.params ?? {})) kernel.setParam(id, value);
+        if (created) settleSmoothers(kernel);
+        kernel.seed = hash32(this.seed, index, 0);
+        kernel.generation = generation;
+        kernels.set(track.deviceId, kernel);
+        return kernel;
+      },
+      (track) => {
+        let strip = this.strips.get(track.trackId);
+        const created = !strip;
+        if (created) strip = new ChannelStrip(this.fs);
+        strip.setGainDb(track.gainDb);
+        strip.setPan(track.pan);
+        strip.mute = track.mute;
+        strip.solo = track.solo;
+        strip.created = created;
+        strips.set(track.trackId, strip);
+        return strip;
+      },
+    );
+    updateGates(compiled.tracks);
+    for (const t of compiled.tracks) {
+      if (t.strip.created) settleSmoothers(t.strip);
+      t.strip.created = false;
+    }
     compiled.generation = generation;
-    this.kernels = next;
+    compiled.masterPan = clampParam(PAN, payload.masterPan ?? 0);
+    this.kernels = kernels;
+    this.strips = strips;
     return compiled;
   }
 
@@ -92,9 +140,46 @@ export class Engine {
       if (k !== null && k.generation !== compiled.generation) k.pool.clear();
     }
     this.model = compiled;
+    // The first project starts at its master pan; later models glide to theirs.
+    if (this.hasProject) this.masterPan.setTarget(compiled.masterPan ?? 0);
+    else this.masterPan.snap(compiled.masterPan ?? 0);
+    this.hasProject = true;
     this.releaseNotes();
     this.reseekTracks(this.playFrame);
     this.beatDirty = true;
+  }
+
+  /**
+   * Applies `params` triples [target, paramId, value] to `model`'s objects
+   * (the current model, or a pending one whose objects it shares). Target −1
+   * is the master; others are track indices. Unknown targets are ignored.
+   */
+  applyParams(values, model = this.model) {
+    let gates = false;
+    for (let i = 0; i + 2 < values.length; i += 3) {
+      const target = values[i];
+      const id = values[i + 1];
+      const value = values[i + 2];
+      if (target === MASTER_TARGET) {
+        if (id === PARAM_PAN) this.masterPan.setTarget(clampParam(PAN, value));
+        continue;
+      }
+      const track = model.tracks[target];
+      if (!track) continue;
+      if (id === PARAM_GAIN) track.strip.setGainDb(value);
+      else if (id === PARAM_PAN) track.strip.setPan(value);
+      else if (id === PARAM_MUTE) {
+        track.strip.mute = value !== 0;
+        gates = true;
+      } else if (id === PARAM_SOLO) {
+        track.strip.solo = value !== 0;
+        gates = true;
+      } else if (id >= INSTRUMENT_PARAM_BASE && track.kernel !== null) {
+        const def = instrumentFor(track.kernel.type)?.params[id - INSTRUMENT_PARAM_BASE];
+        if (def) track.kernel.setParam(def.id, value);
+      }
+    }
+    if (gates) updateGates(model.tracks);
   }
 
   /** Releases every sequenced note (live notes are unaffected once they exist). */
@@ -117,10 +202,21 @@ export class Engine {
     this.beatDirty = true;
   }
 
-  /** Stops playback in place; tails (the metronome click) finish. */
+  /** Stops playback in place; release tails finish. */
   stop() {
     this.playing = false;
     this.releaseNotes();
+  }
+
+  /**
+   * Panic (audio-safety.md): stops the transport and fades every voice and
+   * drum instance over 64 frames; the metronome click stops at once.
+   */
+  panic() {
+    this.playing = false;
+    const tracks = this.model.tracks;
+    for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.allNotesOff(true);
+    this.metronome.reset();
   }
 
   /** Moves the playhead to `frame`. */
@@ -148,6 +244,11 @@ export class Engine {
   /** Sets master volume in dB (clamped to MASTER_VOLUME); smoothed. */
   setMasterVolume(db) {
     this.master.setTarget(dbToGain(clampParam(MASTER_VOLUME, db)));
+  }
+
+  /** Meter readings since the last call: [peakL, peakR, meanSquareL, meanSquareR] per track, master last. */
+  readMeters() {
+    return this.meters.read(this.model.tracks.length);
   }
 
   /** Finds the first beat at or after `frame` and stores it in nextBeatFrame and nextBeatAccent. */
@@ -194,6 +295,7 @@ export class Engine {
       this.renderSpan(bufL, bufR, off, n);
     }
     this.master.flush();
+    this.masterPan.flush();
   }
 
   renderSpan(bufL, bufR, off, n) {
@@ -202,20 +304,13 @@ export class Engine {
     const tracks = this.model.tracks;
     const tb = this.trackBuf;
     const tbR = this.trackBufR;
+    const meters = this.meters;
     for (let t = 0; t < tracks.length; t++) {
-      renderTrack(tracks[t], tb, tbR, n, this.playFrame, this.playing);
-      if (tracks[t].kernel !== null && tracks[t].kernel.stereo) {
-        for (let i = 0; i < n; i++) {
-          bufL[off + i] += tb[i];
-          bufR[off + i] += tbR[i];
-        }
-      } else {
-        for (let i = 0; i < n; i++) {
-          const x = tb[i] * CENTRE;
-          bufL[off + i] += x;
-          bufR[off + i] += x;
-        }
-      }
+      const track = tracks[t];
+      renderTrack(track, tb, tbR, n, this.playFrame, this.playing);
+      const stereo = track.kernel !== null && track.kernel.stereo === true;
+      track.strip.mix(tb, tbR, stereo, n, bufL, bufR, off, this.stripL, this.stripR);
+      meters.add(t, this.stripL, this.stripR, 0, n);
     }
     if (this.playing) {
       if (this.beatDirty) this.findNextBeat(this.playFrame);
@@ -232,11 +327,24 @@ export class Engine {
     } else {
       this.metronome.render(bufL, bufR, off, end);
     }
+    for (let i = 0; i < n; i++) this.masterPan.next();
+    balance(this.masterPan.y, this.masterPanGains);
+    const pl = this.masterPanGains[0];
+    const pr = this.masterPanGains[1];
     const master = this.master;
     for (let i = off; i < end; i++) {
       const g = master.next();
-      bufL[i] *= g;
-      bufR[i] *= g;
+      bufL[i] *= g * pl;
+      bufR[i] *= g * pr;
     }
+    meters.add(MASTER_METER, bufL, bufR, off, end);
+    meters.count(n);
   }
+}
+
+/** Sets every strip's gate from mute and solo (solo-in-place). */
+function updateGates(tracks) {
+  let anySolo = false;
+  for (let i = 0; i < tracks.length; i++) if (tracks[i].strip.solo) anySolo = true;
+  for (let i = 0; i < tracks.length; i++) tracks[i].strip.updateGate(anySolo);
 }
