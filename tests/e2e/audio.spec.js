@@ -228,3 +228,16 @@ test('the FM panel shows ratio, index and index decay with units', async ({ page
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 });
+
+test('the Additive panel groups eight harmonic sliders with percent values', async ({ page }) => {
+  await openExample(page, 'Ambient');
+  await page.getByRole('button', { name: 'Track 2: Pad, Additive synth' }).click();
+  const panel = page.getByRole('region', { name: 'Additive synth: Pad' });
+  const harmonics = panel.getByRole('group', { name: 'Harmonics' });
+  await expect(harmonics.getByRole('slider')).toHaveCount(8);
+  await expect(harmonics.getByRole('slider', { name: 'Harmonic 1' })).toHaveAttribute('aria-valuetext', '100 %');
+  await expect(harmonics.getByRole('slider', { name: 'Harmonic 2' })).toHaveAttribute('aria-valuetext', '50 %');
+  await expect(panel.getByRole('slider', { name: 'Release' })).toHaveAttribute('aria-valuetext', '500 ms');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});

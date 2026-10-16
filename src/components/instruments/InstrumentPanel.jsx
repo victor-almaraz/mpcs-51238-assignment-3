@@ -20,11 +20,12 @@ const LABELS = {
   ratio: 'Ratio',
   index: 'Index',
   indexDecay: 'Index decay',
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`h${i + 1}`, `Harmonic ${i + 1}`])),
 };
 
 const OPTION_LABELS = { sine: 'Sine', square: 'Square', saw: 'Saw', triangle: 'Triangle' };
 
-/** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×". */
+/** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×", "50 %". */
 export function formatParam(def, value) {
   const minus = (s) => s.replace('-', '−');
   switch (def.unit) {
@@ -34,6 +35,8 @@ export function formatParam(def, value) {
       return value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`;
     case 'dB':
       return minus(`${value.toFixed(1)} dB`);
+    case 'fraction':
+      return `${Math.round(value * 100)} %`;
     case '×':
       return `${value.toFixed(1)}×`;
     default:
@@ -69,6 +72,18 @@ function ParamControl({ def, value, onChange, idPrefix }) {
   );
 }
 
+/** Consecutive defs sharing a `group` become one { group, defs } item; others are { def }. */
+function groupParams(defs) {
+  const items = [];
+  for (const def of defs) {
+    const last = items[items.length - 1];
+    if (def.group && last?.group === def.group) last.defs.push(def);
+    else if (def.group) items.push({ group: def.group, defs: [def] });
+    else items.push({ def });
+  }
+  return items;
+}
+
 /**
  * Parameter panel for a track's instrument, generated from its ParamDefs: a
  * radio group per enum, a slider with unit value text per number.
@@ -77,6 +92,15 @@ function ParamControl({ def, value, onChange, idPrefix }) {
 export default function InstrumentPanel({ track, device, onParamChange, disabled }) {
   const entry = instrumentFor(device.type);
   const name = INSTRUMENT_LABELS[device.type] ?? device.type;
+  const control = (def) => (
+    <ParamControl
+      key={def.id}
+      def={def}
+      idPrefix={`instrument-${device.id}`}
+      value={clampParam(def, device.params[def.id])}
+      onChange={(id, value) => onParamChange(device.id, id, value)}
+    />
+  );
   return (
     <Card as="section" aria-labelledby="instrument-panel-heading">
       <h2 id="instrument-panel-heading" className={sectionHeading}>
@@ -84,15 +108,16 @@ export default function InstrumentPanel({ track, device, onParamChange, disabled
       </h2>
       {entry ? (
         <fieldset disabled={disabled} className="flex flex-col gap-3">
-          {entry.params.map((def) => (
-            <ParamControl
-              key={def.id}
-              def={def}
-              idPrefix={`instrument-${device.id}`}
-              value={clampParam(def, device.params[def.id])}
-              onChange={(id, value) => onParamChange(device.id, id, value)}
-            />
-          ))}
+          {groupParams(entry.params).map((item) =>
+            item.group ? (
+              <fieldset key={item.group} className="flex flex-col gap-2 rounded-ds border border-border p-2">
+                <legend className={sectionHeading}>{item.group}</legend>
+                {item.defs.map((def) => control(def))}
+              </fieldset>
+            ) : (
+              control(item.def)
+            ),
+          )}
         </fieldset>
       ) : (
         <p className="text-sm text-muted">This instrument has no controls yet.</p>
