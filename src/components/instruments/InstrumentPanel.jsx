@@ -20,6 +20,9 @@ const LABELS = {
   ratio: 'Ratio',
   index: 'Index',
   indexDecay: 'Index decay',
+  damping: 'Damping',
+  brightness: 'Brightness',
+  decay: 'Decay (T60)',
   ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`h${i + 1}`, `Harmonic ${i + 1}`])),
 };
 

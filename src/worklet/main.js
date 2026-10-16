@@ -43,6 +43,7 @@ class EngineProcessor extends AudioWorkletProcessor {
     }
     switch (msg.t) {
       case 'init':
+        this.engine.seed = msg.seed;
         this.port.postMessage({ t: 'ready', v: PROTOCOL_VERSION, fs: sampleRate, blockSize: BLOCK });
         break;
       case 'model':

@@ -241,3 +241,14 @@ test('the Additive panel groups eight harmonic sliders with percent values', asy
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 });
+
+test('the Pluck panel shows damping, brightness and decay', async ({ page }) => {
+  await openExample(page, 'Pluck melody');
+  await page.getByRole('button', { name: 'Track 1: Pluck lead, Pluck synth' }).click();
+  const panel = page.getByRole('region', { name: 'Pluck synth: Pluck lead' });
+  await expect(panel.getByRole('slider', { name: 'Damping' })).toHaveAttribute('aria-valuetext', '50 %');
+  await expect(panel.getByRole('slider', { name: 'Brightness' })).toHaveAttribute('aria-valuetext', '70 %');
+  await expect(panel.getByRole('slider', { name: 'Decay (T60)' })).toHaveAttribute('aria-valuetext', '2.00 s');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});

@@ -1,0 +1,174 @@
+/*
+ * Plucked string, Karplus–Strong with the Jaffe–Smith extensions
+ * (assignment-3-scope.md, Instruments; a3-audio-implementation.md, Pluck).
+ *   Period P = fs/f. Loop filter y = (1 − S)·x[n] + S·x[n−1], S = 0.5·damping.
+ *   N = floor(P − S − 0.1); Δ = P − S − N ∈ [0.1, 1.1); fractional allpass
+ *   C = (1 − Δ)/(1 + Δ), y[n] = C·x[n] + x[n−1] − C·y[n−1].
+ *   Loop gain ρ = min(0.9999, 10^(−3/(T60·f))).
+ *   Excitation: N samples of seeded noise through a one-pole lowpass with
+ *   a = 0.1 + 0.9·brightness, mean removed, peak normalised.
+ *   Output DC blocker y = x − x1 + 0.995·y1.
+ * One 4096-sample delay per voice (project limit). A note whose period does
+ * not fit plays an octave higher, repeatedly, until it does.
+ */
+import { flushDenormal } from '../core/math.js';
+import { clampParam, defineParam } from '../core/params.js';
+import { Mulberry32, hash32 } from '../core/prng.js';
+import { NOTE_FREQUENCIES } from '../core/tables.js';
+import { PolyKernel } from './poly-kernel.js';
+
+export const PLUCK_DELAY_SIZE = 4096;
+export const RHO_MAX = 0.9999;
+
+/** Envelope times around the string: a 2 ms onset and a 100 ms mute after note-off. */
+const PLUCK_ATTACK_S = 0.002;
+const PLUCK_RELEASE_S = 0.1;
+
+export const PLUCK_PARAMS = [
+  defineParam({ id: 'damping', min: 0, max: 1, default: 0.5, unit: 'fraction', scale: 'lin', step: 0.01 }),
+  defineParam({ id: 'brightness', min: 0, max: 1, default: 0.7, unit: 'fraction', scale: 'lin', step: 0.01 }),
+  defineParam({ id: 'decay', min: 0.2, max: 10, default: 2, unit: 's', scale: 'pow3' }),
+];
+
+const DEF = Object.fromEntries(PLUCK_PARAMS.map((d) => [d.id, d]));
+
+/**
+ * Loop tuning for frequency `f` at `fs` with averager weight `S`, after
+ * octave transposition so that N < PLUCK_DELAY_SIZE. Writes [f, N, C] into
+ * `out` (no allocation: it runs at note-on inside process()).
+ */
+export function pluckTuning(f, fs, S, out) {
+  let freq = f;
+  while (fs / freq - S - 0.1 >= PLUCK_DELAY_SIZE) freq *= 2;
+  const P = fs / freq;
+  let N = Math.floor(P - S - 0.1);
+  if (N < 1) N = 1;
+  const delta = P - S - N;
+  out[0] = freq;
+  out[1] = N;
+  out[2] = (1 - delta) / (1 + delta);
+  return out;
+}
+
+export class PluckKernel extends PolyKernel {
+  /**
+   * @param {number} fs sample rate, Hz
+   * @param {import('./voice-pool.js').GlobalVoices} global shared voice budget
+   */
+  constructor(fs, global) {
+    super(fs, global);
+    const slots = this.slots;
+    this.delay = new Float32Array(slots * PLUCK_DELAY_SIZE);
+    this.length = new Int32Array(slots); // N
+    this.pos = new Int32Array(slots);
+    this.C = new Float64Array(slots);
+    this.S = new Float64Array(slots);
+    this.rho = new Float64Array(slots);
+    this.prev = new Float64Array(slots); // x[n−1] of the loop averager
+    this.apX = new Float64Array(slots);
+    this.apY = new Float64Array(slots);
+    this.dcX = new Float64Array(slots);
+    this.dcY = new Float64Array(slots);
+    this.noise = new Mulberry32(1);
+    this.tuning = new Float64Array(3);
+    this.seed = 1; // set by the engine per track
+    this.damping = DEF.damping.default;
+    this.brightness = DEF.brightness.default;
+    this.decay = DEF.decay.default;
+    this.attack = PLUCK_ATTACK_S;
+    this.release = PLUCK_RELEASE_S;
+  }
+
+  /** Sets a parameter by id; damping, brightness and decay apply from the next note. */
+  setParam(id, value) {
+    const def = DEF[id];
+    if (!def) return;
+    const v = clampParam(def, value);
+    if (id === 'damping') this.damping = v;
+    else if (id === 'brightness') this.brightness = v;
+    else this.decay = v;
+  }
+
+  /** Fills voice `v`'s delay with the excitation and sets its loop. Seeded by (seed, noteId). */
+  startNote(v, pitch, noteId) {
+    const fs = this.fs;
+    const S = 0.5 * this.damping;
+    const tuning = pluckTuning(NOTE_FREQUENCIES[pitch], fs, S, this.tuning);
+    const N = tuning[1];
+    this.length[v] = N;
+    this.pos[v] = 0;
+    this.C[v] = tuning[2];
+    this.S[v] = S;
+    this.rho[v] = Math.min(RHO_MAX, 10 ** (-3 / (this.decay * tuning[0])));
+    this.prev[v] = 0;
+    this.apX[v] = 0;
+    this.apY[v] = 0;
+    this.dcX[v] = 0;
+    this.dcY[v] = 0;
+    const base = v * PLUCK_DELAY_SIZE;
+    const buf = this.delay;
+    const a = 0.1 + 0.9 * this.brightness;
+    this.noise.reseed(hash32(this.seed, noteId, 0));
+    let y = 0;
+    let sum = 0;
+    for (let i = 0; i < N; i++) {
+      y += a * (this.noise.nextBipolar() - y);
+      buf[base + i] = y;
+      sum += y;
+    }
+    const mean = sum / N;
+    let max = 0;
+    for (let i = 0; i < N; i++) {
+      const x = buf[base + i] - mean;
+      buf[base + i] = x;
+      if (x > max) max = x;
+      else if (-x > max) max = -x;
+    }
+    const scale = max > 0 ? 1 / max : 0;
+    for (let i = 0; i < N; i++) buf[base + i] *= scale;
+  }
+
+  noteOn(noteId, pitch, velocity) {
+    const v = this.pool.allocate(noteId);
+    if (v < 0) return;
+    this.gain[v] = this.velocityGain(velocity);
+    this.startNote(v, pitch, noteId);
+    this.env.start(v, this.attack);
+  }
+
+  renderVoice(v, out, start, end) {
+    const buf = this.delay;
+    const base = v * PLUCK_DELAY_SIZE;
+    const N = this.length[v];
+    const C = this.C[v];
+    const S = this.S[v];
+    const rho = this.rho[v];
+    const env = this.env;
+    const g = this.gain[v];
+    let pos = this.pos[v];
+    let prev = this.prev[v];
+    let apX = this.apX[v];
+    let apY = this.apY[v];
+    let dcX = this.dcX[v];
+    let dcY = this.dcY[v];
+    for (let i = start; i < end; i++) {
+      const x = buf[base + pos];
+      const avg = (1 - S) * x + S * prev;
+      prev = x;
+      const ap = C * avg + apX - C * apY;
+      apX = avg;
+      apY = ap;
+      buf[base + pos] = rho * ap;
+      pos = pos + 1 === N ? 0 : pos + 1;
+      dcY = x - dcX + 0.995 * dcY;
+      dcX = x;
+      out[i] += dcY * g * env.next(v);
+    }
+    this.pos[v] = pos;
+    this.prev[v] = prev;
+    this.apX[v] = apX;
+    this.apY[v] = flushDenormal(apY);
+    this.dcX[v] = dcX;
+    this.dcY[v] = flushDenormal(dcY);
+  }
+}

@@ -6,6 +6,7 @@
  */
 import { BLOCK } from '../core/constants.js';
 import { dbToGain } from '../core/math.js';
+import { hash32 } from '../core/prng.js';
 import { clampParam, defineParam } from '../core/params.js';
 import { Smoother } from '../core/smoother.js';
 import { GlobalVoices } from '../instruments/voice-pool.js';
@@ -27,6 +28,7 @@ export class Engine {
   /** @param {number} fs sample rate, Hz */
   constructor(fs) {
     this.fs = fs;
+    this.seed = 1; // project seed for per-track noise (init message)
     this.globalVoices = new GlobalVoices();
     this.kernels = new Map(); // deviceId → kernel, reused across models
     this.generation = 0;
@@ -54,7 +56,9 @@ export class Engine {
   prepareModel(payload) {
     const generation = ++this.generation;
     const next = new Map();
+    let trackIndex = 0;
     const compiled = buildEngineModel(payload, (track) => {
+      const index = trackIndex++;
       const entry = instrumentFor(track.type);
       if (!entry) return null;
       let kernel = this.kernels.get(track.deviceId);
@@ -63,6 +67,7 @@ export class Engine {
         kernel.type = track.type;
       }
       for (const [id, value] of Object.entries(track.params ?? {})) kernel.setParam(id, value);
+      kernel.seed = hash32(this.seed, index, 0);
       kernel.generation = generation;
       next.set(track.deviceId, kernel);
       return kernel;

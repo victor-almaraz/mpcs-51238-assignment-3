@@ -36,9 +36,14 @@ export class PolyKernel {
   noteOn(noteId, pitch, velocity) {
     const v = this.pool.allocate(noteId);
     if (v < 0) return;
-    this.gain[v] = VELOCITY_GAIN[velocity];
+    this.gain[v] = this.velocityGain(velocity);
     this.startVoice(v, pitch, velocity);
     this.env.start(v, this.attack);
+  }
+
+  /** Velocity gain 0.3·(vel/127)²; kernels with a velocity-sensitivity control override it. */
+  velocityGain(velocity) {
+    return VELOCITY_GAIN[velocity];
   }
 
   /** Releases note `noteId`; an unknown id is ignored. */
