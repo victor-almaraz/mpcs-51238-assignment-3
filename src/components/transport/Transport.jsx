@@ -20,8 +20,8 @@ const CONTROL_TARGETS = 'input, textarea, select, button, [contenteditable], [co
 /** Escape keeps its own meaning in text entry (SAFE-03: Panic outside text fields). */
 const TEXT_TARGETS = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable], [contenteditable="true"]';
 
-/** Default loop when none is stored: the first four bars. */
-function loopRange(project, view) {
+/** The loop range in ticks: the saved one, else the first four bars. */
+export function loopRange(project, view) {
   if (view.loop) return view.loop;
   const { numerator, denominator } = project.meter[0];
   return { start: 0, end: 4 * ticksPerBar(numerator, denominator) };

@@ -601,7 +601,7 @@ Session rules:
 1. Range: `[0, projectEndFrame)` or `[loopStartFrame, loopEndFrame)`, plus a 0–10 s tail. Totals above 10 minutes are rejected before rendering.
 2. `new OfflineAudioContext({ numberOfChannels: 2, length, sampleRate: liveCtx.sampleRate })`.
 3. `await ensureModule(offCtx)`.
-4. Engine node with `processorOptions: { init, model, sources, startFrame, offline: true, metronome: false }`; `sources` holds `slice()` copies of the channel data, cloned at construction. Safety node with `processorOptions: { offline: true }`. Connect engine → safety → destination.
+4. Engine node with `processorOptions: { offline: true, seed, model, sources, mips, zones, masterVolumeDb, startFrame, totalFrames }`; `sources` holds `slice()` copies of the channel data (decoded again at the export rate where needed), cloned at construction; `mips` and `zones` bind samplers as live playback does. The metronome is off and the master volume is the saved setting. Safety node with `processorOptions: { offline: true }`, which starts the 50 ms fade-in as playback does. Connect engine → safety → destination.
 5. `startRendering()`. The engine starts at `startFrame` and posts `progress`. The UI shows a determinate bar while `progress` arrives, otherwise an indeterminate one. `suspend()` is not used.
 6. Determinism: fixed seeds, zeroed state, no time reads. Two exports in one browser have equal SHA-256 hashes.
 7. One export runs at a time; the export button is disabled during rendering. Offline contexts are never created in loops.

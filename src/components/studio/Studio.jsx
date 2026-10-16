@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
-import Transport from '@/components/transport/Transport';
+import Transport, { loopRange } from '@/components/transport/Transport';
 import InstrumentPanel from '@/components/instruments/InstrumentPanel';
 import LiveInputControls from '@/components/input/LiveInputControls';
 import PianoRollGrid from '@/components/pianoroll/PianoRollGrid';
@@ -15,6 +15,7 @@ import Timeline from '@/components/timeline/Timeline';
 import EffectChain from '@/components/effects/EffectChain';
 import OpenArchive from '@/components/archive/OpenArchive';
 import SaveArchive from '@/components/archive/SaveArchive';
+import ExportDialog from '@/components/export/ExportDialog';
 import { effectFor } from '@/dsp/effects/registry';
 import { setEffectBypass } from '@/lib/project/effect-commands';
 import { sourceStatus } from '@/components/timeline/layout';
@@ -205,6 +206,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
       <div role="toolbar" aria-label="Project" className="flex flex-wrap items-start gap-4">
         <SaveArchive project={project} disabled={readOnly} />
+        <ExportDialog project={project} loop={loopRange(project, view)} />
         {anyMissing ? <OpenArchive label="Open .wrack file to restore audio" currentId={project.id} /> : null}
       </div>
 

@@ -263,6 +263,7 @@ export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
 /**
  * Messages the engine posts: ready { fs, blockSize }, ack { rev },
  * fault { trackId ('master' for the master chain), deviceId, slot, kind },
+ * progress { renderedFrames, totalFrames } (offline only),
  * pos { playFrame, ctxFrame, playing, meters }, error { code, detail },
  * source-status { deviceId, sourceId, status: 'bound' | 'missing' },
  * sampler-zone-invalid { deviceId, zoneIndex, reason } (reason null once the
@@ -270,7 +271,7 @@ export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
  * meters: Float32Array of [peakL, peakR, meanSquareL, meanSquareR] for 16
  * track slots in model order, then the master.
  */
-export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error', 'fault', 'source-status', 'sampler-zone-invalid']);
+export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error', 'fault', 'progress', 'source-status', 'sampler-zone-invalid']);
 
 /** Validates a message sent to the engine processor. */
 export function validateEngineMessage(msg) {

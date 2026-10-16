@@ -6,17 +6,20 @@
  */
 import { BLOCK, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../dsp/core/constants.js';
 import { Engine } from '../dsp/engine/engine.js';
-import { PROTOCOL_VERSION, reportQuanta, validateEngineMessage, validateSafetyMessage } from '../dsp/protocol.js';
+import { PROTOCOL_VERSION, reportQuanta, validateEngineMessage, validateModel, validateSafetyMessage } from '../dsp/protocol.js';
 import { SafetyKernel } from '../dsp/safety/safety.js';
 
 /** Frames of the mono-output scratch channel; larger than any render quantum. */
 const SCRATCH_FRAMES = 8192;
 
+/** Rendered audio between offline `progress` messages, s (project limit). */
+const PROGRESS_S = 0.25;
+
 /** Transport operations queued between quanta, applied in order. */
 const MAX_PENDING_OPS = 64;
 
 class EngineProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
     this.engine = new Engine(sampleRate);
     this.scratch = new Float32Array(SCRATCH_FRAMES);
@@ -29,7 +32,42 @@ class EngineProcessor extends AudioWorkletProcessor {
     // Reused for every post: process() allocates nothing.
     this.posMessage = { t: 'pos', v: PROTOCOL_VERSION, playFrame: 0, ctxFrame: 0, playing: false, meters: null };
     this.ackMessage = { t: 'ack', v: PROTOCOL_VERSION, rev: 0 };
+    this.offline = null;
     this.port.onmessage = (event) => this.onMessage(event.data);
+    if (options?.processorOptions?.offline) this.startOffline(options.processorOptions);
+  }
+
+  /**
+   * Offline export (a3-audio-implementation.md, Offline export): everything
+   * arrives in processorOptions — { seed, model, sources: [{ sourceId,
+   * channels }], mips: [{ sourceId, levels }], zones: [{ deviceId, zone }],
+   * masterVolumeDb, startFrame, totalFrames } — and playback starts at once
+   * with the metronome off. `progress` is posted every 0.25 s of audio.
+   */
+  startOffline(o) {
+    const invalid = validateModel(o.model);
+    if (invalid) {
+      this.error(invalid, 'offline');
+      return;
+    }
+    const engine = this.engine;
+    engine.seed = o.seed;
+    for (const s of o.sources ?? []) engine.addSource(s.sourceId, s.channels);
+    for (const m of o.mips ?? []) engine.addMips(m.sourceId, m.levels);
+    for (const z of o.zones ?? []) engine.setZone(z.deviceId, z.zone);
+    engine.setModel(engine.prepareModel(o.model));
+    engine.takeReports();
+    engine.setMasterVolume(o.masterVolumeDb);
+    engine.master.snap(engine.master.target);
+    engine.setMetronome(false);
+    engine.play(o.startFrame);
+    const every = Math.max(1, Math.round(PROGRESS_S * sampleRate));
+    this.offline = {
+      every,
+      next: every,
+      rendered: 0,
+      message: { t: 'progress', v: PROTOCOL_VERSION, renderedFrames: 0, totalFrames: o.totalFrames },
+    };
   }
 
   error(code, detail) {
@@ -137,6 +175,16 @@ class EngineProcessor extends AudioWorkletProcessor {
     if (this.ops.length > 0) this.applyOps();
     if (this.liveQueue.length > 0) this.applyLive();
     this.engine.process(outL, outR, 0, frames);
+    if (this.offline !== null) {
+      const off = this.offline;
+      off.rendered += frames;
+      if (off.rendered >= off.next) {
+        off.next += off.every;
+        off.message.renderedFrames = off.rendered;
+        this.port.postMessage(off.message);
+      }
+      return true;
+    }
     if (this.engine.faultCount > 0) {
       for (let i = 0; i < this.engine.faultCount; i++) this.port.postMessage(this.engine.faults[i]);
       this.engine.faultCount = 0;
@@ -156,9 +204,11 @@ class EngineProcessor extends AudioWorkletProcessor {
 }
 
 class SafetyProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
     this.kernel = new SafetyKernel(sampleRate);
+    // Offline, the render starts as playback does: with the 50 ms fade-in.
+    if (options?.processorOptions?.offline) this.kernel.resumeFade();
     this.scratch = new Float32Array(SCRATCH_FRAMES);
     this.guardMessage = { t: 'guard', v: PROTOCOL_VERSION, muted: true };
     this.duckMessage = { t: 'duck', v: PROTOCOL_VERSION, active: false };
