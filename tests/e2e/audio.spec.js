@@ -213,3 +213,18 @@ test('playing an example with Subtractive tracks runs without engine errors', as
   await playButton(page).click();
   expect(errors).toEqual([]);
 });
+
+test('the FM panel shows ratio, index and index decay with units', async ({ page }) => {
+  await openExample(page);
+  await page.getByRole('button', { name: 'Track 3: Lead stab, FM synth' }).click();
+  const panel = page.getByRole('region', { name: 'FM synth: Lead stab' });
+  await expect(panel.getByRole('slider', { name: 'Ratio' })).toHaveAttribute('aria-valuetext', '2.0×');
+  await expect(panel.getByRole('slider', { name: 'Index', exact: true })).toHaveAttribute('aria-valuetext', '3');
+  await expect(panel.getByRole('slider', { name: 'Index decay' })).toHaveAttribute('aria-valuetext', '500 ms');
+  const ratio = panel.getByRole('slider', { name: 'Ratio' });
+  await ratio.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(ratio).toHaveAttribute('aria-valuetext', '2.5×');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});

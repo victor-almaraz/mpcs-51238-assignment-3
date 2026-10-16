@@ -17,11 +17,14 @@ const LABELS = {
   resonance: 'Resonance',
   attack: 'Attack',
   release: 'Release',
+  ratio: 'Ratio',
+  index: 'Index',
+  indexDecay: 'Index decay',
 };
 
 const OPTION_LABELS = { sine: 'Sine', square: 'Square', saw: 'Saw', triangle: 'Triangle' };
 
-/** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB". */
+/** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×". */
 export function formatParam(def, value) {
   const minus = (s) => s.replace('-', '−');
   switch (def.unit) {
@@ -31,6 +34,8 @@ export function formatParam(def, value) {
       return value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`;
     case 'dB':
       return minus(`${value.toFixed(1)} dB`);
+    case '×':
+      return `${value.toFixed(1)}×`;
     default:
       return minus(String(Math.round(value * 100) / 100));
   }
