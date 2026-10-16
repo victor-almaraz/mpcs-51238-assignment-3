@@ -103,6 +103,7 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
         kind="effect"
         device={device}
         label={`${name} preset`}
+        owner={name}
         disabled={disabled}
         onApply={(preset) => onCommand((doc) => ({ ok: true, doc: applyPreset(doc, device.id, preset) }), `Applied ${preset?.name ?? 'Default settings'} to ${name}`)}
       />

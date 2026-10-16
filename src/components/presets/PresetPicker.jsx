@@ -14,10 +14,11 @@ const EMPTY = [];
  * Preset picker for one instrument or effect device: "My presets" (the
  * library's presets of this type) above the built-in settings, and "Save
  * preset". `onApply(preset)` receives a library preset, or null for the
- * built-in defaults. `label` names the picker ("Delay preset" inside a chain)
- * and its Save button ("Save Delay preset").
+ * built-in defaults. `label` names the picker ("Delay preset" inside a chain);
+ * `owner` extends the Save button's name ("Save preset: Delay") so it keeps
+ * the visible text.
  */
-export default function PresetPicker({ kind, device, onApply, disabled, label = 'Preset' }) {
+export default function PresetPicker({ kind, device, onApply, disabled, label = 'Preset', owner = null }) {
   const all = useSyncExternalStore(subscribePresets, getPresets, () => EMPTY);
   const mine = all.filter((p) => p.type === device.type);
   const [saving, setSaving] = useState(false);
@@ -46,7 +47,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
   return (
     <div className="flex flex-wrap items-end gap-2">
       <Select id={`preset-${device.id}`} label={label} value="" options={options} disabled={disabled} onChange={choose} />
-      <Button ref={saveRef} size="sm" disabled={disabled} aria-label={label === 'Preset' ? undefined : `Save ${label}`} onClick={() => setSaving(true)}>
+      <Button ref={saveRef} size="sm" disabled={disabled} aria-label={owner ? `Save preset: ${owner}` : undefined} onClick={() => setSaving(true)}>
         Save preset
       </Button>
       <StatusRegion visuallyHidden>{message}</StatusRegion>
