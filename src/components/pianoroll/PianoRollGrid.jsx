@@ -6,6 +6,7 @@ import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import Toolbar from '@/components/ui/Toolbar';
+import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import { cx, focusRing, sectionHeading } from '@/design-systems/industrial/classes';
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
@@ -17,8 +18,6 @@ import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, po
 import usePianoRollCommands from './usePianoRollCommands';
 
 const VIEW_HEIGHT = 480;
-/** At most one announcement per 250 ms; the latest wins (accessibility.md, project limit). */
-const ANNOUNCE_MS = 250;
 const GRID_OPTIONS = GRIDS.map((g) => ({ value: String(g.value), label: g.label }));
 const LOOP_OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -28,35 +27,6 @@ const LOOP_OPTIONS = [
 ];
 /** Cursor tick that marks the row header. */
 const HEADER = -1;
-
-/** Polite announcements throttled to one per 250 ms, latest wins. */
-function useThrottledAnnouncer() {
-  const [text, setText] = useState('');
-  const last = useRef(0);
-  const pending = useRef(null);
-  const timer = useRef(0);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  function emit(message) {
-    last.current = performance.now();
-    // A repeated message needs changed text to be read again.
-    setText((prev) => (prev === message ? `${message}.` : message));
-  }
-  function announce(message) {
-    const wait = ANNOUNCE_MS - (performance.now() - last.current);
-    if (wait <= 0 && !timer.current) {
-      emit(message);
-      return;
-    }
-    pending.current = message;
-    if (!timer.current) {
-      timer.current = setTimeout(() => {
-        timer.current = 0;
-        emit(pending.current);
-      }, Math.max(0, wait));
-    }
-  }
-  return [text, announce];
-}
 
 /**
  * Piano roll (PR-01 to PR-04): a canvas for the picture and a role="grid"

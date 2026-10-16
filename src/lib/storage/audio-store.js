@@ -75,11 +75,19 @@ async function run(mode, fn) {
   });
 }
 
-/** Stores a record (see the module comment). An existing record for the sourceId is kept as is. */
+/**
+ * Stores a record (see the module comment). An existing record for the
+ * sourceId is kept as is. The record is read back after writing: WebKit
+ * private windows complete the transaction but keep no Blob.
+ */
 export async function put(record) {
   const existing = await get(record.sourceId);
   if (existing.ok && existing.value) return { ok: true, value: existing.value };
-  return run('readwrite', (store) => store.add(record));
+  const written = await run('readwrite', (store) => store.add(record));
+  if (!written.ok) return written;
+  const check = await get(record.sourceId);
+  if (!check.ok || !check.value?.bytes) return fail('failed', new Error('The stored record could not be read back'));
+  return { ok: true, value: record.sourceId };
 }
 
 /** The record for `sourceId`, or null when absent. */

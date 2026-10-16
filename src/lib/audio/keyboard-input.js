@@ -32,9 +32,9 @@ export function noteName(pitch) {
   return `${names[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
 }
 
-/** True when keyboard notes should be ignored for event `e`. */
+/** True when keyboard notes should be ignored for event `e`: modifiers, text entry, open dialogs, or a key a focused editor already handled. */
 export function ignoresKeyboard(e) {
-  if (e.ctrlKey || e.metaKey || e.altKey) return true;
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return true;
   if (e.target?.closest?.(TEXT_ENTRY)) return true;
   return typeof document !== 'undefined' && document.querySelector('dialog[open]') !== null;
 }

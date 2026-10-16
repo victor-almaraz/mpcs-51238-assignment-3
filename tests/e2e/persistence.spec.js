@@ -87,7 +87,9 @@ test('audio clips without loaded audio show "Audio not loaded" and the restore a
   };
   await write(page, `w-rack:v1:project:${id}`, JSON.stringify(doc));
   await page.reload();
-  await expect(page.getByText('Clip: Verse take.')).toContainText('Audio not loaded');
+  await expect(page.getByRole('treegrid', { name: 'Tracks and clips' }).getByRole('row', { name: /^Clip: Verse take/ })).toHaveText(
+    'Clip: Verse take, bar 1 to bar 1 beat 3, Audio not loaded',
+  );
   await expect(page.getByRole('toolbar').getByRole('button', { name: 'Open .wrack file to restore audio' })).toBeVisible();
 });
 

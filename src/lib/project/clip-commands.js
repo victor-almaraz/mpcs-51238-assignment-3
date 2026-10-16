@@ -25,11 +25,27 @@ const requireInt = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`${name} must be an integer, got ${v}`);
 };
 
-const TRACK_COLORS = ['#e36927', '#1659b5', '#1d6835', '#895709', '#c51e21', '#53574e'];
+/** Track and clip colours, from the industrial palette. */
+export const COLORS = [
+  { value: '#e36927', label: 'Signal orange' },
+  { value: '#1659b5', label: 'Control blue' },
+  { value: '#1d6835', label: 'Green' },
+  { value: '#895709', label: 'Amber' },
+  { value: '#c51e21', label: 'Red' },
+  { value: '#53574e', label: 'Grey' },
+];
+const TRACK_COLORS = COLORS.map((c) => c.value);
 
-/** Tempo map at the project's audio rate, for tick ↔ frame conversion of audio clips. */
+const tempoCache = new WeakMap(); // doc.tempo → { rate, map }
+
+/** Tempo map at the project's audio rate, for tick ↔ frame conversion of audio clips. Cached per tempo array. */
 export function audioTempo(doc) {
-  return new TempoMap(doc.tempo, doc.audioRate ?? DEFAULT_AUDIO_RATE);
+  const rate = doc.audioRate ?? DEFAULT_AUDIO_RATE;
+  const cached = tempoCache.get(doc.tempo);
+  if (cached?.rate === rate) return cached.map;
+  const map = new TempoMap(doc.tempo, rate);
+  tempoCache.set(doc.tempo, { rate, map });
+  return map;
 }
 
 function trackCount(doc) {

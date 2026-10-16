@@ -48,6 +48,7 @@ test('keyboard only: create, move, transpose, lengthen, change velocity and dele
 });
 
 test('arrow keys move the cursor across cells and rows; the DOM mirror matches the model', async ({ page }) => {
+  test.slow(); // axe over the whole editor takes most of the default timeout under parallel load
   const id = await createProject(page);
   await silence(page);
   const grid = roll(page, 'Track 1');

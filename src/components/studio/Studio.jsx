@@ -11,6 +11,11 @@ import LiveInputControls from '@/components/input/LiveInputControls';
 import PianoRollGrid from '@/components/pianoroll/PianoRollGrid';
 import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
+import Timeline from '@/components/timeline/Timeline';
+import { sourceStatus } from '@/components/timeline/layout';
+import { getSource } from '@/lib/audio/decode';
+import { pruneStoredSources } from '@/lib/audio/source-cleanup';
+import useProjectSources from './useProjectSources';
 import { getEngine } from '@/lib/audio/engine-client';
 import { engineTrackIds } from '@/lib/audio/param-changes';
 import { METER_FIELDS } from '@/dsp/mixer/meter';
@@ -18,6 +23,7 @@ import { errorText, pageHeading, sectionHeading } from '@/design-systems/industr
 import { setDeviceParam, setTrack, ticksPerBar, trackLabel } from '@/lib/project/model';
 import {
   PROJECT_NEWER,
+  SAVE_DELAY_MS,
   STORAGE_FULL,
   commitEdit,
   flushSaves,
@@ -84,10 +90,28 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  /** Applies an edited document: it saves after 500 ms and reaches the engine at once. */
+  const projectRef = useRef(project);
+  const pruneTimer = useRef(0);
+  useEffect(() => () => clearTimeout(pruneTimer.current), []);
+
+  /**
+   * Applies an edited document: it saves after 500 ms and reaches the engine
+   * at once. An edit that drops a source removes stored audio no saved
+   * project uses, once the save has happened.
+   */
   function edit(next) {
     if (readOnly) return;
-    setProject(commitEdit(next));
+    const prev = projectRef.current;
+    const saved = commitEdit(next);
+    projectRef.current = saved;
+    setProject(saved);
+    if (Object.keys(prev.sources).some((id) => !saved.sources[id])) {
+      clearTimeout(pruneTimer.current);
+      pruneTimer.current = setTimeout(() => {
+        flushSaves();
+        pruneStoredSources(Object.keys(projectRef.current.sources)).catch((err) => console.error('Stored audio cleanup failed', err));
+      }, SAVE_DELAY_MS + 100);
+    }
   }
 
   function changeView(changes) {
@@ -102,6 +126,8 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const audioClips = clips.filter((c) => c.kind === 'audio');
   const failure = [saveState, viewSaveState].find((s) => s.status === 'error');
   const engine = getEngine();
+  const { loading } = useProjectSources(project.id, initialProject.sources, engine.decodeRate());
+  const anyMissing = audioClips.some((c) => sourceStatus(c.sourceId, getSource, loading) === 'Audio not loaded');
   const engineState = useSyncExternalStore(engine.subscribe, engine.getState, engine.getState);
   const mixerTrackIds = engineTrackIds(project);
   const meterFor = (index) => () => {
@@ -133,7 +159,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         ) : null}
       </div>
 
-      {audioClips.length > 0 ? (
+      {anyMissing ? (
         <div role="toolbar" aria-label="Project" className="flex flex-wrap gap-2">
           <Button disabled>Open .wrack file to restore audio</Button>
         </div>
@@ -190,21 +216,9 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
             </li>
           ))}
         </ul>
-        {audioClips.length > 0 ? (
-          <ul aria-label="Audio clips" className="flex flex-col gap-1">
-            {audioClips.map((clip) => (
-              <li key={clip.id}>
-                Clip: {clip.name}. <strong>Audio not loaded</strong>
-              </li>
-            ))}
-          </ul>
-        ) : null}
         {clips.length > 0 ? null : (
           <div className="flex flex-col gap-3">
-            <p>Press a key or click the grid to add a note</p>
-            <div>
-              <Button disabled>Add audio file</Button>
-            </div>
+            <p>Press a key or click the grid to add a note, or add an audio file in the timeline</p>
             <section aria-labelledby="studio-keyboard-map" className="flex flex-col gap-1">
               <h3 id="studio-keyboard-map" className={sectionHeading}>
                 Keyboard map
@@ -216,6 +230,8 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           </div>
         )}
       </Card>
+
+      <Timeline project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} loading={loading} />
 
       <section aria-labelledby="studio-mixer" className="flex flex-col gap-2">
         <h2 id="studio-mixer" className={sectionHeading}>
