@@ -219,31 +219,6 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         showExampleHint={unsavedCopy}
       />
 
-      <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
-
-      <section aria-labelledby="studio-view" className="flex flex-col gap-2">
-        <h2 id="studio-view" className={sectionHeading}>
-          View
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, -1) })} disabled={view.zoom <= ZOOM_MIN}>
-            Zoom out
-          </Button>
-          <output aria-live="polite" className="min-w-24 text-center tabular-nums">
-            Zoom {Math.round(view.zoom * 100)}%
-          </output>
-          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, 1) })} disabled={view.zoom >= ZOOM_MAX}>
-            Zoom in
-          </Button>
-        </div>
-        <p>Playhead: {barBeat(view.playhead, meter)}</p>
-        <p>
-          Loop {view.loopEnabled ? 'on' : 'off'}
-          {view.loop ? `: ${barRange(view.loop, meter)}` : null}
-        </p>
-        <p>Open panel: {view.openPanel ? PANEL_NAMES[view.openPanel] : 'none'}</p>
-      </section>
-
       <Card as="section" aria-labelledby="studio-tracks">
         <h2 id="studio-tracks" className={sectionHeading}>
           Tracks
@@ -277,32 +252,6 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
       </Card>
 
       <Timeline project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} loading={loading} />
-
-      <section aria-labelledby="studio-mixer" className="flex flex-col gap-2">
-        <h2 id="studio-mixer" className={sectionHeading}>
-          Mixer
-        </h2>
-        <div className="flex flex-wrap items-start gap-2">
-          <ul aria-label="Track strips" className="flex flex-wrap gap-2">
-            {mixerTrackIds.map((id, index) => (
-              <TrackStrip
-                key={id}
-                track={project.tracks[id]}
-                readMeter={meterFor(index)}
-                disabled={readOnly}
-                onChange={(changes) => edit(setTrack(projectRef.current, id, changes))}
-              />
-            ))}
-          </ul>
-          <MasterStrip
-            volumeDb={engineState.masterVolumeDb}
-            pan={project.tracks[project.masterTrackId].pan}
-            disabled={readOnly}
-            onVolume={(db) => engine.setMasterVolume(db)}
-            onPan={(pan) => edit(setTrack(projectRef.current, project.masterTrackId, { pan }))}
-          />
-        </div>
-      </section>
 
       {panelDevice ? (
         <PianoRollGrid
@@ -341,7 +290,60 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         />
       ) : null}
 
+
+      <section aria-labelledby="studio-mixer" className="flex flex-col gap-2">
+        <h2 id="studio-mixer" className={sectionHeading}>
+          Mixer
+        </h2>
+        <div className="flex flex-wrap items-start gap-2">
+          <ul aria-label="Track strips" className="flex flex-wrap gap-2">
+            {mixerTrackIds.map((id, index) => (
+              <TrackStrip
+                key={id}
+                track={project.tracks[id]}
+                readMeter={meterFor(index)}
+                disabled={readOnly}
+                onChange={(changes) => edit(setTrack(projectRef.current, id, changes))}
+              />
+            ))}
+          </ul>
+          <MasterStrip
+            volumeDb={engineState.masterVolumeDb}
+            pan={project.tracks[project.masterTrackId].pan}
+            disabled={readOnly}
+            onVolume={(db) => engine.setMasterVolume(db)}
+            onPan={(pan) => edit(setTrack(projectRef.current, project.masterTrackId, { pan }))}
+          />
+        </div>
+      </section>
+
       <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
+
+      <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
+
+      <section aria-labelledby="studio-view" className="flex flex-col gap-2">
+        <h2 id="studio-view" className={sectionHeading}>
+          View
+        </h2>
+        <p className="text-sm text-muted">Zoom, playhead, loop and the open panel return when this project opens again.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, -1) })} disabled={view.zoom <= ZOOM_MIN}>
+            Zoom out
+          </Button>
+          <output aria-live="polite" className="min-w-24 text-center tabular-nums">
+            Zoom {Math.round(view.zoom * 100)}%
+          </output>
+          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, 1) })} disabled={view.zoom >= ZOOM_MAX}>
+            Zoom in
+          </Button>
+        </div>
+        <p>Playhead: {barBeat(view.playhead, meter)} (where playback starts)</p>
+        <p>
+          Loop {view.loopEnabled ? 'on' : 'off'}
+          {view.loop ? `: ${barRange(view.loop, meter)}` : null}
+        </p>
+        <p>Open panel: {view.openPanel ? PANEL_NAMES[view.openPanel] : panelDevice ? PANEL_NAMES.pianoroll : 'none'}</p>
+      </section>
     </>
   );
 }

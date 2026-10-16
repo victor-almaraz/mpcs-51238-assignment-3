@@ -288,3 +288,96 @@ The full study, with sources and confidence labels, is in [`docs/onboarding-rese
 | Return visits restore the working state with the transport stopped; imported audio persists on the device | F7 |
 | Web MIDI access is requested only from a button | F10 |
 | Edits save locally 500 ms after the last change, with a visible save status | F11 |
+
+## First-run check
+
+The main flow was run in Chromium, Firefox and WebKit with empty profiles against the production build: no sound before a user action, Home, an example played after the volume notice, a new project, a saved preset, a return visit with the working state restored, WAV export and a `.wrack` round trip. Every step passed, and the site made no third-party requests. The review as a brand-new and as a returning user led to these changes:
+
+- An empty clip opens with Step input on, so pressing a key adds a note, as the empty-editor hint says.
+- The editor shows the transport, tracks, timeline and piano roll first; live input and view settings come last.
+- The timeline has a bar-number ruler and track names.
+- A Stop button follows Play.
+- Save .wrack file and Load explain what a `.wrack` file is and that edits save in the browser automatically.
+- Each instrument and effect shows its current preset.
+- Split and Join are disabled until the project has clips; effect cards no longer overflow.
+
+The full results, the feedback and what was not changed are in [`docs/first-run-check.md`](docs/first-run-check.md).
+
+## Features
+
+| Area | What W-Rack provides |
+|---|---|
+| Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor |
+| MIDI | Piano roll with keyboard note entry, step input, quantize and clip looping; computer-keyboard and Web MIDI live input |
+| Audio | Multi-file import, waveform timeline with a keyboard treegrid, split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes |
+| Effects | EQ, filter, compressor, saturation, delay and reverb in chains of up to eight on every track and the master |
+| Mixer | Track gain, pan, mute and solo; master volume and pan; meters; Panic (`Escape`) |
+| Safety | A fixed safety stage after the master: guard, DC blocker, sustained-level duck, −1 dBFS limiter and a 50 ms start fade |
+| Projects | Automatic local saving, restored working state, a personal preset library, `.wrack` archives, WAV export |
+
+All audio runs in one AudioWorklet engine followed by the safety stage; no native Web Audio DSP nodes are used. Implementation details are in [`docs/a3-audio-implementation.md`](docs/a3-audio-implementation.md).
+
+## Browser support
+
+| Browser | Status |
+|---|---|
+| Chrome and Edge (Chromium) | Supported. Web MIDI is available after its permission prompt. `.wrack` files save through the file picker. |
+| Firefox | Supported. Web MIDI needs Firefox's site-permission add-on; connect the MIDI device before starting Firefox. Files save as downloads. |
+| Safari (WebKit) | Supported without Web MIDI. Safari can delete site data after 7 days without a visit, so `.wrack` backups are recommended; private windows keep imported audio for the session only. Files save as downloads. |
+
+The end-to-end suite runs in Chromium, Firefox and WebKit.
+
+## Storage
+
+| Data | Where |
+|---|---|
+| Projects, working state, presets, settings | `localStorage`, keys starting with `w-rack:v1:` |
+| Imported audio (original file bytes) | IndexedDB database `w-rack`, store `sources` |
+
+Nothing leaves the device. `/settings` shows storage use, lists stored audio with the projects that use it, and offers "Clear all data".
+
+## Limits
+
+| Limit | Value |
+|---|---|
+| Tracks | 16 |
+| Voices | 16 per instrument, 64 in total |
+| Effects per chain | 8; at most 4 reverbs per project |
+| Decoded audio per project | 20 minutes |
+| Sampler source | 60 s; mip memory 64 MB in total |
+| Expanded MIDI notes per track | 20 000 |
+| Export | 10 minutes plus a tail of up to 10 s |
+| `.wrack` archive | 500 MB |
+| Presets | 200 |
+
+The full list is in [`docs/assignment-3-scope.md`](docs/assignment-3-scope.md) (Limits).
+
+## Accessibility
+
+W-Rack targets WCAG 2.2 AA. Canvas views have DOM mirrors: the timeline is a `treegrid` named "Tracks and clips" and the piano roll a `grid` named "Notes". Every control has a role and a name that is unique within its landmark.
+
+| Pair | Contrast |
+|---|---|
+| Text on background | 12.4:1 |
+| Muted text on background | 5.6:1 |
+| Control boundaries on background | 3.7:1 |
+| Focus ring on background | 5.1:1 |
+| Primary button text | 5.0:1 |
+
+The checks, keyboard paths and known gaps are recorded in [`docs/a11y-check.md`](docs/a11y-check.md).
+
+## Development
+
+Node 24 and the Playwright browsers install under `.tools/` (git-ignored); every command runs with `PATH=$PWD/.tools/node/bin:$PATH`.
+
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Development server; worklet sources are copied to `public/worklets/` and watched |
+| `pnpm build` | Static export to `out/` |
+| `pnpm start` | Serves `out/` on port 3100 with the rewrites and headers in `vercel.json` |
+| `pnpm lint` | ESLint, including the audio-thread rules for `src/dsp` and `src/worklet` |
+| `pnpm test:dsp` | Unit tests in Node (`tests/dsp`) |
+| `pnpm e2e:install` | Installs Chromium, Firefox and WebKit into `.tools/ms-playwright` |
+| `pnpm test:e2e` | End-to-end tests in the three browsers against `out/`, or against `BASE_URL` when set; the CPU benchmark runs last, alone |
+
+Deployment: Vercel runs `pnpm build` and serves `out/` with `vercel.json`, which rewrites every `/projects/<id>` path to the prerendered editor shell and serves `/worklets/` with `Cache-Control: no-cache`.

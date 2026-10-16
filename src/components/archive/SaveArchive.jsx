@@ -61,10 +61,13 @@ export default function SaveArchive({ project, disabled }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button onClick={save} disabled={disabled || busy}>
+      <Button onClick={save} disabled={disabled || busy} aria-describedby="save-archive-help">
         {busy ? 'Saving file…' : 'Save .wrack file'}
       </Button>
       <span className="text-sm">{state.saved ? 'Saved to file' : 'Not saved to file'}</span>
+      <p id="save-archive-help" className="basis-full text-sm text-muted">
+        Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.
+      </p>
       <StatusRegion className="text-sm">{message}</StatusRegion>
       {error ? (
         <p role="alert" className={errorText}>

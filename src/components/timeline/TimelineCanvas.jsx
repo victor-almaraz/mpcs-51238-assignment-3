@@ -6,7 +6,7 @@ import { getSource } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { audioTempo, clipEndTick } from '@/lib/project/clip-commands';
-import { TRACK_H, pxPerTick, trackClips } from './layout';
+import { RULER_H, TRACK_H, pxPerTick, trackClips } from './layout';
 
 function cssVar(name, fallback) {
   if (typeof document === 'undefined') return fallback;
@@ -51,7 +51,8 @@ function drawWaveform(ctx, doc, clip, x0, top, height, zoom, width, color) {
 }
 
 /**
- * Visual layer of the timeline: track rows, bar lines, clips with waveforms
+ * Visual layer of the timeline: a bar-number ruler, track rows with their
+ * names, bar lines, clips with waveforms
  * (from cached peaks) or note sketches, fades, the selection, the edit cursor
  * and the playhead, drawn on Canvas 2D for the visible area only. Hidden from
  * the accessibility tree; the treegrid mirror is the accessible view. `ghost`
@@ -87,7 +88,7 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
       if (!p || !scroller) return;
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(1, scroller.clientWidth);
-      const h = Math.max(TRACK_H, p.rowIds.length * TRACK_H);
+      const h = RULER_H + Math.max(TRACK_H, p.rowIds.length * TRACK_H);
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
@@ -102,9 +103,13 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
       p.rowIds.forEach((_, r) => {
         if (r % 2 === 1) {
           ctx.fillStyle = colors.alt;
-          ctx.fillRect(0, r * TRACK_H, w, TRACK_H);
+          ctx.fillRect(0, RULER_H + r * TRACK_H, w, TRACK_H);
         }
       });
+      ctx.fillStyle = colors.clip;
+      ctx.fillRect(0, 0, w, RULER_H);
+      ctx.fillStyle = colors.bar;
+      ctx.fillRect(0, RULER_H - 1, w, 1);
       // Beat and bar lines across the visible range.
       const firstTick = Math.floor(sx / k);
       const lastTick = Math.ceil((sx + w) / k);
@@ -114,8 +119,11 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
         const next = p.meter.tickAtBar(bar + 1);
         for (let b = t; b < next && b <= lastTick; b += beat) {
           ctx.fillStyle = b === t ? colors.bar : colors.line;
-          ctx.fillRect(b * k - sx, 0, b === t ? 1 : 0.5, h);
+          ctx.fillRect(b * k - sx, b === t ? 0 : RULER_H, b === t ? 1 : 0.5, h);
         }
+        ctx.fillStyle = colors.fg;
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.fillText(String(bar + 1), t * k - sx + 4, 14);
       }
       const g = p.ghost;
       p.rowIds.forEach((trackId, r) => {
@@ -125,7 +133,7 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
           const x = clip.start * k - sx;
           const cw = Math.max(2, (end - clip.start) * k);
           if (x + cw < 0 || x > w) continue;
-          const top = r * TRACK_H + 3;
+          const top = RULER_H + r * TRACK_H + 3;
           const ch = TRACK_H - 6;
           ctx.fillStyle = colors.clip;
           ctx.fillRect(x, top, cw, ch);
@@ -194,10 +202,23 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
             ctx.setLineDash([4, 3]);
             ctx.strokeStyle = colors.focus;
             ctx.lineWidth = 2;
-            ctx.strokeRect(gs * k - sx + 1, gr * TRACK_H + 4, Math.max(2, (ge - gs) * k) - 2, TRACK_H - 8);
+            ctx.strokeRect(gs * k - sx + 1, RULER_H + gr * TRACK_H + 4, Math.max(2, (ge - gs) * k) - 2, TRACK_H - 8);
             ctx.setLineDash([]);
           }
         }
+      });
+      // Track names stay at the left edge, above the clips.
+      ctx.font = '11px ui-monospace, monospace';
+      p.rowIds.forEach((trackId, r) => {
+        const label = p.project.tracks[trackId].name;
+        const y = RULER_H + r * TRACK_H + TRACK_H - 8;
+        const tw = ctx.measureText(label).width + 8;
+        ctx.fillStyle = colors.bg;
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(0, y - 11, tw, 15);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = colors.fg;
+        ctx.fillText(label, 4, y);
       });
       ctx.fillStyle = colors.focus;
       for (let y = 0; y < h; y += 8) ctx.fillRect(p.editCursor * k - sx, y, 1, 4);

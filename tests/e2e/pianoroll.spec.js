@@ -100,7 +100,8 @@ test('step input: computer-keyboard notes insert at the cursor and advance it', 
   await page.evaluate(() => localStorage.setItem('w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
   await page.reload();
   await silence(page);
-  await page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Step input' }).click();
+  // An empty clip opens in step input.
+  await expect(page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Step input' })).toHaveAttribute('aria-pressed', 'true');
   const grid = roll(page, 'Track 1');
   await cursorCell(grid).focus();
   await page.keyboard.press('KeyA');

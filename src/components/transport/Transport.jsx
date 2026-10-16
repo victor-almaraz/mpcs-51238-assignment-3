@@ -28,7 +28,7 @@ export function loopRange(project, view) {
 }
 
 /**
- * Transport toolbar (TRN-01, TRN-02): Go to start, Play, Loop, Metronome,
+ * Transport toolbar (TRN-01, TRN-02): Go to start, Play, Stop, Loop, Metronome,
  * Position, Tempo and Time signature. Space plays and stops at the playhead
  * outside fields and buttons; Home locates to bar 1 and Shift+Home to the loop
  * start. Play passes through the volume notice. `showExampleHint` highlights
@@ -126,6 +126,9 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         >
           Play
         </Toggle>
+        <Button onClick={stop} disabled={!state.playing}>
+          Stop
+        </Button>
         <LoopToggle on={view.loopEnabled} onChange={(on) => onViewChange({ loopEnabled: on, loop })} />
         <MetronomeToggle on={state.metronome} onChange={(on) => engine.setMetronome(on)} />
         <Position />
@@ -148,12 +151,15 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
           </Button>
         </div>
       ) : null}
-      <p className="text-sm">{state.playing ? 'Playing' : 'Stopped'}</p>
-      {hint ? (
-        <p id="transport-play-hint" className="text-sm font-bold">
-          Press Play to hear this example
-        </p>
-      ) : null}
+      <p className="text-sm">
+        {state.playing ? 'Playing' : 'Stopped'}
+        {hint ? (
+          <>
+            {' · '}
+            <strong id="transport-play-hint">Press Play to hear this example</strong>
+          </>
+        ) : null}
+      </p>
       {state.error ? (
         <p role="alert" className={errorText}>
           {state.error}

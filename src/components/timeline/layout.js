@@ -5,8 +5,9 @@
 import { PPQ } from '@/dsp/core/constants';
 import { clipEndTick } from '@/lib/project/clip-commands';
 
-/** Row height and pixels per quarter note at zoom 1, CSS pixels. */
+/** Row height, bar-number ruler height and pixels per quarter note at zoom 1, CSS pixels. */
 export const TRACK_H = 56;
+export const RULER_H = 20;
 export const QUARTER_W = 32;
 /** Pointer distance from a clip edge that grabs a trim handle. */
 export const EDGE_PX = 6;

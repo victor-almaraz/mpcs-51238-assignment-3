@@ -65,6 +65,18 @@ export function renamePreset(id, name, typeLabel) {
   return write(presets.map((p) => (p.id === id ? { ...p, name: name.trim() } : p)));
 }
 
+/**
+ * The device's preset for display: its name, "<name> (edited)" once its
+ * parameters differ from the library preset, or null without one.
+ */
+export function presetLabel(device) {
+  if (!device.preset) return null;
+  const preset = getPresets().find((p) => p.id === device.preset.id);
+  if (!preset) return device.preset.name;
+  const edited = Object.entries(preset.params).some(([id, v]) => device.params[id] !== undefined && device.params[id] !== v);
+  return edited ? `${preset.name} (edited)` : preset.name;
+}
+
 /** Deletes preset `id`. */
 export function deletePreset(id) {
   return write(getPresets().filter((p) => p.id !== id));
@@ -72,12 +84,13 @@ export function deletePreset(id) {
 
 /**
  * Returns `doc` with device `deviceId` set to `preset` (parameters replaced;
- * a sampler preset's zone too). `preset` null applies the built-in defaults.
+ * a sampler preset's zone too) and `device.preset` recording { id, name }.
+ * `preset` null applies the built-in defaults.
  */
 export function applyPreset(doc, deviceId, preset) {
   const device = doc.devices[deviceId];
   if (!device) return doc;
-  const next = { ...device, params: preset ? { ...preset.params } : {} };
+  const next = { ...device, params: preset ? { ...preset.params } : {}, preset: preset ? { id: preset.id, name: preset.name } : null };
   if (device.type === 'sampler' && preset?.sampler) next.sampler = { ...preset.sampler };
   return { ...doc, devices: { ...doc.devices, [deviceId]: next } };
 }

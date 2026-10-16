@@ -17,7 +17,7 @@ import ClipProperties from './ClipProperties';
 import TimelineCanvas from './TimelineCanvas';
 import TimelineTree from './TimelineTree';
 import useTimelineCommands from './useTimelineCommands';
-import { EDGE_PX, TAIL_BARS, TRACK_H, barText, clipAt, contentEnd, pxPerTick, sourceStatus, tickToX, xToTick } from './layout';
+import { EDGE_PX, RULER_H, TAIL_BARS, TRACK_H, barText, clipAt, contentEnd, pxPerTick, sourceStatus, tickToX, xToTick } from './layout';
 
 const ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.oga';
 /** Snap steps in quarter notes (ARR-04); 'bar' snaps to the bar. */
@@ -72,6 +72,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const statusFor = (clip) => sourceStatus(clip.sourceId, getSource, loading);
   const primary = project.clips[selection[selection.length - 1]] ?? null;
   const joinState = commands.joinPair(project);
+  const hasClips = Object.keys(project.clips).length > 0;
+  const showJoin = selection.length > 0;
 
   function setCursor(tick, say = true) {
     const t = Math.max(0, tick);
@@ -131,7 +133,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   function pointerPosition(e) {
     const el = scrollRef.current;
     const rect = el.getBoundingClientRect();
-    return { x: e.clientX - rect.left + el.scrollLeft, row: Math.floor((e.clientY - rect.top + el.scrollTop) / TRACK_H) };
+    return { x: e.clientX - rect.left + el.scrollLeft, row: Math.floor((e.clientY - rect.top + el.scrollTop - RULER_H) / TRACK_H) };
   }
 
   function onPointerDown(e) {
@@ -212,10 +214,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           setSnap(v);
           announce(`Snap: ${SNAP_OPTIONS.find((o) => o.value === v).label}`);
         }} />
-        <Button onClick={() => commands.split(view.selectedTrackId)} disabled={readOnly}>
+        <Button onClick={() => commands.split(view.selectedTrackId)} disabled={readOnly || !hasClips}>
           Split at edit cursor
         </Button>
-        <Button onClick={commands.join} disabled={readOnly} aria-describedby={joinState.reason ? 'timeline-join-reason' : undefined}>
+        <Button onClick={commands.join} disabled={readOnly || !hasClips} aria-describedby={showJoin && joinState.reason ? 'timeline-join-reason' : undefined}>
           Join clips
         </Button>
         <Button onClick={commands.duplicate} disabled={readOnly || selection.length === 0}>
@@ -239,9 +241,11 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           importAudio(files);
         }}
       />
-      <p id="timeline-join-reason" className="text-sm text-muted">
-        {joinState.reason ? `Join: ${joinState.reason}` : 'Join: the selected clips can be joined.'}
-      </p>
+      {showJoin ? (
+        <p id="timeline-join-reason" className="text-sm text-muted">
+          {joinState.reason ? `Join: ${joinState.reason}` : 'Join: the selected clips can be joined.'}
+        </p>
+      ) : null}
       <p className="text-sm">Edit cursor: {barText(editCursor, meter)}</p>
       <StatusRegion aria-label="Import results" className="text-sm">
         {results.length > 0 ? (
@@ -256,7 +260,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       <div
         ref={scrollRef}
         className="relative overflow-x-auto overflow-y-hidden rounded-ds border border-border-strong"
-        style={{ height: Math.max(1, rowIds.length) * TRACK_H + 16, touchAction: 'pan-y' }}
+        style={{ height: RULER_H + Math.max(1, rowIds.length) * TRACK_H + 16, touchAction: 'pan-y' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

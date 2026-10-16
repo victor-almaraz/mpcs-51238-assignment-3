@@ -23,7 +23,8 @@ export default function Toggle({ pressed = false, highlighted = false, size = 'm
       ref={ref}
       type="button"
       aria-pressed={pressed ? 'true' : 'false'}
-      className={cx(controlBase, lamp, controlSizes[size] ?? controlSizes.md, look, className)}
+      // Top padding keeps the lamp clear of the capitals.
+      className={cx(controlBase, lamp, controlSizes[size] ?? controlSizes.md, 'pt-2', look, className)}
       {...rest}
     />
   );

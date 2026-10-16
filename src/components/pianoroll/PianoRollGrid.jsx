@@ -53,7 +53,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
 
   const [grid, setGrid] = useState(DEFAULT_GRID);
   const [showAll, setShowAll] = useState(false);
-  const [stepInput, setStepInput] = useState(false);
+  // An empty clip starts in step input, so the empty-editor hint holds: pressing a key adds a note.
+  const [stepInput, setStepInput] = useState(() => !clip || clip.notes.length === 0);
   const [previewOn, setPreviewOn] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [ghost, setGhost] = useState(null); // provisional note during a drag

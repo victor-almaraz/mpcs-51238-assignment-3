@@ -4,7 +4,7 @@ import { useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { getPresets, subscribePresets } from '@/lib/presets/store';
+import { getPresets, presetLabel, subscribePresets } from '@/lib/presets/store';
 import SavePresetDialog from './SavePresetDialog';
 
 const DEFAULTS = '__defaults';
@@ -50,6 +50,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
       <Button ref={saveRef} size="sm" disabled={disabled} aria-label={owner ? `Save preset: ${owner}` : undefined} onClick={() => setSaving(true)}>
         Save preset
       </Button>
+      <span className="text-sm">Preset: {presetLabel(device) ?? 'none'}</span>
       <StatusRegion visuallyHidden>{message}</StatusRegion>
       <SavePresetDialog
         open={saving}
@@ -59,6 +60,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
         onClose={() => setSaving(false)}
         onSaved={(preset) => {
           setSaving(false);
+          onApply(preset); // the device now uses the saved preset
           setMessage(`Saved preset ${preset.name}`);
         }}
       />

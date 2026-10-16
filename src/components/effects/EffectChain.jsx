@@ -80,7 +80,7 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
   }
   return (
     <li>
-      <div role="group" aria-label={groupLabel} className="flex w-72 flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2">
+      <div role="group" aria-label={groupLabel} className="flex w-full flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2 sm:w-[26rem]">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className={sectionHeading}>{name}</h3>
         {device.bypass ? <span className="text-sm font-bold text-muted">Bypassed</span> : null}
