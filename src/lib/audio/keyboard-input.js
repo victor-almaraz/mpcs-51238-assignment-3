@@ -5,6 +5,8 @@
  * MIDI 12·(o + 1), so octave 4 is C4 = 60 and octaves 0–7 cover C0–C8.
  * Input is inactive in text entry, while a dialog is open and while disabled.
  * Key repeat is ignored; modified keys (Ctrl, Meta, Alt) are left to the page.
+ * Pressing or releasing Meta ends held notes: macOS browsers send no keyup for
+ * other keys while Meta is down, so those notes would otherwise stick.
  */
 
 export const KEY_SEMITONES = Object.freeze({
@@ -53,6 +55,7 @@ export function createKeyboardInput({ onNoteOn, onNoteOff, onOctave, octave: ini
   }
 
   function onKeyDown(e) {
+    if (e.metaKey || e.key === 'Meta') releaseAll();
     if (!enabled || e.repeat || ignoresKeyboard(e)) return;
     if (e.code === 'KeyZ' || e.code === 'KeyX') {
       const next = Math.min(OCTAVE_MAX, Math.max(OCTAVE_MIN, octave + (e.code === 'KeyX' ? 1 : -1)));
@@ -72,6 +75,10 @@ export function createKeyboardInput({ onNoteOn, onNoteOff, onOctave, octave: ini
   }
 
   function onKeyUp(e) {
+    if (e.key === 'Meta') {
+      releaseAll();
+      return;
+    }
     const pitch = held.get(e.code);
     if (pitch === undefined) return;
     held.delete(e.code);

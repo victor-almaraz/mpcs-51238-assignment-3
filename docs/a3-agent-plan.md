@@ -193,7 +193,8 @@ Do not start the next task.
 ### Phase 8 — Piano roll, MIDI clips, input
 - **Goal:** note editing and live input.
 - **Context:** `a3-audio-implementation.md` (Timing and sequencing, UI timing and drawing), `midi.md`, `accessibility.md`.
-- **Files:** `src/components/pianoroll/{PianoRollCanvas,PianoRollGrid,usePianoRollCommands}.jsx`, `src/lib/project/midi-commands.js`, `src/lib/audio/{keyboard-input,midi-input}.js`, `tests/dsp/midi-commands.test.js`, `tests/e2e/pianoroll.spec.js`.
+- **Files:** `src/components/pianoroll/{PianoRollCanvas,PianoRollGrid,usePianoRollCommands}.jsx`, `src/components/pianoroll/layout.js`, `src/components/input/LiveInputControls.jsx`, `src/lib/project/midi-commands.js`, `src/lib/audio/{keyboard-input,midi-input}.js`, `src/dsp/engine/live-input.js`, `tests/dsp/{midi-commands,live-input}.test.js`, `tests/e2e/pianoroll.spec.js`.
+- **Clip looping:** MIDI clips carry an optional `loopLength` (ticks); the piano roll sets it to 1, 2 or 4 bars or off.
 - **Tasks:**
   1. Pure note commands on integer ticks: add, move, resize, delete, velocity, quantize.
   2. Canvas drawing with a `role="grid"` DOM mirror, arrow-key navigation and note names such as "C4, bar 2 beat 1, length 1 beat, velocity 100".

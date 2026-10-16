@@ -147,12 +147,20 @@ export function setLoopLength(doc, clipId, loopLength) {
   return { ok: true, doc: withClip(doc, { ...clip, loopLength }) };
 }
 
-/** The note in `clip` that starts at `tick` with `pitch`, or the one covering that cell; undefined if none. */
-export function noteAt(clip, tick, pitch, cell = 1) {
-  return (
-    clip.notes.find((n) => n.pitch === pitch && n.tick >= tick && n.tick < tick + cell) ??
-    clip.notes.find((n) => n.pitch === pitch && n.tick < tick && n.tick + n.length > tick)
-  );
+/** Notes of `pitch` in `clip` that start inside the cell [tick, tick + cell). */
+export function notesStartingIn(clip, tick, pitch, cell = 1) {
+  return clip.notes.filter((n) => n.pitch === pitch && n.tick >= tick && n.tick < tick + cell);
+}
+
+/**
+ * The note of `pitch` that starts in the cell [tick, tick + cell), or else the
+ * one covering it; undefined if none. With `startOnly` (drum rows, drawn as
+ * fixed-width markers) only notes starting in the cell count.
+ */
+export function noteAt(clip, tick, pitch, cell = 1, startOnly = false) {
+  const starting = clip.notes.find((n) => n.pitch === pitch && n.tick >= tick && n.tick < tick + cell);
+  if (starting || startOnly) return starting;
+  return clip.notes.find((n) => n.pitch === pitch && n.tick < tick && n.tick + n.length > tick);
 }
 
 /**

@@ -47,7 +47,7 @@ export interface Track {
 }
 export type Clip = MidiClip | AudioClip;
 interface ClipBase { id: ClipId; trackId: TrackId; start: Tick; name: string; muted: boolean; color?: string }
-export interface MidiClip extends ClipBase { kind: 'midi'; length: Tick; notes: Note[] }
+export interface MidiClip extends ClipBase { kind: 'midi'; length: Tick; loopLength?: Tick; notes: Note[] } // notes in [0, loopLength) repeat to fill the clip
 export interface Note { id: NoteId; tick: Tick; length: Tick; pitch: number; velocity: number; channel: number } // tick relative to clip start
 export interface AudioClip extends ClipBase {
   kind: 'audio'; sourceId: SourceId;

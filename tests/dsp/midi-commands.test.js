@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compileModel } from '../../src/lib/audio/compile-model.js';
 import {
-  addNote, createClip, deleteNote, expandClipNotes, moveNote, noteAt, quantize, resizeNote, setLoopLength, setVelocity,
+  addNote, createClip, deleteNote, expandClipNotes, moveNote, noteAt, notesStartingIn, quantize, resizeNote, setLoopLength, setVelocity,
 } from '../../src/lib/project/midi-commands.js';
 import { createProject } from '../../src/lib/project/model.js';
 
@@ -133,4 +133,20 @@ test('compile: a looping clip expands into frames, sorted, at most 20 000 notes 
   const off = setLoopLength(doc, s.clipId, null).doc;
   assert.equal(off.clips[s.clipId].loopLength, undefined);
   assert.equal(compileModel(off, 48000).model.tracks[0].notes.start.length, 2);
+});
+
+test('noteAt with startOnly matches drum markers: a long note does not cover later cells', () => {
+  const clip = { notes: [{ id: 'a', tick: 0, length: 960, pitch: 36, velocity: 100 }] };
+  assert.equal(noteAt(clip, 240, 36, 240)?.id, 'a', 'pitched rows: the note covers the cell');
+  assert.equal(noteAt(clip, 240, 36, 240, true), undefined, 'drum rows: only notes starting there');
+  assert.equal(noteAt(clip, 0, 36, 240, true)?.id, 'a');
+});
+
+test('notesStartingIn lists stacked notes of one pitch in a cell', () => {
+  const clip = { notes: [
+    { id: 'a', tick: 0, length: 240, pitch: 60, velocity: 100 },
+    { id: 'b', tick: 120, length: 240, pitch: 60, velocity: 100 },
+    { id: 'c', tick: 0, length: 240, pitch: 61, velocity: 100 },
+  ] };
+  assert.deepEqual(notesStartingIn(clip, 0, 60, 240).map((n) => n.id), ['a', 'b']);
 });

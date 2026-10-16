@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import StatusRegion from '@/components/ui/StatusRegion';
@@ -8,6 +8,7 @@ import Toggle from '@/components/ui/Toggle';
 import Transport from '@/components/transport/Transport';
 import InstrumentPanel from '@/components/instruments/InstrumentPanel';
 import LiveInputControls from '@/components/input/LiveInputControls';
+import PianoRollGrid from '@/components/pianoroll/PianoRollGrid';
 import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -69,6 +70,7 @@ function saveStatusText(unsavedCopy, state) {
 export default function Studio({ project: initialProject, unsavedCopy, readOnly }) {
   const [project, setProject] = useState(initialProject);
   const [view, setView] = useState(() => readView(initialProject));
+  const stepInsertRef = useRef(null);
   const saveState = useSyncExternalStore(subscribeSaveState, getSaveState, getSaveState);
   const viewSaveState = useSyncExternalStore(subscribeViewSaveState, getViewSaveState, getViewSaveState);
 
@@ -146,7 +148,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         showExampleHint={unsavedCopy}
       />
 
-      <LiveInputControls />
+      <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
 
       <section aria-labelledby="studio-view" className="flex flex-col gap-2">
         <h2 id="studio-view" className={sectionHeading}>
@@ -240,6 +242,19 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           />
         </div>
       </section>
+
+      {panelDevice ? (
+        <PianoRollGrid
+          key={panelTrackId}
+          project={project}
+          trackId={panelTrackId}
+          view={view}
+          onViewChange={changeView}
+          onEdit={edit}
+          readOnly={readOnly}
+          stepInsertRef={stepInsertRef}
+        />
+      ) : null}
 
       {panelDevice ? (
         <InstrumentPanel

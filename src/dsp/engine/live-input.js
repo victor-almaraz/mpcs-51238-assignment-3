@@ -2,8 +2,9 @@
  * Live notes from the computer keyboard, Web MIDI and note previews
  * (a3-audio-implementation.md, Live input; midi.md). Events are MIDI channel
  * messages [status, data1, data2] applied at offset 0 of the next quantum.
- * Live voices use note IDs from LIVE_NOTE_BASE + pitch, so transport stops and
- * loop wraps (which release sequenced notes only) leave them sounding.
+ * Live voices use note IDs LIVE_NOTE_BASE + 128·channel + pitch, so transport
+ * stops and loop wraps (which release sequenced notes only) leave them
+ * sounding, and note previews (channel 16) never cut a note being played.
  * A token bucket limits note-ons to 200 per second (project limit); excess
  * note-ons are dropped and counted, note-offs always pass.
  */
@@ -11,6 +12,10 @@ import { NOTE_COUNT } from '../core/constants.js';
 
 /** First live note ID; sequenced note IDs stay below it. */
 export const LIVE_NOTE_BASE = 1 << 24;
+
+/** MIDI channel (0-based) the engine client uses for note previews and auditions. */
+export const PREVIEW_CHANNEL = 15;
+const CHANNELS = 16;
 
 /** Note-on flood limit, per second (project limit). */
 export const FLOOD_LIMIT_PER_S = 200;
@@ -69,14 +74,15 @@ export function applyLiveEvent(kernel, status, data1, data2, limiter, timeS) {
   if (kernel === null) return true;
   const kind = status & 0xf0;
   const pitch = data1 & 0x7f;
+  const id = LIVE_NOTE_BASE + NOTE_COUNT * (status & 0x0f) + pitch;
   if (kind === NOTE_ON && data2 > 0) {
     if (!limiter.allow(timeS)) return false;
-    kernel.noteOff(LIVE_NOTE_BASE + pitch);
-    kernel.noteOn(LIVE_NOTE_BASE + pitch, pitch, data2 & 0x7f);
+    kernel.noteOff(id);
+    kernel.noteOn(id, pitch, data2 & 0x7f);
   } else if (kind === NOTE_OFF || kind === NOTE_ON) {
-    kernel.noteOff(LIVE_NOTE_BASE + pitch);
+    kernel.noteOff(id);
   } else if (kind === CONTROL_CHANGE && (data1 === CC_ALL_SOUND_OFF || data1 === CC_ALL_NOTES_OFF)) {
-    for (let p = 0; p < NOTE_COUNT; p++) kernel.noteOff(LIVE_NOTE_BASE + p);
+    for (let i = 0; i < CHANNELS * NOTE_COUNT; i++) kernel.noteOff(LIVE_NOTE_BASE + i);
     if (data1 === CC_ALL_SOUND_OFF) kernel.allNotesOff(true);
   }
   return true;

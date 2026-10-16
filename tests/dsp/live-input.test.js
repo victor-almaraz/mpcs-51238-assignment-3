@@ -40,6 +40,16 @@ test('applyLiveEvent: note-on, note-off, velocity 0 and all notes off', () => {
   assert.equal(applyLiveEvent(null, 0x90, 60, 100, lim, 0), true, 'a track without a kernel ignores events');
 });
 
+test('previews on channel 16 use their own note IDs and never cut a held note', () => {
+  const k = new SubtractiveKernel(FS, new GlobalVoices());
+  const lim = new FloodLimiter();
+  applyLiveEvent(k, 0x90, 60, 100, lim, 0);
+  applyLiveEvent(k, 0x9f, 60, 100, lim, 0);
+  applyLiveEvent(k, 0x8f, 60, 0, lim, 0);
+  assert.ok(k.pool.find(LIVE_NOTE_BASE + 60) >= 0, 'the played note still holds');
+  assert.equal(k.pool.find(LIVE_NOTE_BASE + 15 * 128 + 60), -1, 'the preview ended');
+});
+
 test('the engine re-checks the flood limit', () => {
   const lim = new FloodLimiter();
   const k = new SubtractiveKernel(FS, new GlobalVoices());

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
+import Toolbar from '@/components/ui/Toolbar';
 import { errorText } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 import { setTempo, setTimeSignature, ticksPerBar } from '@/lib/project/model';
@@ -115,7 +116,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
       <h2 id="studio-transport" className="sr-only">
         Transport
       </h2>
-      <div role="toolbar" aria-label="Transport" className="flex flex-wrap items-center gap-2 rounded-ds border border-border-strong bg-surface p-2">
+      <Toolbar label="Transport" className="flex flex-wrap items-center gap-2 rounded-ds border border-border-strong bg-surface p-2">
         <Button onClick={() => locate(0)}>Go to start</Button>
         <Toggle
           pressed={state.playing}
@@ -137,7 +138,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         <Button variant="danger" size="lg" onClick={panic} className="ml-auto">
           Panic
         </Button>
-      </div>
+      </Toolbar>
       <StatusRegion visuallyHidden>{announcement}</StatusRegion>
       {state.ducked ? (
         <div role="alert" className={errorText}>

@@ -410,9 +410,9 @@ test('computer keyboard notes pass through the volume notice and play the select
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.down('KeyA');
   await expect(notice(page)).toBeVisible();
-  await notice(page).getByRole('button', { name: 'Continue' }).click();
   await page.keyboard.up('KeyA');
-  // The key was released during the notice, so no note sticks.
+  await notice(page).getByRole('button', { name: 'Continue' }).click();
+  // The key was released during the notice, so its note never starts.
   expect(await masterPeakOver(page, 600)).toBeLessThan(1e-3);
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.down('KeyA');

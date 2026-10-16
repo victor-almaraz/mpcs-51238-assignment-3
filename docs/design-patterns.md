@@ -302,7 +302,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Problem:** Modal tool palettes confuse; mouse-only entry excludes keyboard users.
 - **Solution:**
   - Pointer: clicking an empty cell adds a grid-length note; clicking a note selects it; dragging moves; dragging an edge resizes; `B` toggles a paint mode.
-  - Keyboard: arrows move the cursor; Enter adds or removes a note; Shift+Left/Right changes length; Up/Down transposes by a semitone.
+  - Keyboard: arrows move the cursor; Enter adds or removes a note; Delete removes it; Alt+Left/Right moves it by a grid step and Alt+Up/Down transposes it by a row; Shift+Left/Right changes length; Shift+Up/Down changes velocity by 8. Left from the first column reaches the row header, where Space or Enter previews the row.
   - A loop brace above the grid has numeric start and end fields.
 - **Prior art:** Ableton Live's draw mode and grid-stepped insert marker; Song Maker's click-to-toggle cells.
 - **W-Rack application:** Piano roll panel.

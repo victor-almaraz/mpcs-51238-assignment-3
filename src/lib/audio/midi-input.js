@@ -101,7 +101,15 @@ export async function connectMidi({ onNoteOn, onNoteOff, onAllOff, onStatus }) {
   }
 
   bind();
-  access.onstatechange = bind;
+  access.onstatechange = (event) => {
+    // A device unplugged mid-note sends no note-offs: end every live note.
+    if (event?.port?.type === 'input' && event.port.state === 'disconnected') {
+      held.clear();
+      sustained.clear();
+      onAllOff(false);
+    }
+    bind();
+  };
   return () => {
     access.onstatechange = null;
     for (const input of access.inputs.values()) input.onmidimessage = null;

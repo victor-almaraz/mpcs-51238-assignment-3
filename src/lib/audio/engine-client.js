@@ -10,7 +10,7 @@
  * a second context.
  */
 import { CHANNELS, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../../dsp/core/constants.js';
-import { CONTROL_CHANGE, CC_ALL_NOTES_OFF, CC_ALL_SOUND_OFF, FloodLimiter, NOTE_OFF, NOTE_ON } from '../../dsp/engine/live-input.js';
+import { CONTROL_CHANGE, CC_ALL_NOTES_OFF, CC_ALL_SOUND_OFF, FloodLimiter, NOTE_OFF, NOTE_ON, PREVIEW_CHANNEL } from '../../dsp/engine/live-input.js';
 import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
@@ -297,14 +297,15 @@ function createClient() {
 
     /**
      * Note preview (PR-02): plays `pitch` for 250 ms through the target track's
-     * chain. No preview plays during playback.
+     * chain, on its own MIDI channel so it never cuts a held note. No preview
+     * plays during playback.
      */
     preview(pitch, velocity = 100) {
       if (state.playing) return;
       this.requestSound(() => {
         if (!liveLimiter.allow(nowS())) return;
-        sendLive(NOTE_ON, pitch, velocity);
-        setTimeout(() => sendLive(NOTE_OFF, pitch, 0), 250);
+        sendLive(NOTE_ON | PREVIEW_CHANNEL, pitch, velocity);
+        setTimeout(() => sendLive(NOTE_OFF | PREVIEW_CHANNEL, pitch, 0), 250);
       });
     },
 
