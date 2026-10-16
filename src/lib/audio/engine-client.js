@@ -59,6 +59,7 @@ function createClient() {
     ducked: false,
     error: null,
     samplers: {}, // deviceId → { status: 'bound' | 'missing', sourceId, reason } from the engine
+    faults: [], // effects the engine reset and bypassed: { trackId ('master' or a track ID), deviceId, slot }
   };
   let meters = null; // latest engine meters (Float32Array)
   let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
@@ -153,7 +154,8 @@ function createClient() {
       .catch((err) => console.error('Audio could not be decoded at the context rate', err))
       .then(() => {
         // Only the open project's sources go to the engine; others are removed.
-        const used = doc?.sources ?? {};
+        const used = { ...(doc?.sources ?? {}) };
+        for (const d of Object.values(doc?.devices ?? {})) if (d.sampler?.sourceId) used[d.sampler.sourceId] = true;
         const loaded = new Map(allSources().filter((s) => s.rate === rate && used[s.sourceId]).map((s) => [s.sourceId, s]));
         for (const [id, source] of loaded) {
           if (sentSources.get(id) === source.channels) continue;
@@ -219,6 +221,8 @@ function createClient() {
     if (msg.t === 'pos') {
       meters = msg.meters;
       if (msg.playing) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
+    } else if (msg.t === 'fault') {
+      setState({ faults: [...state.faults, { trackId: msg.trackId, deviceId: msg.deviceId, slot: msg.slot }] });
     } else if (msg.t === 'source-status') {
       setState({ samplers: { ...state.samplers, [msg.deviceId]: { status: msg.status, sourceId: msg.sourceId, reason: null } } });
     } else if (msg.t === 'sampler-zone-invalid') {
@@ -330,6 +334,7 @@ function createClient() {
     setProject(project) {
       const changes = paramChanges(doc, project);
       const sourcesChanged = doc?.sources !== project.sources;
+      if (doc && doc.id !== project.id && state.faults.length > 0) setState({ faults: [] }); // faults belong to the project that raised them
       doc = project;
       if (sourcesChanged) syncSources();
       if (changes) {
@@ -354,6 +359,13 @@ function createClient() {
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
       setState({ playing: false });
       return true;
+    },
+
+    /** Returns and clears the faults the engine reported since the last call. */
+    takeFaults() {
+      const faults = state.faults;
+      if (faults.length > 0) setState({ faults: [] });
+      return faults;
     },
 
     /** Sets the engine track index that live notes and previews play on. */

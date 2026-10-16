@@ -6,6 +6,10 @@ import { clampParam } from '@/dsp/core/params';
 import { instrumentFor } from '@/dsp/instruments/registry';
 import { INSTRUMENT_LABELS } from '@/lib/project/model';
 import SamplerPanel from '@/components/sampler/SamplerPanel';
+import PresetPicker from '@/components/presets/PresetPicker';
+import { getSource } from '@/lib/audio/decode';
+import { applyPreset } from '@/lib/presets/store';
+import { setSamplerSource } from '@/lib/project/clip-commands';
 import DrumMachinePanel from './DrumMachinePanel';
 import ParamControl from './ParamControl';
 
@@ -39,11 +43,22 @@ export default function InstrumentPanel({ project, track, device, onParamChange,
       onChange={(id, value) => onParamChange(device.id, id, value)}
     />
   );
+  /** Applies a library preset (or the defaults); a sampler zone whose source is loaded joins the project's sources. */
+  function apply(preset) {
+    let doc = applyPreset(project, device.id, preset);
+    const loaded = preset?.sampler ? getSource(preset.sampler.sourceId) : null;
+    if (loaded) {
+      const bound = setSamplerSource(doc, device.id, loaded);
+      if (bound.ok) doc = bound.doc;
+    }
+    onEdit(doc);
+  }
   return (
     <Card as="section" aria-labelledby="instrument-panel-heading">
       <h2 id="instrument-panel-heading" className={sectionHeading}>
         {name}: {track.name}
       </h2>
+      <PresetPicker kind="instrument" device={device} onApply={apply} disabled={disabled} />
       {device.type === 'drums' ? (
         <DrumMachinePanel device={device} disabled={disabled} onParamChange={onParamChange} />
       ) : device.type === 'sampler' ? (

@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Toggle from '@/components/ui/Toggle';
 import StoredAudio from './StoredAudio';
+import PresetList from '@/components/presets/PresetList';
 import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import {
   getRemember,
@@ -82,6 +83,8 @@ export default function SettingsPanel() {
           </p>
         ) : null}
       </Card>
+
+      <PresetList />
 
       <StoredAudio />
     </>

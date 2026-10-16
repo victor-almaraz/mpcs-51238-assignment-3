@@ -137,6 +137,10 @@ class EngineProcessor extends AudioWorkletProcessor {
     if (this.ops.length > 0) this.applyOps();
     if (this.liveQueue.length > 0) this.applyLive();
     this.engine.process(outL, outR, 0, frames);
+    if (this.engine.faultCount > 0) {
+      for (let i = 0; i < this.engine.faultCount; i++) this.port.postMessage(this.engine.faults[i]);
+      this.engine.faultCount = 0;
+    }
     if (this.reportEvery === 0) this.reportEvery = reportQuanta(sampleRate, frames);
     if (++this.quanta >= this.reportEvery) {
       this.quanta = 0;

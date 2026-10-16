@@ -410,3 +410,153 @@ test('report', (t) => {
   if (results.loopGain !== undefined) t.diagnostic(`delay worst echo ratio ${results.loopGain.toFixed(4)}`);
   if (results.filterOctave !== undefined) t.diagnostic(`filter LP one octave above cutoff ${results.filterOctave.toFixed(2)} dB`);
 });
+
+// Engine integration: insert chains on tracks and the master.
+import { EFFECT_BYPASS, EFFECT_PARAM_BASE, Engine } from '../../src/dsp/engine/engine.js';
+import { NOTE_ON } from '../../src/dsp/engine/live-input.js';
+import { validateModel } from '../../src/dsp/protocol.js';
+import { compileModel } from '../../src/lib/audio/compile-model.js';
+import { paramChanges } from '../../src/lib/audio/param-changes.js';
+import { addEffect, addEffectBlocker, moveEffect, removeEffect, setEffectBypass } from '../../src/lib/project/effect-commands.js';
+import { addInstrumentTrack } from '../../src/lib/project/clip-commands.js';
+import { createDevice, createProject, setDeviceParam } from '../../src/lib/project/model.js';
+
+function projectWith(types, master = []) {
+  let n = 0;
+  const makeId = (p) => `${p}_${++n}`;
+  let doc = createProject({ name: 'Fx', tempo: 120, timeSignature: '4/4', now: 0, makeId });
+  const trackId = doc.trackOrder[0];
+  for (const t of types) doc = addEffect(doc, trackId, t, makeId).doc;
+  for (const t of master) doc = addEffect(doc, doc.masterTrackId, t, makeId).doc;
+  return { doc, trackId, makeId };
+}
+
+function engineFor(doc) {
+  const engine = new Engine(48000);
+  engine.setModel(engine.prepareModel(compileModel(doc, 48000).model));
+  engine.setMasterVolume(0);
+  engine.master.snap(engine.master.target);
+  return engine;
+}
+
+function renderNote(engine, frames = 9600) {
+  engine.live(0, NOTE_ON, 60, 100);
+  const l = new Float32Array(frames);
+  const r = new Float32Array(frames);
+  engine.process(l, r, 0, frames);
+  return [l, r];
+}
+
+const rms = (b) => Math.sqrt(b.reduce((s, x) => s + x * x, 0) / b.length);
+
+test('engine: a track chain and the master chain process the signal', () => {
+  const plain = renderNote(engineFor(projectWith([]).doc))[0];
+  const { doc } = projectWith(['saturation'], ['eq3']);
+  const model = compileModel(doc, 48000).model;
+  assert.equal(validateModel(model), null);
+  assert.equal(model.tracks[0].effects[0].type, 'saturation');
+  assert.equal(model.masterEffects[0].type, 'eq3');
+  const engine = engineFor(doc);
+  assert.equal(engine.model.tracks[0].chain.length, 1);
+  assert.equal(engine.model.masterChain.length, 1);
+  const shaped = renderNote(engine)[0];
+  assert.ok(Math.abs(rms(shaped) - rms(plain)) > 1e-4);
+});
+
+test('engine: effect params and bypass travel as params triples', () => {
+  const { doc } = projectWith(['saturation']);
+  const deviceId = doc.tracks[doc.trackOrder[0]].deviceIds[1];
+  const edited = setDeviceParam(doc, deviceId, 'drive', 24);
+  const changes = paramChanges(doc, edited);
+  const drive = EFFECTS.saturation.params.findIndex((p) => p.id === 'drive');
+  assert.deepEqual(changes, [0, EFFECT_PARAM_BASE + drive, 24]);
+  const bypassed = setEffectBypass(doc, deviceId, true).doc;
+  assert.deepEqual(paramChanges(doc, bypassed), [0, EFFECT_PARAM_BASE + EFFECT_BYPASS, 1]);
+  const engine = engineFor(doc);
+  engine.applyParams(Float64Array.from(paramChanges(doc, bypassed)));
+  assert.equal(engine.model.tracks[0].chain[0].bypassed, true);
+  assert.equal(paramChanges(doc, moveEffect(addEffect(doc, doc.trackOrder[0], 'delay').doc, doc.trackOrder[0], deviceId, 1).doc), null);
+});
+
+test('engine: a slot that outputs non-finite samples queues one fault and bypasses', () => {
+  const { doc, trackId } = projectWith(['filter']);
+  const engine = engineFor(doc);
+  const slot = engine.model.tracks[0].chain[0];
+  slot.kernel.process = (l, r, s, e) => l.fill(Number.NaN, s, e);
+  const [l] = renderNote(engine, 512);
+  assert.ok(l.every(Number.isFinite));
+  assert.equal(engine.faultCount, 1);
+  assert.deepEqual({ ...engine.faults[0] }, { t: 'fault', v: 1, trackId, deviceId: slot.deviceId, slot: 0, kind: 'nonfinite' });
+  assert.equal(slot.bypassed, true);
+});
+
+test('engine: reverbs past four pass through; the command layer refuses a fifth', () => {
+  let { doc, trackId, makeId } = projectWith(['reverb', 'reverb', 'reverb', 'reverb']);
+  assert.match(addEffectBlocker(doc, trackId, 'reverb'), /at most 4 reverbs/);
+  const extra = createDevice({ id: 'dev_extra', type: 'reverb' });
+  doc = { ...doc, devices: { ...doc.devices, [extra.id]: extra }, tracks: { ...doc.tracks, [trackId]: { ...doc.tracks[trackId], deviceIds: [...doc.tracks[trackId].deviceIds, extra.id] } } };
+  const engine = engineFor(doc);
+  assert.equal(engine.model.tracks[0].chain.filter(Boolean).length, 4);
+  assert.equal(engine.model.tracks[0].chain[4], null);
+  assert.ok(removeEffect(doc, trackId, extra.id).ok);
+  assert.ok(makeId);
+});
+
+test('engine: Panic clears effect state, so a delay tail stops', () => {
+  const { doc } = projectWith(['delay']);
+  const engine = engineFor(doc);
+  renderNote(engine, 4800);
+  engine.panic();
+  const l = new Float32Array(48000);
+  const r = new Float32Array(48000);
+  engine.process(l, r, 0, 48000);
+  assert.ok(Math.max(...l.slice(4800).map(Math.abs)) < 1e-6);
+});
+
+test('saturation: the dual-mono shortcut gives the same samples as the full stereo path', () => {
+  const noise = new Mulberry32(7);
+  const x = Float32Array.from({ length: 4096 }, () => noise.next() * 2 - 1);
+  const run = (right) => {
+    const k = new EFFECTS.saturation.Kernel(48000);
+    k.setParam('drive', 18);
+    settleSmoothers(k);
+    const l = Float32Array.from(x);
+    const r = Float32Array.from(right);
+    k.process(l, r, 0, x.length);
+    return [l, r];
+  };
+  const [monoL, monoR] = run(x);
+  const [stereoL] = run(x.map((v) => -v)); // a different right channel takes the full path
+  assert.deepEqual(monoR, monoL);
+  assert.deepEqual(monoL, stereoL);
+});
+
+test('engine: a non-finite source faults no slot; the chain silences it', () => {
+  const { doc } = projectWith(['eq3', 'compressor', 'delay']);
+  const engine = engineFor(doc);
+  const kernel = engine.model.tracks[0].kernel;
+  kernel.render = (buf, s, e) => buf.fill(Number.NaN, s, e);
+  const [l, r] = renderNote(engine, 512);
+  assert.equal(engine.faultCount, 0);
+  assert.ok(l.every(Number.isFinite) && r.every(Number.isFinite));
+  assert.ok(engine.model.tracks[0].chain.every((slot) => !slot.bypassed));
+});
+
+test('engine: faults past the queue stay pending and post in the next quantum', () => {
+  const types = Array(6).fill('filter');
+  let { doc, makeId } = projectWith(types);
+  for (let t = 0; t < 2; t++) {
+    const added = addInstrumentTrack(doc, 'subtractive', `T${t}`, makeId);
+    doc = added.doc;
+    for (const type of types) doc = addEffect(doc, added.trackId, type, makeId).doc;
+  }
+  const engine = engineFor(doc);
+  for (const track of engine.model.tracks) for (const slot of track.chain) slot.kernel.process = (l, r, s, e) => l.fill(Number.NaN, s, e);
+  const l = new Float32Array(128);
+  const r = new Float32Array(128);
+  engine.process(l, r, 0, 128);
+  assert.equal(engine.faultCount, 16);
+  engine.faultCount = 0;
+  engine.process(l, r, 0, 128);
+  assert.equal(engine.faultCount, 2);
+});

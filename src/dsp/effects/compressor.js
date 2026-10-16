@@ -15,6 +15,10 @@ import { Smoother } from '../core/smoother.js';
 /** Soft-knee width, dB (project limit). */
 export const KNEE_DB = 6;
 
+/** 20·log10(x) = DB_PER_NEPER·ln(x); 10^(d/20) = exp(d·NEPER_PER_DB). */
+const DB_PER_NEPER = 20 / Math.LN10;
+const NEPER_PER_DB = Math.LN10 / 20;
+
 /** Detector floor: levels below this read as −180 dB. */
 const LEVEL_FLOOR = 1e-9;
 
@@ -98,16 +102,23 @@ export class CompressorKernel {
     const halfKnee = KNEE_DB / 2;
     const knee2 = 2 * KNEE_DB;
     let yL = this.yL;
+    // Settled controls (the usual case) are read once per block.
+    const steady = thr.settled() && rat.settled() && mk.settled();
+    let T = thr.y;
+    let R = rat.y;
+    let M = mk.y;
     for (let i = start; i < end; i++) {
-      const T = thr.next();
-      const R = rat.next();
-      const M = mk.next();
+      if (!steady) {
+        T = thr.next();
+        R = rat.next();
+        M = mk.next();
+      }
       const l = bufL[i];
       const r = bufR[i];
       const al = l < 0 ? -l : l;
       const ar = r < 0 ? -r : r;
       const x = al > ar ? al : ar;
-      const xdB = 20 * Math.log10(x > LEVEL_FLOOR ? x : LEVEL_FLOOR);
+      const xdB = DB_PER_NEPER * Math.log(x > LEVEL_FLOOR ? x : LEVEL_FLOOR);
       const over = xdB - T;
       let xL = 0; // −gc, the gain reduction the static curve asks for
       if (2 * over > KNEE_DB) xL = over - over / R;
@@ -116,7 +127,7 @@ export class CompressorKernel {
         xL = ((1 - 1 / R) * t * t) / knee2;
       }
       yL = xL > yL ? aA * yL + bA * xL : aR * yL + bR * xL;
-      const g = 10 ** ((M - yL) / 20);
+      const g = Math.exp((M - yL) * NEPER_PER_DB);
       bufL[i] = l * g;
       bufR[i] = r * g;
     }

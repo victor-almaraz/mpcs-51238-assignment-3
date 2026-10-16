@@ -108,6 +108,20 @@ function validateAudioClips(c, sourceCount) {
   return null;
 }
 
+/** Maximum effects per chain (project limit). */
+export const MAX_EFFECTS = 8;
+
+/** Validates an insert chain: up to 8 { deviceId, type, bypass, params } (absent means empty). */
+function validateEffects(effects) {
+  if (effects === undefined) return null;
+  if (!Array.isArray(effects) || effects.length > MAX_EFFECTS) return 'bad-effects';
+  for (const e of effects) {
+    if (!isObject(e) || typeof e.deviceId !== 'string' || typeof e.type !== 'string' || typeof e.bypass !== 'boolean') return 'bad-effect';
+    if (!isObject(e.params) || !Object.values(e.params).every(Number.isFinite)) return 'bad-effect';
+  }
+  return null;
+}
+
 function validateMixer(track) {
   if (typeof track.trackId !== 'string') return 'bad-track';
   if (!Number.isFinite(track.gainDb) || !Number.isFinite(track.pan)) return 'bad-mixer';
@@ -120,11 +134,12 @@ function validateMixer(track) {
  * params, gainDb, pan, mute, solo, notes: { start, end, pitch, vel } } with
  * Int32Array frames sorted by start, end > start, pitch 0–127 and velocity
  * 1–127 in Uint8Arrays. Audio tracks: { trackId, kind: 'audio', gainDb, pan,
- * mute, solo, sourceIds: string[], clips } (validateAudioClips).
+ * mute, solo, sourceIds: string[], clips } (validateAudioClips). Either may
+ * carry `effects`, its insert chain (validateEffects).
  */
 export function validateModelTrack(track) {
   if (!isObject(track)) return 'bad-track';
-  const mixer = validateMixer(track);
+  const mixer = validateMixer(track) ?? validateEffects(track.effects);
   if (mixer) return mixer;
   if (track.kind === 'audio') {
     if (!Array.isArray(track.sourceIds) || !track.sourceIds.every((id) => typeof id === 'string')) return 'bad-sources';
@@ -161,6 +176,8 @@ export function validateModel(model) {
   }
   if (!isFrame(model.endFrame)) return 'bad-end';
   if (!Number.isFinite(model.masterPan)) return 'bad-master-pan';
+  const master = validateEffects(model.masterEffects);
+  if (master) return master;
   if (!Array.isArray(model.tracks) || model.tracks.length > MAX_TRACKS) return 'bad-tracks';
   for (const track of model.tracks) {
     const invalid = validateModelTrack(track);
@@ -245,6 +262,7 @@ export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
 
 /**
  * Messages the engine posts: ready { fs, blockSize }, ack { rev },
+ * fault { trackId ('master' for the master chain), deviceId, slot, kind },
  * pos { playFrame, ctxFrame, playing, meters }, error { code, detail },
  * source-status { deviceId, sourceId, status: 'bound' | 'missing' },
  * sampler-zone-invalid { deviceId, zoneIndex, reason } (reason null once the
@@ -252,7 +270,7 @@ export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
  * meters: Float32Array of [peakL, peakR, meanSquareL, meanSquareR] for 16
  * track slots in model order, then the master.
  */
-export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error', 'source-status', 'sampler-zone-invalid']);
+export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error', 'fault', 'source-status', 'sampler-zone-invalid']);
 
 /** Validates a message sent to the engine processor. */
 export function validateEngineMessage(msg) {

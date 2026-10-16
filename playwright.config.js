@@ -17,9 +17,16 @@ export default defineConfig({
   reporter: process.env.CI ? 'line' : 'list',
   use: { baseURL, trace: 'retain-on-failure' },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /perf\.spec\.js/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testIgnore: /perf\.spec\.js/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testIgnore: /perf\.spec\.js/ },
+    // The CPU benchmark runs alone, after the browser projects, so no other worker shares the CPU.
+    {
+      name: 'perf',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /perf\.spec\.js/,
+      dependencies: ['chromium', 'firefox', 'webkit'],
+    },
   ],
   webServer: process.env.BASE_URL
     ? undefined

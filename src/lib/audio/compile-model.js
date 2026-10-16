@@ -6,7 +6,8 @@
 import { clampParam, clampParams } from '../../dsp/core/params.js';
 import { PAN, TRACK_GAIN } from '../../dsp/mixer/mixer.js';
 import { instrumentFor } from '../../dsp/instruments/registry.js';
-import { MAX_CLIPS_PER_TRACK, MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
+import { effectFor } from '../../dsp/effects/registry.js';
+import { MAX_CLIPS_PER_TRACK, MAX_EFFECTS, MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { expandClipNotes } from '../project/midi-commands.js';
@@ -16,6 +17,29 @@ import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE, audioTempo, clipEndTick } from '.
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
+
+/**
+ * The effect devices of a track's insert chain, in order: every device after
+ * the instrument on instrument tracks, every device on audio tracks and the
+ * master; unknown types are left out; at most 8. Indices in this list are the
+ * engine's slot indices.
+ */
+export function effectDevices(doc, track) {
+  const ids = track.kind === 'instrument' ? track.deviceIds.slice(1) : track.deviceIds;
+  return ids
+    .map((id) => doc.devices[id])
+    .filter((d) => d && effectFor(d.type))
+    .slice(0, MAX_EFFECTS);
+}
+
+function compileEffects(doc, track) {
+  return effectDevices(doc, track).map((d) => ({
+    deviceId: d.id,
+    type: d.type,
+    bypass: d.bypass === true,
+    params: clampParams(effectFor(d.type).params, d.params),
+  }));
+}
 
 /** Scales a frame count recorded at the project's audioRate to `fs`. */
 function scaler(doc, fs) {
@@ -161,6 +185,7 @@ function compileTracks(doc, tempo, scale) {
       tracks.push({
         trackId,
         kind: 'audio',
+        effects: compileEffects(doc, track),
         gainDb: clampParam(TRACK_GAIN, track.gainDb),
         pan: clampParam(PAN, track.pan),
         mute: track.mute === true,
@@ -178,6 +203,7 @@ function compileTracks(doc, tempo, scale) {
       deviceId: device.id,
       type: device.type,
       params: entry ? clampParams(entry.params, device.params) : {},
+      effects: compileEffects(doc, track),
       gainDb: clampParam(TRACK_GAIN, track.gainDb),
       pan: clampParam(PAN, track.pan),
       mute: track.mute === true,
@@ -212,6 +238,7 @@ export function compileModel(doc, fs) {
       loopEndFrame: tempo.frameAt(loop.end),
       endFrame: tempo.frameAt(endTick),
       masterPan: clampParam(PAN, doc.tracks[doc.masterTrackId]?.pan ?? 0),
+      masterEffects: doc.tracks[doc.masterTrackId] ? compileEffects(doc, doc.tracks[doc.masterTrackId]) : [],
       tracks: compileTracks(doc, tempo, scale),
     },
   };

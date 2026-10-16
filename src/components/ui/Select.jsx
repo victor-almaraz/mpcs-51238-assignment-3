@@ -1,7 +1,8 @@
 import { cx, fieldLabel, fieldLabelStacked, focusRing } from '@/design-systems/industrial/classes';
 
 /**
- * Visible label and native <select>. `options` is a list of { value, label }.
+ * Visible label and native <select>. `options` is a list of { value, label },
+ * or of groups { group, options } rendered as <optgroup>.
  * onChange receives the string value. `className` goes on the row, other props
  * on the <select>. `layout`: inline (label beside, default) or stacked (label above).
  */
@@ -35,11 +36,21 @@ export default function Select({
         )}
         {...rest}
       >
-        {options.map((opt) => (
-          <option key={String(opt.value)} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
+        {options.map((opt) =>
+          opt.group ? (
+            <optgroup key={`group-${opt.group}`} label={opt.group}>
+              {opt.options.map((o) => (
+                <option key={String(o.value)} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          ) : (
+            <option key={String(opt.value)} value={opt.value}>
+              {opt.label}
+            </option>
+          ),
+        )}
       </select>
     </div>
   );

@@ -7,6 +7,9 @@
  *   - After each chunk, e = Σ wet² over both channels. If e !== e or e > 1e12,
  *     the kernel is reset, the slot bypasses at once, the chunk outputs the dry
  *     signal, and the fault is reported once through takeFault().
+ *   - A chunk whose input is already non-finite is silenced without
+ *     running the kernel or reporting a fault, so one bad source never faults
+ *     every slot after it.
  * Dry copies live in BLOCK-sized scratch buffers allocated at construction.
  */
 import { BLOCK } from '../core/constants.js';
@@ -57,6 +60,11 @@ export class EffectSlot {
     this.kernel.reset();
   }
 
+  /** True while a fault waits to be taken (takeFault). */
+  hasFault() {
+    return this.pending;
+  }
+
   /** True once after a fault, false otherwise. */
   takeFault() {
     if (!this.pending) return false;
@@ -74,9 +82,20 @@ export class EffectSlot {
     const n = end - start;
     const dryL = this.dryL;
     const dryR = this.dryR;
+    let inE = 0;
     for (let i = 0; i < n; i++) {
-      dryL[i] = bufL[start + i];
-      dryR[i] = bufR[start + i];
+      const l = bufL[start + i];
+      const r = bufR[start + i];
+      dryL[i] = l;
+      dryR[i] = r;
+      inE += l * l + r * r;
+    }
+    if (inE !== inE || inE === Infinity) {
+      // A non-finite input is not this slot's fault: silence the block so the
+      // later slots and the bus never see it, and keep the kernel's state clean.
+      bufL.fill(0, start, end);
+      bufR.fill(0, start, end);
+      return;
     }
     this.kernel.process(bufL, bufR, start, end);
 

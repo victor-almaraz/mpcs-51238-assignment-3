@@ -225,7 +225,7 @@ Do not start the next task.
 ### Phase 10 — Effects
 - **Goal:** six effects in chains of up to eight on every track and the master.
 - **Context:** `a3-audio-implementation.md` (Effects, CPU budget, Performance pitfalls).
-- **Files:** `src/dsp/effects/*.js`, `src/components/effects/*.jsx`, `tests/dsp/effects.test.js`, `tests/e2e/perf.spec.js`.
+- **Files:** `src/dsp/effects/*.js`, `src/components/effects/*.jsx`, `src/lib/project/effect-commands.js`, `tests/dsp/effects.test.js`, `tests/support/stress-model.js`, `tests/e2e/{perf,effects}.spec.js`.
 - **Tasks** (one per turn):
   1. Biquad and 3-band EQ.
   2. State-variable filter.
@@ -242,7 +242,7 @@ Do not start the next task.
 ### Phase 11 — Presets
 - **Goal:** a personal preset library shared across projects.
 - **Context:** `assignment-3-scope.md` (Presets, Persistence).
-- **Files:** `src/lib/presets/{store,validate}.js`, `src/components/presets/{SavePresetDialog,PresetPicker,PresetList}.jsx`, `src/app/settings/page.jsx`, `tests/dsp/presets.test.js`, `tests/e2e/presets.spec.js`.
+- **Files:** `src/lib/presets/{store,validate}.js`, `src/components/presets/{SavePresetDialog,PresetPicker,PresetList}.jsx`, `src/components/presets/labels.js`, `src/app/settings/SettingsPanel.jsx`, `tests/dsp/presets.test.js`, `tests/e2e/presets.spec.js`.
 - **Tasks:**
   1. Preset store in `w-rack:v1:presets`: add, rename, delete; 200-preset limit; parameters clamped through `ParamDef` on load.
   2. Save preset dialog: name field with the scope rules and error strings; entered name kept on error.

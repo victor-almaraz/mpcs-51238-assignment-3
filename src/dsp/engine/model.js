@@ -19,11 +19,14 @@ const NO_NOTES = {
  * { fs, tempo, meter, loopStartFrame, loopEndFrame, endFrame, tracks }.
  * `kernelFor(track, index)` returns the instrument kernel for a payload
  * instrument track, or null; `clipsFor(track)` the clip player state of an
- * audio track; `stripFor(track)` its channel strip. Each compiled track has
- * `kernel` (null for audio tracks) and `audio` (null for instrument tracks).
+ * audio track; `stripFor(track)` its channel strip; `chainFor(effects)` an
+ * insert chain (an array of EffectSlots, null where an effect is skipped).
+ * Each compiled track has `kernel` (null for audio tracks), `audio` (null for
+ * instrument tracks) and `chain`; the model has `masterChain`.
  */
-export function buildEngineModel(model, kernelFor = () => null, stripFor = () => null, clipsFor = () => null) {
+export function buildEngineModel(model, kernelFor = () => null, stripFor = () => null, clipsFor = () => null, chainFor = () => []) {
   return {
+    masterChain: chainFor(model.masterEffects ?? []),
     fs: model.fs,
     tempo: new TempoMap(model.tempo, model.fs),
     meter: new MeterMap(model.meter),
@@ -35,6 +38,8 @@ export function buildEngineModel(model, kernelFor = () => null, stripFor = () =>
       const track = audio ? createTrack(null, NO_NOTES) : createTrack(kernelFor(t, index), t.notes);
       track.audio = audio ? clipsFor(t) : null;
       track.strip = stripFor(t);
+      track.trackId = t.trackId;
+      track.chain = chainFor(t.effects ?? []);
       return track;
     }),
   };

@@ -5,10 +5,12 @@
  * EngineProcessor is a thin wrapper; Node tests run this class directly.
  * process() allocates nothing.
  *
- * Signal order: track source → strip (gain, pan, mute/solo gate) → master bus
- * → metronome click → master volume → master pan (balance) → safety node.
+ * Signal order: track source → insert chain (stereo; mono sources enter at
+ * −3 dB per side and then pan by balance) → strip (gain, pan, mute/solo gate)
+ * → master bus → master chain → metronome click → master volume → master pan
+ * (balance) → safety node.
  */
-import { BLOCK } from '../core/constants.js';
+import { BLOCK, STEAL_FADE_FRAMES } from '../core/constants.js';
 import { dbToGain } from '../core/math.js';
 import { hash32 } from '../core/prng.js';
 import { clampParam, defineParam } from '../core/params.js';
@@ -16,6 +18,9 @@ import { Smoother, settleSmoothers } from '../core/smoother.js';
 import { bindSources, createClipTrack, renderClips, startStopFade } from '../clips/clip-player.js';
 import { GlobalVoices } from '../instruments/voice-pool.js';
 import { instrumentFor } from '../instruments/registry.js';
+import { EffectSlot } from '../effects/chain.js';
+import { effectFor } from '../effects/registry.js';
+import { MAX_REVERBS } from '../effects/reverb.js';
 import { MeterBank } from '../mixer/meter.js';
 import { ChannelStrip, PAN } from '../mixer/mixer.js';
 import { balance } from '../mixer/pan.js';
@@ -39,6 +44,16 @@ export const PARAM_MUTE = 2;
 export const PARAM_SOLO = 3;
 /** Instrument parameter i of a track's kernel is paramId INSTRUMENT_PARAM_BASE + i. */
 export const INSTRUMENT_PARAM_BASE = 100;
+/**
+ * Parameter k of insert slot s (on a track, or the master with target −1) is
+ * EFFECT_PARAM_BASE + EFFECT_PARAM_STRIDE·s + k; k = EFFECT_BYPASS is bypass.
+ */
+export const EFFECT_PARAM_BASE = 1000;
+export const EFFECT_PARAM_STRIDE = 100;
+export const EFFECT_BYPASS = 99;
+
+/** Faults queued between posts (preallocated; faults past it stay pending until the next quantum). */
+const FAULT_QUEUE = 16;
 
 /** Meter index of the master: after the track slots. */
 export const MASTER_METER = MAX_TRACKS;
@@ -56,6 +71,10 @@ export class Engine {
     this.mips = new Map(); // sourceId → [[level 1 channels], [level 2 channels]], from source-mips
     this.zones = new Map(); // sampler deviceId → { sourceId, sourceName }, from sampler-zones
     this.reports = []; // source-status and sampler-zone-invalid messages to post
+    this.slots = new Map(); // effect deviceId → EffectSlot, reused across models
+    this.faults = Array.from({ length: FAULT_QUEUE }, () => ({ t: 'fault', v: 1, trackId: '', deviceId: '', slot: 0, kind: 'nonfinite' }));
+    this.faultCount = 0;
+    this.chainClearIn = 0; // frames until Panic clears effect state again, after the voice fades
     this.generation = 0;
     this.trackBuf = new Float32Array(BLOCK);
     this.trackBufR = new Float32Array(BLOCK);
@@ -94,6 +113,9 @@ export class Engine {
     const kernels = new Map();
     const strips = new Map();
     const clipTracks = new Map();
+    const slots = new Map();
+    const bpm = payload.tempo?.[0]?.bpm ?? 120;
+    let reverbs = 0;
     const compiled = buildEngineModel(
       payload,
       (track, index) => {
@@ -132,6 +154,29 @@ export class Engine {
         clipTracks.set(track.trackId, clips);
         return clips;
       },
+      (effects) =>
+        effects.map((e) => {
+          const entry = effectFor(e.type);
+          // Reverbs past the project limit and unknown types pass the signal through.
+          if (!entry || (e.type === 'reverb' && ++reverbs > MAX_REVERBS)) return null;
+          let slot = this.slots.get(e.deviceId);
+          const created = !slot || slot.type !== e.type;
+          if (created) {
+            slot = new EffectSlot(this.fs, new entry.Kernel(this.fs));
+            slot.type = e.type;
+            slot.deviceId = e.deviceId;
+          }
+          for (const [id, value] of Object.entries(e.params)) slot.kernel.setParam(id, value);
+          if (typeof slot.kernel.setTempo === 'function') slot.kernel.setTempo(bpm);
+          // A faulted slot stays bypassed until the main thread turns it on with a params bypass edit.
+          if (!slot.faulted) slot.setBypass(e.bypass);
+          if (created) {
+            settleSmoothers(slot.kernel);
+            slot.wet = slot.target; // a new slot starts in its bypass state
+          }
+          slots.set(e.deviceId, slot);
+          return slot;
+        }),
     );
     updateGates(compiled.tracks);
     for (const t of compiled.tracks) {
@@ -143,6 +188,7 @@ export class Engine {
     this.kernels = kernels;
     this.strips = strips;
     this.clipTracks = clipTracks;
+    this.slots = slots;
     return compiled;
   }
 
@@ -270,10 +316,15 @@ export class Engine {
       const value = values[i + 2];
       if (target === MASTER_TARGET) {
         if (id === PARAM_PAN) this.masterPan.setTarget(clampParam(PAN, value));
+        else if (id >= EFFECT_PARAM_BASE) applyEffectParam(model.masterChain, id, value);
         continue;
       }
       const track = model.tracks[target];
       if (!track) continue;
+      if (id >= EFFECT_PARAM_BASE) {
+        applyEffectParam(track.chain, id, value);
+        continue;
+      }
       if (id === PARAM_GAIN) track.strip.setGainDb(value);
       else if (id === PARAM_PAN) track.strip.setPan(value);
       else if (id === PARAM_MUTE) {
@@ -341,7 +392,38 @@ export class Engine {
     this.playing = false;
     const tracks = this.model.tracks;
     for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.allNotesOff(true);
+    this.clearChains();
+    // The voices' 64-frame fades still enter the chains; clear them again once the fades end.
+    this.chainClearIn = STEAL_FADE_FRAMES;
     this.metronome.reset();
+  }
+
+  clearChains() {
+    const tracks = this.model.tracks;
+    for (let i = 0; i < tracks.length; i++) resetChain(tracks[i].chain);
+    resetChain(this.model.masterChain);
+  }
+
+  /** Queues a fault message for a slot that reset and bypassed itself. */
+  queueFault(trackId, slot, index) {
+    if (this.faultCount >= FAULT_QUEUE) return;
+    const f = this.faults[this.faultCount++];
+    f.trackId = trackId;
+    f.deviceId = slot.deviceId;
+    f.slot = index;
+  }
+
+  /** Runs `chain` over frames [0, n) of the track buffers and queues any fault. */
+  runChain(chain, trackId, bufL, bufR, start, end) {
+    for (let s = 0; s < chain.length; s++) {
+      const slot = chain[s];
+      if (slot === null) continue;
+      slot.process(bufL, bufR, start, end);
+      if (slot.hasFault() && this.faultCount < FAULT_QUEUE) {
+        slot.takeFault();
+        this.queueFault(trackId, slot, s);
+      }
+    }
   }
 
   /** Moves the playhead to `frame`. */
@@ -422,6 +504,10 @@ export class Engine {
     }
     this.master.flush();
     this.masterPan.flush();
+    if (this.chainClearIn > 0) {
+      this.chainClearIn -= n;
+      if (this.chainClearIn <= 0) this.clearChains();
+    }
   }
 
   renderSpan(bufL, bufR, off, n) {
@@ -433,16 +519,42 @@ export class Engine {
     const meters = this.meters;
     for (let t = 0; t < tracks.length; t++) {
       const track = tracks[t];
+      const chained = hasSlots(track.chain);
       if (track.audio !== null) {
-        renderClips(track.audio, this.monoBuf, tb, tbR, n, this.playFrame, this.playing);
-        track.strip.mixAudio(this.monoBuf, tb, tbR, n, bufL, bufR, off, this.stripL, this.stripR);
+        const mono = this.monoBuf;
+        renderClips(track.audio, mono, tb, tbR, n, this.playFrame, this.playing);
+        if (chained) {
+          // Mono clips join the stereo bus at −3 dB, the centre of constant-power pan.
+          for (let i = 0; i < n; i++) {
+            const m = mono[i] * Math.SQRT1_2;
+            tb[i] += m;
+            tbR[i] += m;
+          }
+          this.runChain(track.chain, track.trackId, tb, tbR, 0, n);
+          track.strip.mix(tb, tbR, true, n, bufL, bufR, off, this.stripL, this.stripR);
+        } else {
+          track.strip.mixAudio(mono, tb, tbR, n, bufL, bufR, off, this.stripL, this.stripR);
+        }
       } else {
         renderTrack(track, tb, tbR, n, this.playFrame, this.playing);
-        const stereo = track.kernel !== null && track.kernel.stereo === true;
+        let stereo = track.kernel !== null && track.kernel.stereo === true;
+        if (chained) {
+          if (!stereo) {
+            // Mono instruments enter the stereo chain at −3 dB per side; balance pan follows.
+            for (let i = 0; i < n; i++) {
+              const m = tb[i] * Math.SQRT1_2;
+              tb[i] = m;
+              tbR[i] = m;
+            }
+            stereo = true;
+          }
+          this.runChain(track.chain, track.trackId, tb, tbR, 0, n);
+        }
         track.strip.mix(tb, tbR, stereo, n, bufL, bufR, off, this.stripL, this.stripR);
       }
       meters.add(t, this.stripL, this.stripR, 0, n);
     }
+    if (hasSlots(this.model.masterChain)) this.runChain(this.model.masterChain, 'master', bufL, bufR, off, end);
     if (this.playing) {
       if (this.beatDirty) this.findNextBeat(this.playFrame);
       let pos = off;
@@ -471,6 +583,30 @@ export class Engine {
     meters.add(MASTER_METER, bufL, bufR, off, end);
     meters.count(n);
   }
+}
+
+/** True when `chain` has at least one slot. */
+function hasSlots(chain) {
+  for (let i = 0; i < chain.length; i++) if (chain[i] !== null) return true;
+  return false;
+}
+
+/** Applies effect param `id` (EFFECT_PARAM_BASE + stride·slot + k) to `chain`. */
+function applyEffectParam(chain, id, value) {
+  const rel = id - EFFECT_PARAM_BASE;
+  const slot = chain[Math.floor(rel / EFFECT_PARAM_STRIDE)];
+  if (!slot) return;
+  const k = rel % EFFECT_PARAM_STRIDE;
+  if (k === EFFECT_BYPASS) slot.setBypass(value !== 0);
+  else {
+    const def = effectFor(slot.type)?.params[k];
+    if (def) slot.setParam(def.id, value);
+  }
+}
+
+/** Clears every slot's effect state (Panic). */
+function resetChain(chain) {
+  for (let i = 0; i < chain.length; i++) if (chain[i] !== null) chain[i].reset();
 }
 
 /** Sets every strip's gate from mute and solo (solo-in-place). */

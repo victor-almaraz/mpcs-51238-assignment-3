@@ -121,14 +121,14 @@ export function ensureModule(ctx) {
 |---|---|---|
 | `init` | `fs`, `seed`, `limits` | Once, after node creation |
 | `model` | `rev`, EngineModel (typed arrays) | Full snapshot on structural edits; at most one per animation frame |
-| `params` | `rev`, `Float64Array` of triples `[target, paramId, value]` | At most one per animation frame; one message per slider event is not allowed. `target` is a model track index, or −1 for the master. `paramId` 0–3 are gain (dB), pan, mute and solo; 100 + i is parameter i of the track instrument's ParamDefs. The main thread sends `params` instead of `model` when an edit changes only these values |
+| `params` | `rev`, `Float64Array` of triples `[target, paramId, value]` | At most one per animation frame; one message per slider event is not allowed. `target` is a model track index, or −1 for the master. `paramId` 0–3 are gain (dB), pan, mute and solo; 100 + i is parameter i of the track instrument's ParamDefs; 1000 + 100·s + k is parameter k of insert slot s, and 1000 + 100·s + 99 is that slot's bypass (tracks and the master). The main thread sends `params` instead of `model` when an edit changes only these values |
 | `transport` | `op` (`play`, `stop`, `locate`, `loop`), `frame`, `loopStart`, `loopEnd`, `loopOn` | Applied at the next quantum boundary |
 | `live` | `Uint8Array` of `[status, data1, data2]` triples | Keyboard and Web MIDI notes; applied at offset 0 of the next quantum |
 | `source-add` | `sourceId`, `channels` (array of `Float32Array`) | Transfer list: each channel's `buffer` |
 | `source-remove` | `sourceId` | References released at the next quantum |
 | `source-mips` | `sourceId`, `levels` (array of `{ level, channels }`) | Transfer list: each channel's `buffer` |
 | `sampler-zones` | `deviceId`, `selection` (0), `zones` (at most one `{ sourceId, sourceName }`; empty unbinds) | No sample data; sent whole on change. Markers and the other zone settings are instrument params |
-| `panic` | — | Every voice, drum instance, preview and audition fades over 5 ms (project limit), effect state clears, transport stops |
+| `panic` | — | Every voice, drum instance, preview and audition fades over 5 ms (project limit), effect state clears at once and again when the fades end, transport stops |
 | `metronome` | `on`, `gainDb` | — |
 | `master` | `volumeDb` | Clamped to the master volume ParamDef (−60 to 0 dB, default −12) and smoothed |
 
@@ -138,7 +138,7 @@ export function ensureModule(ctx) {
 | `ready` | `fs`, `blockSize` | Once |
 | `ack` | `rev` | After applying a `model` or `params` rev |
 | `pos` | `playFrame`, `ctxFrame` (`currentFrame` at block start), `playing`, meters | Every `REPORT_QUANTA` quanta, `REPORT_QUANTA = max(1, round(0.025·fs/frames))` (project limit) |
-| `fault` | `trackId`, `slot`, `kind: 'nonfinite'` | Once per fault |
+| `fault` | `trackId` (`'master'` for the master chain), `deviceId`, `slot`, `kind: 'nonfinite'` | Once per fault, from a preallocated queue of 16 per quantum |
 | `source-status` | `deviceId`, `sourceId`, `status` (`bound` or `missing`) | Once per bind attempt |
 | `sampler-zone-invalid` | `deviceId`, `zoneIndex`, `reason` | Once per rejected zone; `reason: null` once the zone is valid again |
 | `progress` | `renderedFrames`, `totalFrames` | Offline only; every 0.25 s of rendered audio (project limit) |
@@ -454,7 +454,8 @@ y  = ((c3·t + c2)·t + c1)·t + c0
 ### Shared slot rules
 - Chains hold at most 8 slots. Bypass crossfades over 10 ms (project limit).
 - Parameters are smoothed per the real-time rules.
-- At block end, each slot computes `e = Σ out²`. If `e !== e` or `e > 1e12`, the slot resets, bypasses and posts `fault` once.
+- At block end, each slot computes `e = Σ out²`. If `e !== e` or `e > 1e12`, the slot resets, bypasses and posts `fault` once. A block whose input is already non-finite is silenced instead, so one bad source never faults the slots after it.
+- A faulted slot stays bypassed until a `params` bypass edit turns it on; the main thread writes the bypass into the document and shows "Effect <name> on <track> was reset and bypassed." once per fault.
 - Every feedback path has total gain below 1, enforced by parameter clamps.
 
 ### Biquad (RBJ Audio EQ Cookbook, transposed direct form II)
@@ -536,8 +537,10 @@ LP = v2; BP = v1; HP = x − k·v1 − v2
 - Stereo ring of `ceil(2·fs) + 4` frames, allocated at init.
 - Time: 1–2000 ms, or synced to 1/32, 1/16, 1/8, 1/4, 1/2, 1/1 with dotted and triplet variants (`beats·60/bpm`, capped at 2000 ms, recomputed on tempo change). Time smoothing τ 50 ms (project limit).
 - Reads use linear interpolation at the fractional delay.
-- Feedback `fb = clamp(feedback, 0, 0.9)` through a one-pole high-cut (1–20 kHz, gain ≤ 1), so loop gain stays below 1.
-- Mix 0–1.
+- Feedback `fb = clamp(feedback, 0, 0.9)` through a one-pole high-cut (1–20 kHz, gain ≤ 1), so loop gain stays below 1. The wet output is taken after the high-cut, so every echo is filtered.
+- Mix 0–1. Left and right are independent delays.
+- Defaults: time 375 ms, sync off, feedback 0.35, high-cut 8000 Hz, mix 0.3.
+- Synced times follow the project's first tempo point.
 
 ### Reverb (Freeverb structure)
 - Per channel: 8 parallel lowpass-feedback combs into 4 series allpasses with `g = 0.5`.
@@ -546,11 +549,15 @@ LP = v2; BP = v1; HP = x − k·v1 − v2
 - Comb gains `g_i = min(0.98, 10^(−3·L_i/(T60·fs)))`, T60 = decay 0.2–10 s; the 0.98 cap (project limit) keeps loop gain below 1.
 - Damping 0–1 sets the in-loop one-pole `d`: `f = y·(1 − d) + f·d`, `out = buf + g·f`.
 - Size 0–1 scales comb lengths by 0.5–1.0; buffers are allocated at maximum length.
-- Mix 0–1. At most 4 reverb instances per project (project limit).
+- Mix 0–1: `out = dry·(1 − mix) + 3·wet·mix` (Freeverb's wet scale). Damping maps to `d = 0.4·damping`. Left wet comes from the left comb bank and right wet from the right bank.
+- Defaults: size 0.75, decay 2 s, damping 0.5, pre-delay 10 ms, mix 0.25.
+- The 0.98 comb-gain cap shortens long decays at small sizes: at size 0 a 10 s setting decays in about 5.6 s. From size 0.75 the measured T60 stays within ±20% of the setting.
+- At most 4 reverb instances per project (project limit); the engine passes the signal through any reverb past the fourth, and the chain UI refuses a fifth.
 - A 4-line feedback delay network with a Householder matrix `A = I − (2/N)·11ᵀ` replaces Freeverb if the CPU benchmark fails.
 
 ## Mixer and metering
-- Per track: source → insert chain → gain (−∞ to +6 dB, smoothed) → pan → mute/solo gate → master bus.
+- Per track: source → insert chain → gain (−∞ to +6 dB, smoothed) → pan → mute/solo gate → master bus. Chains are stereo: a mono source enters a non-empty chain at −3 dB per side (the centre of constant-power pan), and the track then pans by balance.
+- The master chain runs after the track sum and before the metronome click.
 - Pan: mono sources use constant power, `θ = (p + 1)·π/4`, `L = cos θ`, `R = sin θ`. Stereo clips use balance, `L·= min(1, 1 − p)`, `R·= min(1, 1 + p)`. Instruments render mono; the pan stage produces stereo.
 - Solo-in-place: `audible = !mute && (anySolo ? solo : true)`, smoothed over 5 ms (project limit).
 - Master: master chain → master volume (default −12 dB, maximum 0 dB) → master pan (balance) → `SafetyProcessor`.
@@ -652,6 +659,8 @@ Target: at most 50% of a 128-frame quantum (1.33 ms at 48 kHz) for the worst-cas
 | Sampler | 16 stereo voices inside a loop crossfade (estimate 5.3%) | 7% of a quantum |
 
 Benchmark: `tests/e2e/perf.spec.js` renders a 20 s stress project (16 tracks, 64 voices, 4 reverbs, 16 compressors, 16 saturators) offline and measures wall time on the main thread. Pass: realtime factor ≥ 4 in Chromium (project limit).
+- The stress project (`tests/support/stress-model.js`) gives each of 16 instrument tracks a four-note chord held for 20 s, a compressor and a saturator, and a reverb on four tracks.
+- Saturation processes dual-mono input (equal channels and equal state, as mono sources in a stereo chain produce) once and copies it to the right channel; the result is identical to the stereo path.
 
 ## Performance pitfalls
 | Pitfall | Rule |

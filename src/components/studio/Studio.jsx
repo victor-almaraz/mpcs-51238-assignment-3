@@ -12,6 +12,9 @@ import PianoRollGrid from '@/components/pianoroll/PianoRollGrid';
 import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
 import Timeline from '@/components/timeline/Timeline';
+import EffectChain from '@/components/effects/EffectChain';
+import { effectFor } from '@/dsp/effects/registry';
+import { setEffectBypass } from '@/lib/project/effect-commands';
 import { sourceStatus } from '@/components/timeline/layout';
 import { getSource } from '@/lib/audio/decode';
 import { pruneStoredSources } from '@/lib/audio/source-cleanup';
@@ -80,6 +83,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const saveState = useSyncExternalStore(subscribeSaveState, getSaveState, getSaveState);
   const viewSaveState = useSyncExternalStore(subscribeViewSaveState, getViewSaveState, getViewSaveState);
 
+  const projectRef = useRef(project);
   useEffect(() => {
     function handleBeforeUnload(e) {
       flushView();
@@ -90,7 +94,6 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  const projectRef = useRef(project);
   const pruneTimer = useRef(0);
   useEffect(() => () => clearTimeout(pruneTimer.current), []);
 
@@ -139,6 +142,32 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const panelTrack = panelTrackId ? project.tracks[panelTrackId] : null;
   const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
   const liveTargetIndex = Math.max(0, mixerTrackIds.indexOf(panelTrackId));
+  const chainTrackId = view.selectedTrackId && project.tracks[view.selectedTrackId] ? view.selectedTrackId : panelTrackId;
+
+  /** Applies fn(newest document) when it succeeds; returns its result (effect chains). */
+  function command(fn) {
+    const result = fn(projectRef.current);
+    if (result.ok) edit(result.doc);
+    return result;
+  }
+  const setParam = (deviceId, id, value) => edit(setDeviceParam(projectRef.current, deviceId, id, value));
+
+  // An effect the engine reset after non-finite output is bypassed in the document too.
+  // Faults are taken from the client once, so a later visit never replays them.
+  const [faultNotices, setFaultNotices] = useState([]);
+  useEffect(() => {
+    if ((engineState.faults ?? []).length === 0) return;
+    const notices = [];
+    for (const f of engine.takeFaults()) {
+      const doc = projectRef.current;
+      const device = doc.devices[f.deviceId];
+      if (!device) continue;
+      const trackName = f.trackId === 'master' ? 'Master' : (doc.tracks[f.trackId]?.name ?? 'a track');
+      notices.push(`Effect ${effectFor(device.type)?.label ?? device.type} on ${trackName} was reset and bypassed.`);
+      if (!readOnly && !device.bypass) edit(setEffectBypass(doc, f.deviceId, true).doc);
+    }
+    if (notices.length > 0) setFaultNotices((prev) => [...prev, ...notices]);
+  }, [engineState.faults]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     engine.setLiveTarget(liveTargetIndex);
   }, [engine, liveTargetIndex]);
@@ -152,6 +181,15 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         </p>
         <StatusRegion className="text-sm">{saveStatusText(unsavedCopy, saveState)}</StatusRegion>
         {readOnly ? <p className={errorText}>{PROJECT_NEWER}</p> : null}
+        {faultNotices.length > 0 ? (
+          <ul role="alert" className={errorText}>
+            {faultNotices.map((text, i) => (
+              <li key={i}>
+                <span aria-hidden="true">▲</span> {text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {failure ? (
           <p role="alert" className={errorText}>
             <span aria-hidden="true">▲</span>
@@ -281,9 +319,23 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           onEdit={edit}
           loading={loading}
           disabled={readOnly}
-          onParamChange={(deviceId, id, value) => edit(setDeviceParam(projectRef.current, deviceId, id, value))}
+          onParamChange={setParam}
         />
       ) : null}
+
+      {chainTrackId ? (
+        <EffectChain
+          key={`chain-${chainTrackId}`}
+          project={project}
+          trackId={chainTrackId}
+          title={`Effects: ${project.tracks[chainTrackId].name}`}
+          onCommand={command}
+          onParam={setParam}
+          disabled={readOnly}
+        />
+      ) : null}
+
+      <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
     </>
   );
 }

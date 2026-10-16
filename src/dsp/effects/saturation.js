@@ -95,12 +95,24 @@ export class SaturationKernel {
     let f1r = this.f1[1];
     let lpl = this.lp[0];
     let lpr = this.lp[1];
+    // Settled controls (the usual case) are read once per block.
+    const steady = drive.settled() && mix.settled() && output.settled();
+    let g = drive.y;
+    let m = mix.y;
+    let o = output.y;
     for (let i = start; i < end; i++) {
-      const g = drive.next();
-      const m = mix.next();
-      const o = output.next();
+      if (!steady) {
+        g = drive.next();
+        m = mix.next();
+        o = output.next();
+      }
 
       const xl = bufL[i];
+      const xl1 = x1l;
+      const u1lPrev = u1l;
+      const f1lPrev = f1l;
+      const lplPrev = lpl;
+      const lprPrev = lpr;
       const ul = xl * g;
       const aul = ul < 0 ? -ul : ul;
       const fl = aul + Math.log1p(Math.exp(-2 * aul)) - LN2;
@@ -114,6 +126,15 @@ export class SaturationKernel {
       f1l = fl;
 
       const xr = bufR[i];
+      if (xr === xl && x1r === xl1 && u1r === u1lPrev && f1r === f1lPrev && lprPrev === lplPrev) {
+        // Dual-mono input with equal state (mono sources in a stereo chain): the right channel is the left.
+        bufR[i] = bufL[i];
+        lpr = lpl;
+        x1r = xr;
+        u1r = ul;
+        f1r = fl;
+        continue;
+      }
       const ur = xr * g;
       const aur = ur < 0 ? -ur : ur;
       const fr = aur + Math.log1p(Math.exp(-2 * aur)) - LN2;

@@ -35,6 +35,9 @@ const OPTION_LABELS = {
   chord: 'Chord',
   off: 'Off',
   on: 'On',
+  lowpass: 'Lowpass',
+  highpass: 'Highpass',
+  bandpass: 'Bandpass',
   forward: 'Forward',
   pingpong: 'Ping-pong',
   gate: 'Gate',
@@ -67,6 +70,10 @@ export function formatParam(def, value) {
       return `${value.toFixed(1)}×`;
     case 'ms':
       return value < 1000 ? `${value < 10 ? value.toFixed(1) : Math.round(value)} ms` : `${(value / 1000).toFixed(2)} s`;
+    case 'Q':
+      return `Q ${value.toFixed(2)}`;
+    case ':1':
+      return `${value.toFixed(1)}:1`;
     case 'cents':
       return minus(`${value > 0 ? '+' : ''}${value.toFixed(1)} cents`);
     case '× 48 st':
