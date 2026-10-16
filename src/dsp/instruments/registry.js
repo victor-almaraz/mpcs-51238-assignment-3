@@ -5,6 +5,7 @@
  */
 import { ADDITIVE_PARAMS, AdditiveKernel } from './additive.js';
 import { FM_PARAMS, FmKernel } from './fm.js';
+import { GRANULAR_PARAMS, GranularKernel } from './granular.js';
 import { PLUCK_PARAMS, PluckKernel } from './pluck.js';
 import { SUBTRACTIVE_PARAMS, SubtractiveKernel } from './subtractive.js';
 
@@ -13,6 +14,7 @@ export const INSTRUMENTS = Object.freeze({
   fm: Object.freeze({ params: FM_PARAMS, Kernel: FmKernel }),
   additive: Object.freeze({ params: ADDITIVE_PARAMS, Kernel: AdditiveKernel }),
   pluck: Object.freeze({ params: PLUCK_PARAMS, Kernel: PluckKernel }),
+  granular: Object.freeze({ params: GRANULAR_PARAMS, Kernel: GranularKernel }),
 });
 
 /** The registry entry for instrument `type`, or undefined. */

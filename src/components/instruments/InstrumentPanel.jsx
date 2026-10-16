@@ -23,10 +23,14 @@ const LABELS = {
   damping: 'Damping',
   brightness: 'Brightness',
   decay: 'Decay (T60)',
+  source: 'Source',
+  grainSize: 'Grain size',
+  density: 'Density',
+  spray: 'Spray',
   ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`h${i + 1}`, `Harmonic ${i + 1}`])),
 };
 
-const OPTION_LABELS = { sine: 'Sine', square: 'Square', saw: 'Saw', triangle: 'Triangle' };
+const OPTION_LABELS = { sine: 'Sine', square: 'Square', saw: 'Saw', triangle: 'Triangle', noise: 'Noise', chord: 'Chord' };
 
 /** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×", "50 %". */
 export function formatParam(def, value) {
@@ -38,6 +42,8 @@ export function formatParam(def, value) {
       return value < 1 ? `${Math.round(value * 1000)} ms` : `${value.toFixed(2)} s`;
     case 'dB':
       return minus(`${value.toFixed(1)} dB`);
+    case 'grains/s':
+      return `${value.toFixed(1)} grains/s`;
     case 'fraction':
       return `${Math.round(value * 100)} %`;
     case '×':

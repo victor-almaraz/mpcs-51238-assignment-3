@@ -252,3 +252,15 @@ test('the Pluck panel shows damping, brightness and decay', async ({ page }) => 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 });
+
+test('the Granular panel shows source, grain size, density and spray', async ({ page }) => {
+  await openExample(page, 'Ambient');
+  await page.getByRole('button', { name: 'Track 1: Texture, Granular synth' }).click();
+  const panel = page.getByRole('region', { name: 'Granular synth: Texture' });
+  await expect(panel.getByRole('group', { name: 'Source' }).getByRole('radio', { name: 'Saw' })).toBeChecked();
+  await expect(panel.getByRole('slider', { name: 'Grain size' })).toHaveAttribute('aria-valuetext', '60 ms');
+  await expect(panel.getByRole('slider', { name: 'Density' })).toHaveAttribute('aria-valuetext', '20.0 grains/s');
+  await expect(panel.getByRole('slider', { name: 'Spray' })).toHaveAttribute('aria-valuetext', '20 %');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});
