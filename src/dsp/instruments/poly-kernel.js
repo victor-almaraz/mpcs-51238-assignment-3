@@ -12,6 +12,7 @@
 import { VOICES_PER_INSTRUMENT } from '../core/constants.js';
 import { Smoother } from '../core/smoother.js';
 import { VELOCITY_GAIN } from '../core/tables.js';
+import { LIVE_NOTE_BASE } from '../engine/live-input.js';
 import { EnvelopeBank, IDLE } from './envelope.js';
 import { VoicePool } from './voice-pool.js';
 
@@ -60,6 +61,16 @@ export class PolyKernel {
       if (this.env.stage[v] === IDLE) continue;
       if (hard) this.env.steal(v);
       else this.env.release(v, this.release);
+      this.pool.detach(v);
+    }
+  }
+
+  /** Releases held sequenced notes; live notes (IDs from LIVE_NOTE_BASE) keep sounding. */
+  releaseSequenced() {
+    for (let v = 0; v < this.slots; v++) {
+      const id = this.pool.noteId[v];
+      if (id < 0 || id >= LIVE_NOTE_BASE || this.env.stage[v] === IDLE) continue;
+      this.env.release(v, this.release);
       this.pool.detach(v);
     }
   }

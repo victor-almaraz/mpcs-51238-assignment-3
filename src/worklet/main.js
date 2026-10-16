@@ -23,6 +23,7 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.pendingModel = null;
     this.pendingRev = -1;
     this.ops = [];
+    this.liveQueue = []; // live messages waiting for the next quantum
     this.quanta = 0;
     this.reportEvery = 0;
     // Reused for every post: process() allocates nothing.
@@ -53,6 +54,9 @@ class EngineProcessor extends AudioWorkletProcessor {
         }
         this.pendingModel = this.engine.prepareModel(msg.model);
         this.pendingRev = msg.rev;
+        break;
+      case 'live':
+        this.liveQueue.push(msg);
         break;
       case 'params':
         this.engine.applyParams(msg.values, this.pendingModel ?? this.engine.model);
@@ -91,6 +95,16 @@ class EngineProcessor extends AudioWorkletProcessor {
     this.ops.length = 0;
   }
 
+  /** Applies queued live events at offset 0 of this quantum. */
+  applyLive() {
+    for (let m = 0; m < this.liveQueue.length; m++) {
+      const msg = this.liveQueue[m];
+      const events = msg.events;
+      for (let i = 0; i + 2 < events.length; i += 3) this.engine.live(msg.track, events[i], events[i + 1], events[i + 2]);
+    }
+    this.liveQueue.length = 0;
+  }
+
   process(_inputs, outputs) {
     const out = outputs[0];
     const outL = out[0];
@@ -104,6 +118,7 @@ class EngineProcessor extends AudioWorkletProcessor {
       this.port.postMessage(this.ackMessage);
     }
     if (this.ops.length > 0) this.applyOps();
+    if (this.liveQueue.length > 0) this.applyLive();
     this.engine.process(outL, outR, 0, frames);
     if (this.reportEvery === 0) this.reportEvery = reportQuanta(sampleRate, frames);
     if (++this.quanta >= this.reportEvery) {

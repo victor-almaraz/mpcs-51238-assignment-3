@@ -143,6 +143,11 @@ const ENGINE_VALIDATORS = {
   panic() {
     return null;
   },
+  live(msg) {
+    if (!Number.isInteger(msg.track) || msg.track < 0 || msg.track >= MAX_TRACKS) return 'bad-track';
+    if (!(msg.events instanceof Uint8Array) || msg.events.length % 3 !== 0) return 'bad-events';
+    return null;
+  },
 };
 
 /** Messages the engine processor accepts. */

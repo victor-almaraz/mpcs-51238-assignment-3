@@ -198,6 +198,9 @@ export class DrumKernel {
   /** Note-off has no effect on drum hits. */
   noteOff() {}
 
+  /** Drum hits ignore note-offs, so transport stops and loop wraps leave them ringing. */
+  releaseSequenced() {}
+
   /** Fades every instance over 64 frames (all-notes-off and Panic alike). */
   allNotesOff() {
     for (let s = 0; s < this.slots; s++) {

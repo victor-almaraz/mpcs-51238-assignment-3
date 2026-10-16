@@ -19,6 +19,7 @@ import { MeterBank } from '../mixer/meter.js';
 import { ChannelStrip, PAN } from '../mixer/mixer.js';
 import { balance } from '../mixer/pan.js';
 import { MAX_TRACKS } from '../protocol.js';
+import { FloodLimiter, applyLiveEvent } from './live-input.js';
 import { Metronome } from './metronome.js';
 import { buildEngineModel, emptyModel } from './model.js';
 import { renderTrack, reseek } from './sequencer.js';
@@ -63,6 +64,8 @@ export class Engine {
     this.masterPan = new Smoother(fs, 0);
     this.masterPanGains = new Float64Array(2);
     this.hasProject = false;
+    this.liveLimiter = new FloodLimiter();
+    this.framesRendered = 0;
     this.playing = false;
     this.playFrame = 0;
     this.loopOn = false;
@@ -182,10 +185,20 @@ export class Engine {
     if (gates) updateGates(model.tracks);
   }
 
-  /** Releases every sequenced note (live notes are unaffected once they exist). */
+  /** Releases every sequenced note; live notes keep sounding. */
   releaseNotes() {
     const tracks = this.model.tracks;
-    for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.allNotesOff(false);
+    for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.releaseSequenced();
+  }
+
+  /**
+   * Applies one live MIDI message to track `trackIndex` (live-input.js).
+   * Returns false when the flood limit dropped a note-on.
+   */
+  live(trackIndex, status, data1, data2) {
+    const track = this.model.tracks[trackIndex];
+    if (!track) return true;
+    return applyLiveEvent(track.kernel, status, data1, data2, this.liveLimiter, this.framesRendered / this.fs);
   }
 
   reseekTracks(frame) {
@@ -273,6 +286,7 @@ export class Engine {
 
   /** Renders frames [start, end) of both channels, overwriting them. */
   process(bufL, bufR, start, end) {
+    this.framesRendered += end - start;
     for (let off = start; off < end; off += BLOCK) {
       const n = off + BLOCK < end ? BLOCK : end - off;
       bufL.fill(0, off, off + n);

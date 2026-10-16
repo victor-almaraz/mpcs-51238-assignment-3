@@ -403,3 +403,62 @@ test('Escape is Panic outside text fields, including on a focused button', async
   await page.keyboard.press('Escape');
   await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
 });
+
+test('computer keyboard notes pass through the volume notice and play the selected track', async ({ page }) => {
+  await openExample(page, 'Pluck melody');
+  await page.getByRole('button', { name: 'Track 2: Bass, Subtractive synth' }).click();
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.down('KeyA');
+  await expect(notice(page)).toBeVisible();
+  await notice(page).getByRole('button', { name: 'Continue' }).click();
+  await page.keyboard.up('KeyA');
+  // The key was released during the notice, so no note sticks.
+  expect(await masterPeakOver(page, 600)).toBeLessThan(1e-3);
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.down('KeyA');
+  const held = await masterPeakOver(page, 600);
+  await page.keyboard.up('KeyA');
+  expect(held).toBeGreaterThan(0.005);
+  await page.waitForTimeout(800);
+  expect(await masterPeakOver(page, 300)).toBeLessThan(1e-3);
+});
+
+test('Z and X change the keyboard octave and save it; typing in a field plays nothing', async ({ page }) => {
+  await openExample(page);
+  await expect(page.getByText('Keyboard octave: C4')).toBeVisible();
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.press('KeyX');
+  await expect(page.getByText('Keyboard octave: C5')).toBeVisible();
+  await page.keyboard.press('KeyZ');
+  await page.keyboard.press('KeyZ');
+  await expect(page.getByText('Keyboard octave: C3')).toBeVisible();
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  expect(settings.keyboardOctave).toBe(3);
+  await page.getByRole('textbox', { name: 'Tempo (BPM)' }).focus();
+  await page.keyboard.press('KeyA');
+  await expect(notice(page)).toHaveCount(0);
+  await page.keyboard.press('Backspace');
+  await page.getByRole('button', { name: 'Play with keyboard' }).click();
+  await expect(page.getByRole('button', { name: 'Play with keyboard' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.press('KeyA');
+  await expect(notice(page)).toHaveCount(0);
+});
+
+test('Web MIDI states the browser\'s support before and after Connect MIDI device', async ({ page, context, browserName }) => {
+  await openExample(page);
+  const region = page.getByRole('region', { name: 'Live input' });
+  if (browserName === 'webkit') {
+    await expect(region.getByText('Web MIDI is not supported in this browser.')).toBeVisible();
+    await region.getByRole('button', { name: 'Connect MIDI device' }).click();
+    await expect(region.getByRole('status').filter({ hasText: 'Web MIDI is not supported in this browser.' })).toBeVisible();
+  } else if (browserName === 'firefox') {
+    // Requesting access starts Firefox's add-on install prompt, which headless runs cannot answer.
+    await expect(region.getByText('Firefox asks to install a site permission add-on. Connect the MIDI device before starting Firefox.')).toBeVisible();
+  } else {
+    await context.grantPermissions(['midi']);
+    await region.getByRole('button', { name: 'Connect MIDI device' }).click();
+    // Headless Chromium refuses Web MIDI even with the permission granted; each outcome has a status.
+    await expect(region.getByRole('status').filter({ hasText: /No MIDI devices found|MIDI input:|MIDI access was not allowed/ })).toBeVisible();
+  }
+});

@@ -10,6 +10,7 @@
  * a second context.
  */
 import { CHANNELS, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../../dsp/core/constants.js';
+import { CONTROL_CHANGE, CC_ALL_NOTES_OFF, CC_ALL_SOUND_OFF, FloodLimiter, NOTE_OFF, NOTE_ON } from '../../dsp/engine/live-input.js';
 import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
@@ -59,6 +60,13 @@ function createClient() {
   let meters = null; // latest engine meters (Float32Array)
   let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
   const pendingParams = new Map(); // "target:paramId" → value, sent once per frame
+  let liveTarget = 0; // engine track index for keyboard, MIDI and previews
+  const liveLimiter = new FloodLimiter();
+  const nowS = () => performance.now() / 1000;
+
+  function sendLive(status, data1, data2) {
+    send({ t: 'live', track: liveTarget, events: Uint8Array.of(status, data1, data2) });
+  }
   const listeners = new Set();
 
   function setState(changes) {
@@ -256,6 +264,48 @@ function createClient() {
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
       setState({ playing: false });
       return true;
+    },
+
+    /** Sets the engine track index that live notes and previews play on. */
+    setLiveTarget(index) {
+      if (index !== liveTarget && engine) sendLive(CONTROL_CHANGE, CC_ALL_NOTES_OFF, 0);
+      liveTarget = index;
+    },
+
+    /**
+     * Plays a live note through the volume notice when needed. `isHeld()`
+     * says whether the key or MIDI note is still down when audio starts, so a
+     * note released during the notice never sticks. Note-ons beyond 200 per
+     * second are dropped. Call from the input event handler.
+     */
+    noteOn(pitch, velocity, isHeld = () => true) {
+      this.requestSound(() => {
+        if (!isHeld() || !liveLimiter.allow(nowS())) return;
+        sendLive(NOTE_ON, pitch, velocity);
+      });
+    },
+
+    /** Ends a live note. */
+    noteOff(pitch) {
+      if (engine) sendLive(NOTE_OFF, pitch, 0);
+    },
+
+    /** Ends every live note on the target track; `hard` fades them out at once. */
+    allLiveOff(hard = false) {
+      if (engine) sendLive(CONTROL_CHANGE, hard ? CC_ALL_SOUND_OFF : CC_ALL_NOTES_OFF, 0);
+    },
+
+    /**
+     * Note preview (PR-02): plays `pitch` for 250 ms through the target track's
+     * chain. No preview plays during playback.
+     */
+    preview(pitch, velocity = 100) {
+      if (state.playing) return;
+      this.requestSound(() => {
+        if (!liveLimiter.allow(nowS())) return;
+        sendLive(NOTE_ON, pitch, velocity);
+        setTimeout(() => sendLive(NOTE_OFF, pitch, 0), 250);
+      });
     },
 
     /** Releases a sustained-level duck (the user acknowledged it). */

@@ -7,6 +7,7 @@ import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import Transport from '@/components/transport/Transport';
 import InstrumentPanel from '@/components/instruments/InstrumentPanel';
+import LiveInputControls from '@/components/input/LiveInputControls';
 import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -108,6 +109,10 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const panelTrackId = view.selectedTrackId ?? project.trackOrder.find((id) => project.tracks[id].kind === 'instrument');
   const panelTrack = panelTrackId ? project.tracks[panelTrackId] : null;
   const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
+  const liveTargetIndex = Math.max(0, mixerTrackIds.indexOf(panelTrackId));
+  useEffect(() => {
+    engine.setLiveTarget(liveTargetIndex);
+  }, [engine, liveTargetIndex]);
 
   return (
     <>
@@ -140,6 +145,8 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         readOnly={readOnly}
         showExampleHint={unsavedCopy}
       />
+
+      <LiveInputControls />
 
       <section aria-labelledby="studio-view" className="flex flex-col gap-2">
         <h2 id="studio-view" className={sectionHeading}>
