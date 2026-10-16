@@ -9,6 +9,7 @@ import { instrumentFor } from '../../dsp/instruments/registry.js';
 import { MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
+import { expandClipNotes } from '../project/midi-commands.js';
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
@@ -24,21 +25,19 @@ function contentEndTick(doc) {
 
 /**
  * Note arrays for one instrument track, sorted by start frame then pitch.
- * Notes are placed at clip start + note tick and cropped at the clip end;
- * muted clips are skipped. At most MAX_NOTES_PER_TRACK notes.
+ * Looping clips expand (expandClipNotes); notes are placed at clip start +
+ * note tick and cropped at the clip end; muted clips are skipped. At most
+ * MAX_NOTES_PER_TRACK notes.
  */
 function compileNotes(doc, track, tempo) {
   const notes = [];
   for (const clipId of track.clipIds) {
     const clip = doc.clips[clipId];
     if (!clip || clip.kind !== 'midi' || clip.muted) continue;
-    const clipEnd = clip.start + clip.length;
-    for (const note of clip.notes) {
+    for (const note of expandClipNotes(clip, MAX_NOTES_PER_TRACK - notes.length)) {
       const tick = clip.start + note.tick;
-      if (tick >= clipEnd) continue;
-      const endTick = Math.min(clipEnd, tick + note.length);
       const start = tempo.frameAt(tick);
-      const end = tempo.frameAt(endTick);
+      const end = tempo.frameAt(tick + note.length);
       if (end > start) notes.push({ start, end, pitch: note.pitch, vel: note.velocity });
     }
   }
