@@ -59,16 +59,77 @@ export const MAX_NOTES_PER_TRACK = 20000;
 /** Maximum tracks (project limit). */
 export const MAX_TRACKS = 16;
 
+/** Maximum audio clips per track (project limit). */
+export const MAX_CLIPS_PER_TRACK = 1000;
+
+/** Maximum envelope points per audio track (project limit). */
+export const MAX_ENVELOPE_POINTS = 20000;
+
+/** Fade curve indices: FADE_CURVES order (linear, equalPower, exp). */
+const FADE_CURVE_COUNT = 3;
+
+const INT_FIELDS = ['start', 'length', 'srcStart', 'source', 'fadeIn', 'fadeOut'];
+
 /**
- * Validates one model track: { trackId, deviceId, type, params, gainDb, pan,
- * mute, solo, notes: { start, end, pitch, vel } } with Int32Array frames sorted
- * by start, end > start, pitch 0–127 and velocity 1–127 in Uint8Arrays.
+ * Validates the clips of an audio model track: { id: string[], start, length,
+ * srcStart, source (index into sourceIds), fadeIn, fadeOut: Int32Array;
+ * gain: Float32Array; fadeInCurve, fadeOutCurve: Uint8Array; envStart:
+ * Int32Array of count + 1 offsets into envFrame (Int32Array) and envGain
+ * (Float32Array) }. Clips are sorted by start; envelope frames ascend per clip.
  */
-export function validateModelTrack(track) {
-  if (!isObject(track) || typeof track.deviceId !== 'string' || typeof track.type !== 'string') return 'bad-track';
+function validateAudioClips(c, sourceCount) {
+  if (!isObject(c) || !Array.isArray(c.id)) return 'bad-clips';
+  const count = c.id.length;
+  if (count > MAX_CLIPS_PER_TRACK) return 'bad-clips';
+  for (const key of INT_FIELDS) if (!(c[key] instanceof Int32Array) || c[key].length !== count) return 'bad-clips';
+  if (!(c.gain instanceof Float32Array) || c.gain.length !== count) return 'bad-clips';
+  for (const key of ['fadeInCurve', 'fadeOutCurve']) if (!(c[key] instanceof Uint8Array) || c[key].length !== count) return 'bad-clips';
+  if (!(c.envStart instanceof Int32Array) || c.envStart.length !== count + 1) return 'bad-clips';
+  if (!(c.envFrame instanceof Int32Array) || !(c.envGain instanceof Float32Array)) return 'bad-clips';
+  const points = c.envFrame.length;
+  if (points > MAX_ENVELOPE_POINTS || c.envGain.length !== points || c.envStart[0] !== 0 || c.envStart[count] !== points) return 'bad-clips';
+  for (let i = 0; i < count; i++) {
+    if (typeof c.id[i] !== 'string') return 'bad-clip';
+    if (c.start[i] < 0 || c.length[i] <= 0 || c.srcStart[i] < 0) return 'bad-clip';
+    if (c.source[i] < 0 || c.source[i] >= sourceCount) return 'bad-clip';
+    if (c.fadeIn[i] < 0 || c.fadeOut[i] < 0 || c.fadeIn[i] > c.length[i] || c.fadeOut[i] > c.length[i]) return 'bad-clip';
+    if (c.fadeInCurve[i] >= FADE_CURVE_COUNT || c.fadeOutCurve[i] >= FADE_CURVE_COUNT) return 'bad-clip';
+    if (!(c.gain[i] >= 0) || !Number.isFinite(c.gain[i])) return 'bad-clip';
+    if (i > 0 && c.start[i] < c.start[i - 1]) return 'unsorted-clips';
+    const lo = c.envStart[i];
+    const hi = c.envStart[i + 1];
+    if (hi < lo) return 'bad-envelope';
+    for (let k = lo; k < hi; k++) {
+      if (c.envFrame[k] < 0 || !(c.envGain[k] >= 0) || !Number.isFinite(c.envGain[k])) return 'bad-envelope';
+      if (k > lo && c.envFrame[k] <= c.envFrame[k - 1]) return 'bad-envelope';
+    }
+  }
+  return null;
+}
+
+function validateMixer(track) {
   if (typeof track.trackId !== 'string') return 'bad-track';
   if (!Number.isFinite(track.gainDb) || !Number.isFinite(track.pan)) return 'bad-mixer';
   if (typeof track.mute !== 'boolean' || typeof track.solo !== 'boolean') return 'bad-mixer';
+  return null;
+}
+
+/**
+ * Validates one model track. Instrument tracks: { trackId, deviceId, type,
+ * params, gainDb, pan, mute, solo, notes: { start, end, pitch, vel } } with
+ * Int32Array frames sorted by start, end > start, pitch 0–127 and velocity
+ * 1–127 in Uint8Arrays. Audio tracks: { trackId, kind: 'audio', gainDb, pan,
+ * mute, solo, sourceIds: string[], clips } (validateAudioClips).
+ */
+export function validateModelTrack(track) {
+  if (!isObject(track)) return 'bad-track';
+  const mixer = validateMixer(track);
+  if (mixer) return mixer;
+  if (track.kind === 'audio') {
+    if (!Array.isArray(track.sourceIds) || !track.sourceIds.every((id) => typeof id === 'string')) return 'bad-sources';
+    return validateAudioClips(track.clips, track.sourceIds.length);
+  }
+  if (typeof track.deviceId !== 'string' || typeof track.type !== 'string') return 'bad-track';
   if (!isObject(track.params) || !Object.values(track.params).every(Number.isFinite)) return 'bad-params';
   const n = track.notes;
   if (!isObject(n) || !(n.start instanceof Int32Array) || !(n.end instanceof Int32Array)) return 'bad-notes';
@@ -142,6 +203,16 @@ const ENGINE_VALIDATORS = {
   },
   panic() {
     return null;
+  },
+  'source-add'(msg) {
+    if (typeof msg.sourceId !== 'string' || msg.sourceId === '') return 'bad-source';
+    const ch = msg.channels;
+    if (!Array.isArray(ch) || ch.length < 1 || ch.length > 2) return 'bad-channels';
+    if (!ch.every((c) => c instanceof Float32Array && c.length > 0 && c.length === ch[0].length)) return 'bad-channels';
+    return null;
+  },
+  'source-remove'(msg) {
+    return typeof msg.sourceId === 'string' ? null : 'bad-source';
   },
   live(msg) {
     if (!Number.isInteger(msg.track) || msg.track < 0 || msg.track >= MAX_TRACKS) return 'bad-track';

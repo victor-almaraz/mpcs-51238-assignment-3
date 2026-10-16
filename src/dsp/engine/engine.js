@@ -13,6 +13,7 @@ import { dbToGain } from '../core/math.js';
 import { hash32 } from '../core/prng.js';
 import { clampParam, defineParam } from '../core/params.js';
 import { Smoother, settleSmoothers } from '../core/smoother.js';
+import { bindSources, createClipTrack, renderClips, startStopFade } from '../clips/clip-player.js';
 import { GlobalVoices } from '../instruments/voice-pool.js';
 import { instrumentFor } from '../instruments/registry.js';
 import { MeterBank } from '../mixer/meter.js';
@@ -50,9 +51,12 @@ export class Engine {
     this.globalVoices = new GlobalVoices();
     this.kernels = new Map(); // deviceId → kernel, reused across models
     this.strips = new Map(); // trackId → ChannelStrip, reused across models
+    this.clipTracks = new Map(); // trackId → clip player state of the last prepared model
+    this.sources = new Map(); // sourceId → [Float32Array] or [L, R], from source-add
     this.generation = 0;
     this.trackBuf = new Float32Array(BLOCK);
     this.trackBufR = new Float32Array(BLOCK);
+    this.monoBuf = new Float32Array(BLOCK);
     this.stripL = new Float32Array(BLOCK);
     this.stripR = new Float32Array(BLOCK);
     this.meters = new MeterBank(MAX_TRACKS + 1);
@@ -86,11 +90,10 @@ export class Engine {
     const generation = ++this.generation;
     const kernels = new Map();
     const strips = new Map();
-    let trackIndex = 0;
+    const clipTracks = new Map();
     const compiled = buildEngineModel(
       payload,
-      (track) => {
-        const index = trackIndex++;
+      (track, index) => {
         const entry = instrumentFor(track.type);
         if (!entry) return null;
         let kernel = this.kernels.get(track.deviceId);
@@ -118,6 +121,12 @@ export class Engine {
         strips.set(track.trackId, strip);
         return strip;
       },
+      (track) => {
+        const clips = createClipTrack(track, this.fs, this.clipTracks.get(track.trackId) ?? null);
+        bindSources(clips, this.sources);
+        clipTracks.set(track.trackId, clips);
+        return clips;
+      },
     );
     updateGates(compiled.tracks);
     for (const t of compiled.tracks) {
@@ -128,7 +137,29 @@ export class Engine {
     compiled.masterPan = clampParam(PAN, payload.masterPan ?? 0);
     this.kernels = kernels;
     this.strips = strips;
+    this.clipTracks = clipTracks;
     return compiled;
+  }
+
+  /**
+   * Stores a source's channels (source-add) and binds it in the current
+   * model and in `pending` (a prepared model not yet swapped in).
+   */
+  addSource(sourceId, channels, pending = null) {
+    this.sources.set(sourceId, channels);
+    this.rebindSources(pending);
+  }
+
+  /** Drops a source (source-remove); clips that use it fall silent. */
+  removeSource(sourceId, pending = null) {
+    this.sources.delete(sourceId);
+    this.rebindSources(pending);
+  }
+
+  rebindSources(pending) {
+    for (const model of pending === null ? [this.model] : [this.model, pending]) {
+      for (const track of model.tracks) if (track.audio !== null) bindSources(track.audio, this.sources);
+    }
   }
 
   /**
@@ -215,10 +246,16 @@ export class Engine {
     this.beatDirty = true;
   }
 
-  /** Stops playback in place; release tails finish. */
+  /** Stops playback in place; release tails finish and audio clips fade over 64 frames. */
   stop() {
+    if (this.playing) this.fadeClips();
     this.playing = false;
     this.releaseNotes();
+  }
+
+  fadeClips() {
+    const tracks = this.model.tracks;
+    for (let i = 0; i < tracks.length; i++) if (tracks[i].audio !== null) startStopFade(tracks[i].audio, this.playFrame);
   }
 
   /**
@@ -226,6 +263,7 @@ export class Engine {
    * drum instance over 64 frames; the metronome click stops at once.
    */
   panic() {
+    if (this.playing) this.fadeClips();
     this.playing = false;
     const tracks = this.model.tracks;
     for (let i = 0; i < tracks.length; i++) if (tracks[i].kernel !== null) tracks[i].kernel.allNotesOff(true);
@@ -321,9 +359,14 @@ export class Engine {
     const meters = this.meters;
     for (let t = 0; t < tracks.length; t++) {
       const track = tracks[t];
-      renderTrack(track, tb, tbR, n, this.playFrame, this.playing);
-      const stereo = track.kernel !== null && track.kernel.stereo === true;
-      track.strip.mix(tb, tbR, stereo, n, bufL, bufR, off, this.stripL, this.stripR);
+      if (track.audio !== null) {
+        renderClips(track.audio, this.monoBuf, tb, tbR, n, this.playFrame, this.playing);
+        track.strip.mixAudio(this.monoBuf, tb, tbR, n, bufL, bufR, off, this.stripL, this.stripR);
+      } else {
+        renderTrack(track, tb, tbR, n, this.playFrame, this.playing);
+        const stereo = track.kernel !== null && track.kernel.stereo === true;
+        track.strip.mix(tb, tbR, stereo, n, bufL, bufR, off, this.stripL, this.stripR);
+      }
       meters.add(t, this.stripL, this.stripR, 0, n);
     }
     if (this.playing) {

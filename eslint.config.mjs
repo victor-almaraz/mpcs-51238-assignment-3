@@ -11,6 +11,7 @@ const DSP_RULE = 'src/dsp is environment-independent (a3-audio-implementation.md
 const config = [
   {
     ignores: [
+      '.claude/**',
       '.next/**',
       '.tools/**',
       'node_modules/**',

@@ -6,21 +6,107 @@
 import { clampParam, clampParams } from '../../dsp/core/params.js';
 import { PAN, TRACK_GAIN } from '../../dsp/mixer/mixer.js';
 import { instrumentFor } from '../../dsp/instruments/registry.js';
-import { MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
+import { MAX_CLIPS_PER_TRACK, MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { expandClipNotes } from '../project/midi-commands.js';
+import { curveIndex } from '../../dsp/clips/fades.js';
+import { dbToGain } from '../../dsp/core/math.js';
+import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE } from '../project/clip-commands.js';
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
 
+/** Scales a frame count recorded at the project's audioRate to `fs`. */
+function scaler(doc, fs) {
+  const ratio = fs / (doc.audioRate ?? DEFAULT_AUDIO_RATE);
+  return ratio === 1 ? (x) => x : (x) => Math.round(x * ratio);
+}
+
 /** Last tick used by any clip, or 0. */
-function contentEndTick(doc) {
+function contentEndTick(doc, tempo, scale) {
   let end = 0;
   for (const clip of Object.values(doc.clips)) {
     if (clip.kind === 'midi') end = Math.max(end, clip.start + clip.length);
+    else end = Math.max(end, tempo.tickAt(tempo.frameAt(clip.start) + scale(clip.sourceLength)));
   }
   return end;
+}
+
+/**
+ * Clip arrays for one audio track (protocol.js, validateAudioClips), sorted
+ * by start frame. Offsets scale from audioRate to `fs`. Where two clips
+ * overlap by L frames, the earlier clip's fade-out and the later clip's
+ * fade-in become L frames of equalPower (the crossfade). Muted clips are
+ * skipped.
+ */
+function compileClips(doc, track, tempo, scale) {
+  const sourceIds = [];
+  const clips = [];
+  for (const clipId of track.clipIds) {
+    const clip = doc.clips[clipId];
+    if (!clip || clip.kind !== 'audio' || clip.muted) continue;
+    const length = scale(clip.sourceLength);
+    if (length <= 0) continue;
+    let source = sourceIds.indexOf(clip.sourceId);
+    if (source < 0) source = sourceIds.push(clip.sourceId) - 1;
+    clips.push({
+      id: clip.id,
+      start: tempo.frameAt(clip.start),
+      length,
+      srcStart: scale(clip.sourceOffset),
+      source,
+      gain: clip.gainDb <= CLIP_GAIN_MIN_DB ? 0 : dbToGain(clip.gainDb),
+      fadeIn: Math.min(length, scale(clip.fadeIn?.length ?? 0)),
+      fadeOut: Math.min(length, scale(clip.fadeOut?.length ?? 0)),
+      fadeInCurve: curveIndex(clip.fadeIn?.curve),
+      fadeOutCurve: curveIndex(clip.fadeOut?.curve),
+      envelope: (clip.envelope ?? []).map((p) => ({ frame: scale(p.frame), gain: p.gain })),
+    });
+  }
+  clips.sort((a, b) => a.start - b.start);
+  if (clips.length > MAX_CLIPS_PER_TRACK) clips.length = MAX_CLIPS_PER_TRACK;
+  for (let i = 1; i < clips.length; i++) {
+    const a = clips[i - 1];
+    const b = clips[i];
+    const overlap = Math.min(a.start + a.length, b.start + b.length) - b.start;
+    if (overlap <= 0) continue;
+    a.fadeOut = Math.min(a.length, overlap);
+    a.fadeOutCurve = curveIndex('equalPower');
+    b.fadeIn = overlap;
+    b.fadeInCurve = curveIndex('equalPower');
+  }
+  const envStart = new Int32Array(clips.length + 1);
+  const envFrame = [];
+  const envGain = [];
+  clips.forEach((c, i) => {
+    let last = -1;
+    for (const p of c.envelope) {
+      if (p.frame <= last) continue; // scaling can merge points
+      envFrame.push(p.frame);
+      envGain.push(p.gain);
+      last = p.frame;
+    }
+    envStart[i + 1] = envFrame.length;
+  });
+  return {
+    sourceIds,
+    clips: {
+      id: clips.map((c) => c.id),
+      start: Int32Array.from(clips, (c) => c.start),
+      length: Int32Array.from(clips, (c) => c.length),
+      srcStart: Int32Array.from(clips, (c) => c.srcStart),
+      source: Int32Array.from(clips, (c) => c.source),
+      gain: Float32Array.from(clips, (c) => c.gain),
+      fadeIn: Int32Array.from(clips, (c) => c.fadeIn),
+      fadeOut: Int32Array.from(clips, (c) => c.fadeOut),
+      fadeInCurve: Uint8Array.from(clips, (c) => c.fadeInCurve),
+      fadeOutCurve: Uint8Array.from(clips, (c) => c.fadeOutCurve),
+      envStart,
+      envFrame: Int32Array.from(envFrame),
+      envGain: Float32Array.from(envGain),
+    },
+  };
 }
 
 /**
@@ -51,11 +137,23 @@ function compileNotes(doc, track, tempo) {
   };
 }
 
-/** Model tracks for the document's instrument tracks, in track order. */
-function compileTracks(doc, tempo) {
+/** Model tracks for the document's instrument and audio tracks, in track order (engineTrackIds). */
+function compileTracks(doc, tempo, scale) {
   const tracks = [];
   for (const trackId of doc.trackOrder) {
     const track = doc.tracks[trackId];
+    if (track?.kind === 'audio') {
+      tracks.push({
+        trackId,
+        kind: 'audio',
+        gainDb: clampParam(TRACK_GAIN, track.gainDb),
+        pan: clampParam(PAN, track.pan),
+        mute: track.mute === true,
+        solo: track.solo === true,
+        ...compileClips(doc, track, tempo, scale),
+      });
+      continue;
+    }
     if (!track || track.kind !== 'instrument') continue;
     const device = doc.devices[track.deviceIds[0]];
     if (!device) continue;
@@ -84,7 +182,8 @@ export function compileModel(doc, fs) {
   const tempo = new TempoMap(doc.tempo, fs);
   const meter = new MeterMap(doc.meter);
   const minEnd = meter.tickAtBar(MIN_BARS);
-  const endTick = Math.max(contentEndTick(doc), minEnd);
+  const scale = scaler(doc, fs);
+  const endTick = Math.max(contentEndTick(doc, tempo, scale), minEnd);
   const loop = doc.loop ?? { start: 0, end: endTick };
   return {
     tempo,
@@ -98,7 +197,7 @@ export function compileModel(doc, fs) {
       loopEndFrame: tempo.frameAt(loop.end),
       endFrame: tempo.frameAt(endTick),
       masterPan: clampParam(PAN, doc.tracks[doc.masterTrackId]?.pan ?? 0),
-      tracks: compileTracks(doc, tempo),
+      tracks: compileTracks(doc, tempo, scale),
     },
   };
 }

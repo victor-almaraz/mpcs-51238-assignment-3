@@ -55,6 +55,12 @@ class EngineProcessor extends AudioWorkletProcessor {
         this.pendingModel = this.engine.prepareModel(msg.model);
         this.pendingRev = msg.rev;
         break;
+      case 'source-add':
+        this.engine.addSource(msg.sourceId, msg.channels, this.pendingModel);
+        break;
+      case 'source-remove':
+        this.engine.removeSource(msg.sourceId, this.pendingModel);
+        break;
       case 'live':
         this.liveQueue.push(msg);
         break;

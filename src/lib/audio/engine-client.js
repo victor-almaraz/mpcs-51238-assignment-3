@@ -14,6 +14,7 @@ import { CONTROL_CHANGE, CC_ALL_NOTES_OFF, CC_ALL_SOUND_OFF, FloodLimiter, NOTE_
 import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
+import { allSources, redecodeAll, subscribeSources } from './decode.js';
 import { paramChanges } from './param-changes.js';
 
 export const WORKLET_URL = '/worklets/worklet/main.js';
@@ -129,6 +130,44 @@ function createClient() {
     });
   }
 
+  const sentSources = new Map(); // sourceId → the channel arrays last sent
+  let syncing = null;
+
+  /**
+   * Sends every loaded source the engine lacks (source-add with transferred
+   * copies) and removes unloaded ones. Sources decoded at another rate decode
+   * again at the context rate first.
+   */
+  function syncSources() {
+    if (!engine) return;
+    if (syncing) {
+      syncing.again = true;
+      return;
+    }
+    syncing = { again: false };
+    const rate = ctx.sampleRate;
+    const pending = allSources().some((s) => s.rate !== rate) ? redecodeAll(rate) : Promise.resolve();
+    pending
+      .catch((err) => console.error('Audio could not be decoded at the context rate', err))
+      .then(() => {
+        const loaded = new Map(allSources().filter((s) => s.rate === rate).map((s) => [s.sourceId, s]));
+        for (const [id, source] of loaded) {
+          if (sentSources.get(id) === source.channels) continue;
+          const copies = source.channels.map((c) => c.slice());
+          engine.port.postMessage({ t: 'source-add', v: PROTOCOL_VERSION, sourceId: id, channels: copies }, copies.map((c) => c.buffer));
+          sentSources.set(id, source.channels);
+        }
+        for (const id of sentSources.keys()) {
+          if (loaded.has(id)) continue;
+          send({ t: 'source-remove', sourceId: id });
+          sentSources.delete(id);
+        }
+        const again = syncing.again;
+        syncing = null;
+        if (again) syncSources();
+      });
+  }
+
   function compile() {
     compiled = doc ? compileModel(doc, fs()) : null;
   }
@@ -185,6 +224,8 @@ function createClient() {
       send({ t: 'init', seed: 1 });
       compile();
       sendModel();
+      subscribeSources(syncSources);
+      syncSources();
       sendLoop();
       send({ t: 'master', volumeDb: getSettings().masterVolumeDb });
       send({ t: 'metronome', on: state.metronome, gainDb: 0 });
@@ -208,6 +249,9 @@ function createClient() {
 
     /** True once an AudioContext exists. */
     hasContext: () => ctx !== null,
+
+    /** Rate to decode audio at: the context's, or 48 kHz before one exists. */
+    decodeRate: () => fs(),
 
     /**
      * Runs a sound-producing `action` (Play, a note, an audition), opening the

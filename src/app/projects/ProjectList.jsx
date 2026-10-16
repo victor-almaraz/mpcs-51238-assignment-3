@@ -7,6 +7,7 @@ import Dialog from '@/components/ui/Dialog';
 import StatusRegion from '@/components/ui/StatusRegion';
 import { buttonVariants, controlBase, controlSizes, cx, errorText } from '@/design-systems/industrial/classes';
 import { deleteProject, getIndexSnapshot, listProjects, subscribeProjects } from '@/lib/project/store';
+import { pruneStoredSources } from '@/lib/audio/source-cleanup';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -26,6 +27,7 @@ export default function ProjectList() {
   function confirmDelete() {
     const result = deleteProject(pending.id);
     if (result.ok) {
+      pruneStoredSources().catch((err) => console.error('Stored audio cleanup failed', err));
       setMessage(`Deleted ${pending.name}`);
       setError(null);
     } else {

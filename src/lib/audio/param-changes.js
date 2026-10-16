@@ -16,9 +16,12 @@ import {
 import { instrumentFor } from '../../dsp/instruments/registry.js';
 import { PAN, TRACK_GAIN } from '../../dsp/mixer/mixer.js';
 
-/** Instrument track IDs in compile order (the engine's track indices). */
+/** Instrument and audio track IDs in compile order (the engine's track indices). */
 export function engineTrackIds(doc) {
-  return doc.trackOrder.filter((id) => doc.tracks[id]?.kind === 'instrument' && doc.devices[doc.tracks[id].deviceIds[0]]);
+  return doc.trackOrder.filter((id) => {
+    const track = doc.tracks[id];
+    return track?.kind === 'audio' || (track?.kind === 'instrument' && doc.devices[track.deviceIds[0]]);
+  });
 }
 
 /**
@@ -28,7 +31,7 @@ export function engineTrackIds(doc) {
  */
 export function paramChanges(prev, next) {
   if (!prev || prev.id !== next.id) return null;
-  for (const key of ['clips', 'tempo', 'meter', 'trackOrder', 'loop', 'sources', 'masterTrackId']) {
+  for (const key of ['clips', 'tempo', 'meter', 'trackOrder', 'loop', 'sources', 'audioRate', 'masterTrackId']) {
     if (prev[key] !== next[key]) return null;
   }
   const out = [];

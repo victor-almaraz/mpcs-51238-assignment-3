@@ -33,6 +33,7 @@ export class ChannelStrip {
     this.mute = false;
     this.solo = false;
     this.panGains = new Float64Array(2);
+    this.balanceGains = new Float64Array(2);
   }
 
   setGainDb(db) {
@@ -68,6 +69,35 @@ export class ChannelStrip {
       const r = stereo ? srcR[i] : srcL[i];
       const yl = l * g * pl;
       const yr = r * g * pr;
+      outL[i] = yl;
+      outR[i] = yr;
+      busL[off + i] += yl;
+      busR[off + i] += yr;
+    }
+    gain.flush();
+    this.pan.flush();
+    gate.flush();
+  }
+
+  /**
+   * Audio tracks: like mix(), for a track whose mono clips arrive in `mono`
+   * (constant-power pan) and stereo clips in `srcL`/`srcR` (balance).
+   */
+  mixAudio(mono, srcL, srcR, n, busL, busR, off, outL, outR) {
+    for (let i = 0; i < n; i++) this.pan.next();
+    constantPower(this.pan.y, this.panGains);
+    balance(this.pan.y, this.balanceGains);
+    const cl = this.panGains[0];
+    const cr = this.panGains[1];
+    const bl = this.balanceGains[0];
+    const br = this.balanceGains[1];
+    const gain = this.gain;
+    const gate = this.gate;
+    for (let i = 0; i < n; i++) {
+      const g = gain.next() * gate.next();
+      const m = mono[i];
+      const yl = (m * cl + srcL[i] * bl) * g;
+      const yr = (m * cr + srcR[i] * br) * g;
       outL[i] = yl;
       outR[i] = yr;
       busL[off + i] += yl;

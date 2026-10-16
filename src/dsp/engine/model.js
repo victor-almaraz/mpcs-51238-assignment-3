@@ -7,13 +7,22 @@ import { TempoMap } from '../timing/tempo-map.js';
 import { MeterMap } from '../timing/meter-map.js';
 import { createTrack } from './sequencer.js';
 
+const NO_NOTES = {
+  start: new Int32Array(0),
+  end: new Int32Array(0),
+  pitch: new Uint8Array(0),
+  vel: new Uint8Array(0),
+};
+
 /**
  * Returns the compiled model for a validated EngineModel payload:
  * { fs, tempo, meter, loopStartFrame, loopEndFrame, endFrame, tracks }.
- * `kernelFor(track)` returns the instrument kernel for a payload track, or null;
- * `stripFor(track)` returns its channel strip.
+ * `kernelFor(track, index)` returns the instrument kernel for a payload
+ * instrument track, or null; `clipsFor(track)` the clip player state of an
+ * audio track; `stripFor(track)` its channel strip. Each compiled track has
+ * `kernel` (null for audio tracks) and `audio` (null for instrument tracks).
  */
-export function buildEngineModel(model, kernelFor = () => null, stripFor = () => null) {
+export function buildEngineModel(model, kernelFor = () => null, stripFor = () => null, clipsFor = () => null) {
   return {
     fs: model.fs,
     tempo: new TempoMap(model.tempo, model.fs),
@@ -21,8 +30,10 @@ export function buildEngineModel(model, kernelFor = () => null, stripFor = () =>
     loopStartFrame: model.loopStartFrame,
     loopEndFrame: model.loopEndFrame,
     endFrame: model.endFrame,
-    tracks: (model.tracks ?? []).map((t) => {
-      const track = createTrack(kernelFor(t), t.notes);
+    tracks: (model.tracks ?? []).map((t, index) => {
+      const audio = t.kind === 'audio';
+      const track = audio ? createTrack(null, NO_NOTES) : createTrack(kernelFor(t, index), t.notes);
+      track.audio = audio ? clipsFor(t) : null;
       track.strip = stripFor(t);
       return track;
     }),
