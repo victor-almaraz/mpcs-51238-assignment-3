@@ -176,7 +176,7 @@ Imported audio sources persist on the device in IndexedDB. Projects, working sta
 | Limits | 20 minutes of decoded audio per project (project limit) |
 
 - Records hold original file bytes, never decoded PCM. Sources decode on project open.
-- An import is **session-only** when the capacity check fails, or when the write fails with `QuotaExceededError` or another IndexedDB error. The import result shows "This browser could not store <name>. Save a .wrack file to keep this audio." Stored records are never evicted to make room.
+- An import is **session-only** when the capacity check fails, when the write fails with `QuotaExceededError` or another IndexedDB error, or when the record cannot be read back after the write (WebKit private windows complete the write but keep no `Blob`). The import result shows "This browser could not store <name>. Save a .wrack file to keep this audio." Stored records are never evicted to make room.
 - Each audio clip shows "Saved on this device" or "Session only" in its properties panel and accessible name.
 - "Audio not loaded" appears only for sources absent from both memory and the store, for example after the browser deletes site data.
 - Safari can delete script-writable storage after 7 days without user interaction. `/settings` states this in Safari and recommends `.wrack` backups.

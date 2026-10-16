@@ -12,7 +12,7 @@ import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { expandClipNotes } from '../project/midi-commands.js';
 import { curveIndex } from '../../dsp/clips/fades.js';
 import { dbToGain } from '../../dsp/core/math.js';
-import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE } from '../project/clip-commands.js';
+import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE, audioTempo, clipEndTick } from '../project/clip-commands.js';
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
@@ -24,37 +24,45 @@ function scaler(doc, fs) {
 }
 
 /** Last tick used by any clip, or 0. */
-function contentEndTick(doc, tempo, scale) {
+function contentEndTick(doc) {
   let end = 0;
   for (const clip of Object.values(doc.clips)) {
     if (clip.kind === 'midi') end = Math.max(end, clip.start + clip.length);
-    else end = Math.max(end, tempo.tickAt(tempo.frameAt(clip.start) + scale(clip.sourceLength)));
+    else end = Math.max(end, clipEndTick(doc, clip));
   }
   return end;
 }
 
 /**
  * Clip arrays for one audio track (protocol.js, validateAudioClips), sorted
- * by start frame. Offsets scale from audioRate to `fs`. Where two clips
- * overlap by L frames, the earlier clip's fade-out and the later clip's
- * fade-in become L frames of equalPower (the crossfade). Muted clips are
- * skipped.
+ * by start frame. Positions come from the tempo map at audioRate and scale to
+ * `fs` from shared rounded boundaries: a clip spans
+ * [round(F·r), round((F + length)·r)) and reads the source at a fixed
+ * timeline-to-source offset round((srcStart − F)·r), so the parts of a split
+ * stay contiguous and read the same frames at any rate (r = fs/audioRate).
+ * Where a later clip starts inside an earlier one and outlasts it, the
+ * overlap of L frames becomes the earlier clip's fade-out and the later
+ * clip's fade-in, L frames of equalPower (the crossfade); a clip lying wholly
+ * inside another gets no automatic fades. Muted clips are skipped.
  */
-function compileClips(doc, track, tempo, scale) {
+function compileClips(doc, track, scale) {
+  const tempo = audioTempo(doc);
   const sourceIds = [];
   const clips = [];
   for (const clipId of track.clipIds) {
     const clip = doc.clips[clipId];
     if (!clip || clip.kind !== 'audio' || clip.muted) continue;
-    const length = scale(clip.sourceLength);
+    const startAr = tempo.frameAt(clip.start);
+    const start = scale(startAr);
+    const length = scale(startAr + clip.sourceLength) - start;
     if (length <= 0) continue;
     let source = sourceIds.indexOf(clip.sourceId);
     if (source < 0) source = sourceIds.push(clip.sourceId) - 1;
     clips.push({
       id: clip.id,
-      start: tempo.frameAt(clip.start),
+      start,
       length,
-      srcStart: scale(clip.sourceOffset),
+      srcStart: Math.max(0, start + scale(clip.sourceOffset - startAr)),
       source,
       gain: clip.gainDb <= CLIP_GAIN_MIN_DB ? 0 : dbToGain(clip.gainDb),
       fadeIn: Math.min(length, scale(clip.fadeIn?.length ?? 0)),
@@ -66,21 +74,28 @@ function compileClips(doc, track, tempo, scale) {
   }
   clips.sort((a, b) => a.start - b.start);
   if (clips.length > MAX_CLIPS_PER_TRACK) clips.length = MAX_CLIPS_PER_TRACK;
-  for (let i = 1; i < clips.length; i++) {
-    const a = clips[i - 1];
-    const b = clips[i];
-    const overlap = Math.min(a.start + a.length, b.start + b.length) - b.start;
-    if (overlap <= 0) continue;
-    a.fadeOut = Math.min(a.length, overlap);
-    a.fadeOutCurve = curveIndex('equalPower');
-    b.fadeIn = overlap;
-    b.fadeInCurve = curveIndex('equalPower');
+  const equalPower = curveIndex('equalPower');
+  for (let j = 1; j < clips.length; j++) {
+    const b = clips[j];
+    for (let i = 0; i < j; i++) {
+      const a = clips[i];
+      const aEnd = a.start + a.length;
+      if (!(b.start < aEnd && aEnd <= b.start + b.length)) continue;
+      // The longest overlap wins when a clip crossfades with several others.
+      const overlap = aEnd - b.start;
+      a.fadeOut = a.crossOut ? Math.max(a.fadeOut, overlap) : overlap;
+      a.fadeOutCurve = equalPower;
+      a.crossOut = true;
+      b.fadeIn = b.crossIn ? Math.max(b.fadeIn, overlap) : overlap;
+      b.fadeInCurve = equalPower;
+      b.crossIn = true;
+    }
   }
   const envStart = new Int32Array(clips.length + 1);
   const envFrame = [];
   const envGain = [];
   clips.forEach((c, i) => {
-    let last = -1;
+    let last = -Infinity;
     for (const p of c.envelope) {
       if (p.frame <= last) continue; // scaling can merge points
       envFrame.push(p.frame);
@@ -150,7 +165,7 @@ function compileTracks(doc, tempo, scale) {
         pan: clampParam(PAN, track.pan),
         mute: track.mute === true,
         solo: track.solo === true,
-        ...compileClips(doc, track, tempo, scale),
+        ...compileClips(doc, track, scale),
       });
       continue;
     }
@@ -183,7 +198,7 @@ export function compileModel(doc, fs) {
   const meter = new MeterMap(doc.meter);
   const minEnd = meter.tickAtBar(MIN_BARS);
   const scale = scaler(doc, fs);
-  const endTick = Math.max(contentEndTick(doc, tempo, scale), minEnd);
+  const endTick = Math.max(contentEndTick(doc), minEnd);
   const loop = doc.loop ?? { start: 0, end: endTick };
   return {
     tempo,

@@ -136,7 +136,7 @@ test('an undecodable file reports its error and the next file still imports', as
   await expect(clipRows(page)).toHaveCount(1);
 });
 
-test('keyboard only: split at the edit cursor, join, move, duplicate and delete clips', async ({ page }) => {
+test('keyboard only: split at the edit cursor, join, move, duplicate, delete and trim clips', async ({ page }) => {
   const id = await createProject(page, 'Edit');
   await importFixtures(page, [FIXTURES[0]]);
   const clip = clipRows(page).first();
@@ -146,17 +146,17 @@ test('keyboard only: split at the edit cursor, join, move, duplicate and delete 
   await page.keyboard.press('.');
   await page.keyboard.press('.');
   await expect(page.getByText('Edit cursor: bar 1 beat 3')).toBeVisible();
-  await page.keyboard.press('s');
+  await page.keyboard.press('Control+e');
   await expect(clipRows(page)).toHaveText([
     'Clip: tone-a, bar 1 to bar 1 beat 3, Saved on this device',
     'Clip: tone-a, bar 1 beat 3 to bar 2, Saved on this device',
   ]);
-  await page.keyboard.press('j');
+  await page.keyboard.press('Control+j');
   await expect(clipRows(page)).toHaveText(['Clip: tone-a, bar 1 to bar 2, Saved on this device']);
   await expect.poll(async () => Object.keys((await saved(page, id)).clips).length).toBe(1);
 
   await clipRows(page).first().focus();
-  await page.keyboard.press('Alt+ArrowRight');
+  await page.keyboard.press('ArrowRight');
   await expect(clipRows(page)).toHaveText(['Clip: tone-a, bar 1 beat 2 to bar 2 beat 2, Saved on this device']);
   await page.keyboard.press('Control+d');
   await expect(clipRows(page)).toHaveCount(2);
@@ -172,7 +172,7 @@ test('join explains why it is unavailable', async ({ page }) => {
   await importFixtures(page, [FIXTURES[0]]);
   await clipRows(page).first().click();
   await expect(page.getByText('Join: No clip touches this clip.')).toBeVisible();
-  await page.keyboard.press('j');
+  await page.keyboard.press('Control+j');
   await expect(page.getByRole('status').filter({ hasText: 'Cannot join: No clip touches this clip.' })).toHaveCount(1);
 });
 
@@ -194,7 +194,7 @@ test('clip properties edit gain, fades and the envelope', async ({ page }) => {
   expect(clip.gainDb).toBe(-6);
   expect(clip.fadeIn.length).toBe(Math.round(0.25 * (await saved(page, id)).audioRate));
   expect(clip.fadeOut.curve).toBe('equalPower');
-  expect(clip.envelope).toEqual([{ frame: 0, gain: 1 }]);
+  expect(clip.envelope).toEqual([expect.objectContaining({ frame: 0, gain: 1 })]);
 });
 
 test('deleting the last project that uses a source removes its stored record', async ({ page }) => {
@@ -221,4 +221,89 @@ test('imported audio plays through the engine after the volume notice', async ({
   await expect(play).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.evaluate(() => globalThis.__wrackEngine.getMasterLevel().peakL), { timeout: 5000 }).toBeGreaterThan(0.001);
   expect(errors).toEqual([]);
+});
+
+/** Adds a sampler track and opens its panel. */
+async function addSampler(page) {
+  const tools = page.getByRole('toolbar', { name: 'Clip commands' });
+  await tools.getByLabel('Instrument').selectOption('sampler');
+  await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  // Adding a track selects it, which opens its instrument panel.
+  await expect(page.getByRole('button', { name: /^Track 2: Track 2, Sampler/ })).toHaveAttribute('aria-pressed', 'true');
+  return page.getByRole('region', { name: 'Sampler: Track 2' });
+}
+
+test('sampler: load a sample, then move markers by keyboard alone within their constraints', async ({ page }) => {
+  const id = await createProject(page, 'Sampler');
+  const panel = await addSampler(page);
+  await expect(panel).toContainText('No sample. Load a sample file or choose a project source.');
+  await page.locator('input[type="file"]').nth(1).setInputFiles([FIXTURES[0]]);
+  await expect(panel).toContainText('Sample: tone-a.wav, 2.00 s, Saved on this device');
+  await expect.poll(async () => (await saved(page, id)).audioRate).toBeGreaterThan(0);
+  const rate = (await saved(page, id)).audioRate;
+
+  const start = panel.getByRole('slider', { name: 'Start', exact: true });
+  await start.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(start).toHaveAttribute('aria-valuetext', `0.001 seconds, frame ${Math.round(rate / 1000)}`);
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(start).toHaveAttribute('aria-valuetext', `0.001 seconds, frame ${Math.round(rate / 1000) + 1}`);
+  await page.keyboard.press('PageUp');
+  await expect(start).toHaveAttribute('aria-valuetext', new RegExp(`frame ${101 * Math.round(rate / 1000) + 1}$`));
+  await page.keyboard.press('z');
+  const snapped = Number((await start.getAttribute('aria-valuetext')).split('frame ')[1]);
+  expect(Math.abs(snapped - (101 * Math.round(rate / 1000) + 1))).toBeLessThanOrEqual(2048);
+
+  await panel.getByRole('group', { name: 'Loop mode' }).getByText('Forward').click();
+  const loopStart = panel.getByRole('slider', { name: 'Loop start' });
+  await expect(loopStart).toBeEnabled();
+  await loopStart.focus();
+  await page.keyboard.press('Home');
+  await expect(loopStart).toHaveAttribute('aria-valuetext', new RegExp(`frame ${snapped + 1}$`));
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('status').filter({ hasText: 'Loop start cannot move past the marker before it' })).toHaveCount(1);
+  await expect(loopStart).toHaveAttribute('aria-valuetext', new RegExp(`frame ${snapped + 1}$`));
+
+  const root = panel.getByRole('spinbutton', { name: 'Root note' });
+  await root.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(root).toHaveAttribute('aria-valuetext', 'C#4');
+  await expect.poll(async () => Object.values((await saved(page, id)).devices).find((d) => d.type === 'sampler').params.rootNote).toBe(61);
+});
+
+test('sampler: a missing source shows "Audio not loaded" and importing the same file restores it', async ({ page }) => {
+  const id = await createProject(page, 'Missing');
+  await addSampler(page);
+  await expect.poll(async () => Object.values((await saved(page, id)).devices).some((d) => d.type === 'sampler')).toBe(true);
+  const doc = await saved(page, id);
+  const device = Object.values(doc.devices).find((d) => d.type === 'sampler');
+  const sha = await page.evaluate(async (bytes) => {
+    const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }, [...FIXTURES[0].buffer]);
+  device.sampler = { sourceId: sha, sourceName: 'tone-a.wav' };
+  doc.audioRate = 48000;
+  doc.sources[sha] = { id: sha, name: 'tone-a.wav', path: `audio/${sha}.wav`, sampleRate: 48000, channels: 1, frames: 96000, format: 'audio/wav', sha256: sha };
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [`w-rack:v1:project:${id}`, JSON.stringify(doc)]);
+  await page.reload();
+  await expect(page.getByRole('button', { name: /^Track 2: Track 2, Sampler/ })).toHaveAttribute('aria-pressed', 'true');
+  const panel = page.getByRole('region', { name: 'Sampler: Track 2' });
+  await expect(panel).toContainText('Audio not loaded: tone-a.wav');
+  await page.locator('input[type="file"]').first().setInputFiles([FIXTURES[0]]);
+  await expect(panel).toContainText('Sample: tone-a.wav, 2.00 s, Saved on this device');
+});
+
+test('settings list stored audio with its projects; Clear all data removes everything', async ({ page }) => {
+  await createProject(page, 'Kept');
+  await importFixtures(page, [FIXTURES[0]]);
+  await expect.poll(() => storedIds(page)).toHaveLength(1);
+  await page.goto('/settings');
+  const list = page.getByRole('list', { name: 'Stored audio files' });
+  await expect(list).toContainText('tone-a.wav');
+  await expect(list).toContainText('Used by Kept');
+  await page.getByRole('button', { name: 'Clear all data' }).click();
+  await page.getByRole('dialog', { name: 'Clear all data?' }).getByRole('button', { name: 'Clear all data' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('w-rack:')))).toEqual([]);
+  expect(await storedIds(page)).toEqual([]);
 });

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
@@ -10,8 +11,8 @@ import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getSource, importFiles } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
-import { addAudioClip, addAudioTrack, clipEndTick } from '@/lib/project/clip-commands';
-import { ticksPerBar } from '@/lib/project/model';
+import { addAudioClip, addAudioTrack, addInstrumentTrack, clipEndTick } from '@/lib/project/clip-commands';
+import { INSTRUMENT_LABELS, ticksPerBar } from '@/lib/project/model';
 import ClipProperties from './ClipProperties';
 import TimelineCanvas from './TimelineCanvas';
 import TimelineTree from './TimelineTree';
@@ -19,6 +20,14 @@ import useTimelineCommands from './useTimelineCommands';
 import { EDGE_PX, TAIL_BARS, TRACK_H, barText, clipAt, contentEnd, pxPerTick, sourceStatus, tickToX, xToTick } from './layout';
 
 const ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.oga';
+/** Snap steps in quarter notes (ARR-04); 'bar' snaps to the bar. */
+const SNAP_OPTIONS = [
+  { value: 'bar', label: 'Bar' },
+  { value: '1', label: '1/4' },
+  { value: '0.5', label: '1/8' },
+  { value: '0.25', label: '1/16' },
+];
+const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENT_LABELS).map(([value, label]) => ({ value, label }));
 
 /**
  * Arrangement timeline (assignment-3-scope.md, Audio clips): "Add audio
@@ -32,7 +41,6 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const meter = useMemo(() => new MeterMap(project.meter), [project.meter]);
   const { numerator, denominator } = project.meter[0];
   const barTicks = ticksPerBar(numerator, denominator);
-  const beatTicks = (4 * PPQ) / denominator;
   const rowIds = project.trackOrder.filter((id) => project.tracks[id]);
   const selection = view.selectedClipIds.filter((id) => project.clips[id]);
   const editCursor = view.playhead;
@@ -40,6 +48,9 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const [results, setResults] = useState([]);
   const [importing, setImporting] = useState(false);
   const [ghost, setGhost] = useState(null);
+  const [newInstrument, setNewInstrument] = useState('subtractive');
+  const [snap, setSnap] = useState('1');
+  const stepTicks = snap === 'bar' ? barTicks : Number(snap) * PPQ;
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
   const nameRef = useRef(null);
@@ -50,7 +61,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     project,
     rowIds,
     meter,
-    beatTicks,
+    stepTicks,
     editCursor,
     selection,
     setSelection,
@@ -70,7 +81,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   }
 
   function stepCursor(sign, unit) {
-    const step = unit === 'bar' ? barTicks : beatTicks;
+    const step = unit === 'bar' ? barTicks : stepTicks;
     setCursor(Math.round(editCursor / step) * step + sign * step);
   }
 
@@ -107,8 +118,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     }
   }
 
-  function addTrack() {
-    const added = addAudioTrack(commands.docRef.current);
+  function addTrack(type) {
+    const added = type ? addInstrumentTrack(commands.docRef.current, type) : addAudioTrack(commands.docRef.current);
     if (!added.ok) {
       announce(added.error.message);
       return;
@@ -130,7 +141,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     const hit = trackId ? clipAt(project, project.tracks[trackId], xToTick(x, view.zoom)) : null;
     if (!hit) {
       setSelection([]);
-      setCursor(Math.round(xToTick(x, view.zoom) / beatTicks) * beatTicks);
+      const t = xToTick(x, view.zoom);
+      setCursor(e.altKey ? t : Math.round(t / stepTicks) * stepTicks);
       return;
     }
     const left = tickToX(hit.start, view.zoom);
@@ -153,7 +165,9 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     const d = drag.current;
     if (!d) return;
     const { x, row } = pointerPosition(e);
-    const dTick = Math.round((x - d.x0) / pxPerTick(view.zoom) / beatTicks) * beatTicks;
+    const raw = Math.round((x - d.x0) / pxPerTick(view.zoom));
+    // Alt while dragging bypasses snap (ARR-04).
+    const dTick = e.altKey ? raw : Math.round(raw / stepTicks) * stepTicks;
     setGhost({ clipIds: d.clipIds, mode: d.mode, dTick, dRow: d.mode === 'move' ? row - d.row0 : 0 });
   }
 
@@ -180,9 +194,24 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         <Button onClick={() => fileRef.current?.click()} disabled={readOnly || importing}>
           {importing ? 'Adding audio…' : 'Add audio file'}
         </Button>
-        <Button onClick={addTrack} disabled={readOnly}>
+        <Button onClick={() => addTrack(null)} disabled={readOnly}>
           Add audio track
         </Button>
+        <Select
+          id="timeline-new-instrument"
+          label="Instrument"
+          value={newInstrument}
+          options={INSTRUMENT_OPTIONS}
+          disabled={readOnly}
+          onChange={setNewInstrument}
+        />
+        <Button onClick={() => addTrack(newInstrument)} disabled={readOnly}>
+          Add instrument track
+        </Button>
+        <Select id="timeline-snap" label="Snap" value={snap} options={SNAP_OPTIONS} onChange={(v) => {
+          setSnap(v);
+          announce(`Snap: ${SNAP_OPTIONS.find((o) => o.value === v).label}`);
+        }} />
         <Button onClick={() => commands.split(view.selectedTrackId)} disabled={readOnly}>
           Split at edit cursor
         </Button>

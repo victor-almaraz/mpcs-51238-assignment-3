@@ -96,7 +96,8 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
   /**
    * Applies an edited document: it saves after 500 ms and reaches the engine
-   * at once. An edit that drops a source removes stored audio no saved
+   * at once. Handlers build edits on projectRef.current, the newest document,
+   * so several edits in one event all take effect. An edit that drops a source removes stored audio no saved
    * project uses, once the save has happened.
    */
   function edit(next) {
@@ -245,7 +246,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
                 track={project.tracks[id]}
                 readMeter={meterFor(index)}
                 disabled={readOnly}
-                onChange={(changes) => edit(setTrack(project, id, changes))}
+                onChange={(changes) => edit(setTrack(projectRef.current, id, changes))}
               />
             ))}
           </ul>
@@ -254,7 +255,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
             pan={project.tracks[project.masterTrackId].pan}
             disabled={readOnly}
             onVolume={(db) => engine.setMasterVolume(db)}
-            onPan={(pan) => edit(setTrack(project, project.masterTrackId, { pan }))}
+            onPan={(pan) => edit(setTrack(projectRef.current, project.masterTrackId, { pan }))}
           />
         </div>
       </section>
@@ -274,10 +275,13 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
       {panelDevice ? (
         <InstrumentPanel
+          project={project}
           track={panelTrack}
           device={panelDevice}
+          onEdit={edit}
+          loading={loading}
           disabled={readOnly}
-          onParamChange={(deviceId, id, value) => edit(setDeviceParam(project, deviceId, id, value))}
+          onParamChange={(deviceId, id, value) => edit(setDeviceParam(projectRef.current, deviceId, id, value))}
         />
       ) : null}
     </>

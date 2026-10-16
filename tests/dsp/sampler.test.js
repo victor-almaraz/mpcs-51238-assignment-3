@@ -393,3 +393,93 @@ test('two renders are bit-identical', () => {
   };
   assert.deepEqual(run(), run());
 });
+
+// Engine integration: zones, source binding, mips and reports.
+import { Engine } from '../../src/dsp/engine/engine.js';
+import { NOTE_ON as LIVE_NOTE_ON } from '../../src/dsp/engine/live-input.js';
+import { compileModel } from '../../src/lib/audio/compile-model.js';
+import { addInstrumentTrack, pruneSources, samplerMipBytes, setSamplerSource } from '../../src/lib/project/clip-commands.js';
+import { createProject, setDeviceParam } from '../../src/lib/project/model.js';
+
+function samplerDoc() {
+  let n = 0;
+  const makeId = (p) => `${p}_${++n}`;
+  const doc = createProject({ name: 'S', tempo: 120, timeSignature: '4/4', now: 0, makeId });
+  const added = addInstrumentTrack(doc, 'sampler', 'Keys', makeId);
+  const deviceId = added.doc.tracks[added.trackId].deviceIds[0];
+  return { doc: added.doc, deviceId, index: 1 };
+}
+
+const SINE = Float32Array.from({ length: 48000 }, (_, i) => 0.5 * Math.sin((2 * Math.PI * 440 * i) / 48000));
+const ENTRY = { sourceId: 'src_s', name: 'sine.wav', frames: 48000, rate: 48000, channels: [SINE], mimeType: 'audio/wav' };
+
+function engineFor(doc) {
+  const engine = new Engine(48000);
+  engine.setModel(engine.prepareModel(compileModel(doc, 48000).model));
+  return engine;
+}
+
+function peakAfterNote(engine, index) {
+  engine.live(index, LIVE_NOTE_ON, 60, 100);
+  const l = new Float32Array(4096);
+  const r = new Float32Array(4096);
+  engine.process(l, r, 0, 4096);
+  return Math.max(...l.map(Math.abs));
+}
+
+test('engine: a sampler binds its zone source by reference and reports bound', () => {
+  const { doc, deviceId, index } = samplerDoc();
+  const set = setSamplerSource(doc, deviceId, ENTRY);
+  assert.ok(set.ok);
+  assert.ok(set.doc.sources.src_s);
+  const engine = engineFor(set.doc);
+  engine.setZone(deviceId, { sourceId: 'src_s', sourceName: 'sine.wav' });
+  assert.deepEqual(engine.takeReports(), [{ t: 'source-status', deviceId, sourceId: 'src_s', status: 'missing' }]);
+  assert.equal(peakAfterNote(engine, index), 0);
+  engine.addSource('src_s', [SINE]);
+  assert.deepEqual(engine.takeReports(), [{ t: 'source-status', deviceId, sourceId: 'src_s', status: 'bound' }]);
+  assert.equal(engine.kernels.get(deviceId).channels[0], SINE);
+  assert.ok(peakAfterNote(engine, index) > 0.01);
+  const [l1, l2] = buildMips(SINE);
+  engine.addMips('src_s', [{ level: 1, channels: [l1] }, { level: 2, channels: [l2] }]);
+  assert.equal(engine.kernels.get(deviceId).mips[0][0], l1);
+  assert.equal(engine.takeReports().length, 1); // the mips bind again
+  engine.prepareModel(compileModel(set.doc, 48000).model);
+  assert.deepEqual(engine.takeReports(), []); // an unchanged binding is not attempted again
+});
+
+test('engine: an invalid zone is reported once with its reason', () => {
+  const { doc, deviceId } = samplerDoc();
+  let d = setSamplerSource(doc, deviceId, ENTRY).doc;
+  d = setDeviceParam(d, deviceId, 'loopMode', 1); // forward, with loopStart = start = 0
+  const engine = engineFor(d);
+  engine.addSource('src_s', [SINE]);
+  engine.setZone(deviceId, { sourceId: 'src_s', sourceName: 'sine.wav' });
+  const reports = engine.takeReports();
+  assert.deepEqual(reports.find((r) => r.t === 'sampler-zone-invalid'), { t: 'sampler-zone-invalid', deviceId, zoneIndex: 0, reason: 'loop-markers-out-of-order' });
+  assert.deepEqual(engine.takeReports(), []);
+});
+
+test('sampler sources: the 60 s limit, mip memory and pruning keep sampler references', () => {
+  const { doc, deviceId } = samplerDoc();
+  const long = { ...ENTRY, sourceId: 'src_long', frames: 61 * 48000 };
+  assert.match(setSamplerSource(doc, deviceId, long).error.message, /at most 60 seconds/);
+  const d = setSamplerSource(doc, deviceId, ENTRY).doc;
+  assert.equal(samplerMipBytes(d), 0.75 * 48000 * 4);
+  assert.ok(pruneSources(d).sources.src_s);
+  const cleared = setSamplerSource(d, deviceId, null).doc;
+  assert.deepEqual(cleared.sources, {});
+});
+
+test('engine: a rejected zone reports reason null once its markers are valid again', () => {
+  const { doc, deviceId, index } = samplerDoc();
+  const d = setDeviceParam(setSamplerSource(doc, deviceId, ENTRY).doc, deviceId, 'loopMode', 1);
+  const engine = engineFor(d);
+  engine.addSource('src_s', [SINE]);
+  engine.setZone(deviceId, { sourceId: 'src_s', sourceName: 'sine.wav' });
+  engine.takeReports();
+  const loopStart = SAMPLER_PARAMS.findIndex((p) => p.id === 'loopStart');
+  engine.applyParams(Float64Array.of(index, 100 + loopStart, 0.25));
+  assert.deepEqual(engine.takeReports(), [{ t: 'sampler-zone-invalid', deviceId, zoneIndex: 0, reason: null }]);
+  assert.deepEqual(engine.takeReports(), []);
+});

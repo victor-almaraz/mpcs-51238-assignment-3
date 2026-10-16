@@ -75,7 +75,8 @@ const INT_FIELDS = ['start', 'length', 'srcStart', 'source', 'fadeIn', 'fadeOut'
  * srcStart, source (index into sourceIds), fadeIn, fadeOut: Int32Array;
  * gain: Float32Array; fadeInCurve, fadeOutCurve: Uint8Array; envStart:
  * Int32Array of count + 1 offsets into envFrame (Int32Array) and envGain
- * (Float32Array) }. Clips are sorted by start; envelope frames ascend per clip.
+ * (Float32Array) }. Clips are sorted by start; envelope frames ascend per clip
+ * and may lie outside the clip (anchors of segments crossing its edges).
  */
 function validateAudioClips(c, sourceCount) {
   if (!isObject(c) || !Array.isArray(c.id)) return 'bad-clips';
@@ -100,7 +101,7 @@ function validateAudioClips(c, sourceCount) {
     const hi = c.envStart[i + 1];
     if (hi < lo) return 'bad-envelope';
     for (let k = lo; k < hi; k++) {
-      if (c.envFrame[k] < 0 || !(c.envGain[k] >= 0) || !Number.isFinite(c.envGain[k])) return 'bad-envelope';
+      if (!(c.envGain[k] >= 0) || !Number.isFinite(c.envGain[k])) return 'bad-envelope';
       if (k > lo && c.envFrame[k] <= c.envFrame[k - 1]) return 'bad-envelope';
     }
   }
@@ -214,6 +215,24 @@ const ENGINE_VALIDATORS = {
   'source-remove'(msg) {
     return typeof msg.sourceId === 'string' ? null : 'bad-source';
   },
+  'source-mips'(msg) {
+    if (typeof msg.sourceId !== 'string') return 'bad-source';
+    if (!Array.isArray(msg.levels) || msg.levels.length !== 2) return 'bad-mips';
+    for (let i = 0; i < 2; i++) {
+      const l = msg.levels[i];
+      if (!isObject(l) || l.level !== i + 1 || !Array.isArray(l.channels) || l.channels.length < 1 || l.channels.length > 2) return 'bad-mips';
+      if (!l.channels.every((c) => c instanceof Float32Array && c.length > 0)) return 'bad-mips';
+    }
+    return null;
+  },
+  'sampler-zones'(msg) {
+    if (typeof msg.deviceId !== 'string') return 'bad-device';
+    if (msg.selection !== 0 || !Array.isArray(msg.zones) || msg.zones.length > 1) return 'bad-zones';
+    for (const z of msg.zones) {
+      if (!isObject(z) || !(z.sourceId === null || typeof z.sourceId === 'string') || typeof z.sourceName !== 'string') return 'bad-zones';
+    }
+    return null;
+  },
   live(msg) {
     if (!Number.isInteger(msg.track) || msg.track < 0 || msg.track >= MAX_TRACKS) return 'bad-track';
     if (!(msg.events instanceof Uint8Array) || msg.events.length % 3 !== 0) return 'bad-events';
@@ -226,11 +245,14 @@ export const ENGINE_IN = Object.freeze(Object.keys(ENGINE_VALIDATORS));
 
 /**
  * Messages the engine posts: ready { fs, blockSize }, ack { rev },
- * pos { playFrame, ctxFrame, playing, meters }, error { code, detail }.
+ * pos { playFrame, ctxFrame, playing, meters }, error { code, detail },
+ * source-status { deviceId, sourceId, status: 'bound' | 'missing' },
+ * sampler-zone-invalid { deviceId, zoneIndex, reason } (reason null once the
+ * zone is valid again).
  * meters: Float32Array of [peakL, peakR, meanSquareL, meanSquareR] for 16
  * track slots in model order, then the master.
  */
-export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error']);
+export const ENGINE_OUT = Object.freeze(['ready', 'ack', 'pos', 'error', 'source-status', 'sampler-zone-invalid']);
 
 /** Validates a message sent to the engine processor. */
 export function validateEngineMessage(msg) {

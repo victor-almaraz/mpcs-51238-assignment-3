@@ -209,7 +209,7 @@ Do not start the next task.
 ### Phase 9 — Audio import and clip management
 - **Goal:** audio tracks with full clip editing.
 - **Context:** `a3-audio-implementation.md` (Transfer and memory, Clip playback, Decoding), `assignment-3-scope.md` (Audio persistence), `project-model.md`.
-- **Files:** `src/lib/audio/{decode,peaks-client}.js`, `src/lib/storage/audio-store.js`, `src/workers/peaks.js`, `src/dsp/clips/*.js`, `src/lib/project/clip-commands.js`, `src/components/timeline/*.jsx`, `src/dsp/instruments/{sampler,sampler-zones}.js`, `src/dsp/core/{interp,halfband}.js`, `src/components/sampler/*.jsx`, `tests/dsp/{clips,sampler}.test.js`, `tests/e2e/audio-import.spec.js`.
+- **Files:** `src/lib/audio/{decode,peaks-client,source-cleanup}.js`, `src/lib/storage/audio-store.js`, `src/workers/peaks.js`, `src/dsp/clips/*.js`, `src/lib/project/clip-commands.js`, `src/components/timeline/*.{js,jsx}`, `src/components/studio/useProjectSources.js`, `src/components/ui/useThrottledAnnouncer.js`, `src/dsp/instruments/{sampler,sampler-zones}.js`, `src/dsp/core/{interp,halfband}.js`, `src/components/sampler/*.{js,jsx}`, `src/app/settings/StoredAudio.jsx`, `tests/dsp/{clips,sampler}.test.js`, `tests/e2e/audio-import.spec.js`.
 - **Tasks:**
   1. Multi-file import: hash, decode a copy, `source-add` with transferred copies, the 20-minute limit, per-file error messages.
   2. Peaks worker and multi-resolution waveform drawing.

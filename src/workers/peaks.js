@@ -1,11 +1,16 @@
 /*
- * Peaks worker (a3-audio-implementation.md, Decoding, hashing and peaks).
- * Loaded as a module worker from /worklets/workers/peaks.js. Receives
- * { t: 'peaks', id, sourceId, channels } with transferred channel copies and
- * replies { t: 'peaks', id, sourceId, levels } where each level is
- * { bucket, min, max }: Float32Array min/max pairs over both channels, level 0
- * at 256 frames per bucket, each level 4× coarser, up to 65 536 frames.
+ * Peaks worker (a3-audio-implementation.md, Decoding, hashing and peaks;
+ * Sampler → Mip levels). Loaded as a module worker from
+ * /worklets/workers/peaks.js. Both requests carry transferred channel copies:
+ *   { t: 'peaks', id, sourceId, channels } → { t: 'peaks', id, sourceId, levels }
+ *     where each level is { bucket, min, max }: Float32Array min/max pairs
+ *     over both channels, level 0 at 256 frames per bucket, each level 4×
+ *     coarser, up to 65 536 frames.
+ *   { t: 'mips', id, sourceId, channels } → { t: 'mips', id, sourceId, levels }
+ *     with levels [{ level: 1, channels }, { level: 2, channels }]: half-band
+ *     filtered, 2:1 decimated copies for the sampler.
  */
+import { buildMips } from '../dsp/core/halfband.js';
 
 /** Frames per bucket at level 0, the level step, and the coarsest bucket (project limits). */
 export const BASE_BUCKET = 256;
@@ -64,9 +69,15 @@ export function peakLevels(channels) {
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof window === 'undefined') {
   self.onmessage = (event) => {
     const msg = event.data;
-    if (msg?.t !== 'peaks') return;
-    const levels = peakLevels(msg.channels);
-    const transfer = levels.flatMap((l) => [l.min.buffer, l.max.buffer]);
-    self.postMessage({ t: 'peaks', id: msg.id, sourceId: msg.sourceId, levels }, transfer);
+    if (msg?.t === 'peaks') {
+      const levels = peakLevels(msg.channels);
+      const transfer = levels.flatMap((l) => [l.min.buffer, l.max.buffer]);
+      self.postMessage({ t: 'peaks', id: msg.id, sourceId: msg.sourceId, levels }, transfer);
+    } else if (msg?.t === 'mips') {
+      const perChannel = msg.channels.map((c) => buildMips(c));
+      const levels = [1, 2].map((level) => ({ level, channels: perChannel.map((m) => m[level - 1]) }));
+      const transfer = levels.flatMap((l) => l.channels.map((c) => c.buffer));
+      self.postMessage({ t: 'mips', id: msg.id, sourceId: msg.sourceId, levels }, transfer);
+    }
   };
 }

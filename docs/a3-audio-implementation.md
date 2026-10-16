@@ -127,7 +127,7 @@ export function ensureModule(ctx) {
 | `source-add` | `sourceId`, `channels` (array of `Float32Array`) | Transfer list: each channel's `buffer` |
 | `source-remove` | `sourceId` | References released at the next quantum |
 | `source-mips` | `sourceId`, `levels` (array of `{ level, channels }`) | Transfer list: each channel's `buffer` |
-| `sampler-zones` | `deviceId`, `selection`, `zones` | No sample data; sent whole on change |
+| `sampler-zones` | `deviceId`, `selection` (0), `zones` (at most one `{ sourceId, sourceName }`; empty unbinds) | No sample data; sent whole on change. Markers and the other zone settings are instrument params |
 | `panic` | — | Every voice, drum instance, preview and audition fades over 5 ms (project limit), effect state clears, transport stops |
 | `metronome` | `on`, `gainDb` | — |
 | `master` | `volumeDb` | Clamped to the master volume ParamDef (−60 to 0 dB, default −12) and smoothed |
@@ -140,7 +140,7 @@ export function ensureModule(ctx) {
 | `pos` | `playFrame`, `ctxFrame` (`currentFrame` at block start), `playing`, meters | Every `REPORT_QUANTA` quanta, `REPORT_QUANTA = max(1, round(0.025·fs/frames))` (project limit) |
 | `fault` | `trackId`, `slot`, `kind: 'nonfinite'` | Once per fault |
 | `source-status` | `deviceId`, `sourceId`, `status` (`bound` or `missing`) | Once per bind attempt |
-| `sampler-zone-invalid` | `deviceId`, `zoneIndex`, `reason` | Once per rejected zone |
+| `sampler-zone-invalid` | `deviceId`, `zoneIndex`, `reason` | Once per rejected zone; `reason: null` once the zone is valid again |
 | `progress` | `renderedFrames`, `totalFrames` | Offline only; every 0.25 s of rendered audio (project limit) |
 | `error` | `code`, `detail` | On protocol errors |
 
@@ -237,8 +237,10 @@ renderBlock(off, n):
 ## Clip playback
 ### Source addressing
 - A clip stores `sourceId`, `start` (ticks), `srcStart` and `srcLength` (frames), `gainDb`, fades, fade curves and envelope.
-- The project stores `audioRate`, the `fs` at which frame offsets were recorded. When a project opens at another `fs`, every frame offset is scaled by `round(x·fs/audioRate)` and `audioRate` is set to `fs`. `decodeAudioData` output always matches the context rate.
-- For timeline frame `F`, the read index is `srcStart + (F − clipStartFrame)`. Mono sources feed both channels through constant-power pan.
+- The project stores `audioRate`, the `fs` at which frame offsets were recorded (the first imported source's decode rate). When the context runs at another `fs`, the compile step scales the offsets from shared rounded boundaries (Gain stages); the document keeps its offsets. Sources decode again from their bytes at the context rate, so `decodeAudioData` output matches it.
+- For timeline frame `F`, the read index is `srcStart + (F − clipStartFrame)`. Mono sources feed both channels through constant-power pan; stereo sources use balance pan.
+- Rendering is a pure function of the play frame, so a split clip renders the same samples as the unsplit clip.
+- Transport stop and Panic fade sounding clips over 64 frames (project limit).
 
 ### Edit math
 | Edit | Rule |
@@ -257,8 +259,10 @@ renderBlock(off, n):
   - `equalPower`: `g = sin(x·π/2)`
   - `exp`: `g = x === 0 ? 0 : 10^(−3·(1 − x))`
   - A fade-out reads the table at `1 − x`.
-- Crossfades: where two clips on one track overlap by `L` frames, the compile step sets the earlier clip's fade-out and the later clip's fade-in to `L` with `equalPower` curves, so `a² + b² = 1`. The engine has no crossfade logic.
-- Gain envelope: breakpoints `{ frame, gain }` with clip-relative frames and linear gain 0–1.995 (−∞ to +6 dB). Segments are linear in gain; per sample `g += dg`, with `dg` computed on segment entry.
+- Crossfades: where a later clip on one track starts inside an earlier clip and ends after it, the overlap of `L` frames becomes the earlier clip's fade-out and the later clip's fade-in, `L` frames of `equalPower`, so `a² + b² = 1`. Each clip is compared with every earlier clip still sounding; the longest overlap wins. A clip lying wholly inside another gets no automatic fades. The engine has no crossfade logic.
+- Gain envelope: breakpoints `{ id, frame, gain }` with clip-relative frames and linear gain 0–1.995 (−∞ to +6 dB). Segments are linear in gain; per sample `g = g0 + (p − f0)·dg`, with `g0`, `f0` and `dg` found on segment entry, so the value does not depend on where rendering started. Points outside the clip anchor the segments that cross its edges.
+- Split, trim and join keep the gain at every kept frame: each part keeps the points that shape it plus the nearest point on each side. Rejoined parts of one split share their anchors and restore the clip exactly; other joins give each side its own gain up to the boundary, and a side without an envelope is unity. A split inside a fade is refused.
+- At another context rate, a clip spans `[round(F·r), round((F + length)·r))` with `F` its start frame at `audioRate` and `r = fs/audioRate`, and reads the source at the fixed offset `round((srcStart − F)·r)`, so the parts of a split stay contiguous.
 
 ## Instruments
 ### Shared rules

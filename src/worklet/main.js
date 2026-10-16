@@ -37,6 +37,11 @@ class EngineProcessor extends AudioWorkletProcessor {
   }
 
   onMessage(msg) {
+    this.handle(msg);
+    for (const report of this.engine.takeReports()) this.port.postMessage({ v: PROTOCOL_VERSION, ...report });
+  }
+
+  handle(msg) {
     const invalid = validateEngineMessage(msg);
     if (invalid) {
       this.error(invalid, msg?.t ?? null);
@@ -60,6 +65,12 @@ class EngineProcessor extends AudioWorkletProcessor {
         break;
       case 'source-remove':
         this.engine.removeSource(msg.sourceId, this.pendingModel);
+        break;
+      case 'source-mips':
+        this.engine.addMips(msg.sourceId, msg.levels);
+        break;
+      case 'sampler-zones':
+        this.engine.setZone(msg.deviceId, msg.zones[0] ?? null);
         break;
       case 'live':
         this.liveQueue.push(msg);

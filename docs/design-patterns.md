@@ -262,7 +262,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `ARR-03` Conventional edit commands
 - **Problem:** Non-standard keys force relearning.
-- **Solution:** Split at the playhead `Mod+E`; duplicate `Mod+D`; join `Mod+J`; delete `Delete` or `Backspace`; move by grid `Left`/`Right`; trim start `Alt+Left`/`Alt+Right`; trim end `Alt+Shift+Left`/`Alt+Shift+Right`; reorder tracks `Alt+Up`/`Alt+Down`. Every command also appears in the clip context menu and `HELP-02`.
+- **Solution:** Split at the edit cursor `Mod+E`; duplicate `Mod+D`; join `Mod+J`; delete `Delete` or `Backspace`; move by grid `Left`/`Right`; trim start `Alt+Left`/`Alt+Right`; trim end `Alt+Shift+Left`/`Alt+Shift+Right`; on a clip, `Alt+Up`/`Alt+Down` move it to the adjacent track of the same kind; on a track, they reorder tracks. Comma and period move the edit cursor by the grid step, with Shift by a bar. Every command also appears in the clip context menu and `HELP-02`.
 - **Prior art:** Ableton Live 12 uses `Mod+E` split, `Mod+D` duplicate, `Mod+J` consolidate. OSARA provides keyboard move and trim for REAPER items.
 - **W-Rack application:** Audio and MIDI clips; edge handles for pointer trim.
 - **Accessibility:** Results are announced ("Split Vox 1 at 5.1.1, two clips"); the context menu opens with `Shift+F10`.

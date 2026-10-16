@@ -22,9 +22,10 @@ const trackKindFor = (clip) => (clip.kind === 'midi' ? 'instrument' : 'audio');
  * Timeline commands shared by the keyboard mirror and the pointer layer. Each
  * reads the latest document from a ref (async imports and quick key repeats
  * never act on a stale copy), applies clip commands, calls `onEdit` once and
- * announces the result. `selection` is the selected clip IDs in order.
+ * announces the result. `selection` is the selected clip IDs in order;
+ * `stepTicks` is the snap step that nudges and trims use.
  */
-export default function useTimelineCommands({ project, rowIds, meter, beatTicks, editCursor, selection, setSelection, onEdit, announce, readOnly }) {
+export default function useTimelineCommands({ project, rowIds, meter, stepTicks, editCursor, selection, setSelection, onEdit, announce, readOnly }) {
   const docRef = useRef(project);
   useEffect(() => {
     docRef.current = project;
@@ -41,7 +42,7 @@ export default function useTimelineCommands({ project, rowIds, meter, beatTicks,
   /** Audio frames in one grid step (a beat) at tick `tick`. */
   function stepFrames(doc, tick) {
     const tempo = audioTempo(doc);
-    return tempo.frameAt(tick + beatTicks) - tempo.frameAt(tick);
+    return tempo.frameAt(tick + stepTicks) - tempo.frameAt(tick);
   }
 
   /** Moves the selection by `dTick` ticks and `dRow` tracks of the same kind. */
@@ -95,13 +96,13 @@ export default function useTimelineCommands({ project, rowIds, meter, beatTicks,
     const clips = selectedClips(doc);
     for (const clip of clips) {
       let delta;
-      if (clip.kind === 'midi') delta = dTick ?? steps * beatTicks;
+      if (clip.kind === 'midi') delta = dTick ?? steps * stepTicks;
       else {
         const at = edge === 'start' ? clip.start : clipEndTick(doc, clip);
         if (dTick !== undefined) {
           const tempo = audioTempo(doc);
           delta = tempo.frameAt(Math.max(0, at + dTick)) - tempo.frameAt(at);
-        } else delta = steps * stepFrames(doc, steps < 0 ? Math.max(0, at - beatTicks) : at);
+        } else delta = steps * stepFrames(doc, steps < 0 ? Math.max(0, at - stepTicks) : at);
       }
       doc = (edge === 'start' ? trimStart : trimEnd)(doc, clip.id, delta).doc;
     }
@@ -194,6 +195,22 @@ export default function useTimelineCommands({ project, rowIds, meter, beatTicks,
   }
 
   const clipEnd = (clip) => clipEndTick(docRef.current, clip);
+  const snapStep = () => stepTicks;
 
-  return { docRef, commit, clipEnd, move, moveToRow, trim, split, join, joinPair, duplicate, remove };
+  /** Moves track `trackId` up (−1) or down (+1) in the track order. */
+  function moveTrack(trackId, dir) {
+    if (readOnly) return;
+    const doc = docRef.current;
+    const order = [...doc.trackOrder];
+    const at = order.indexOf(trackId);
+    const to = at + dir;
+    if (at < 0 || to < 0 || to >= order.length) {
+      announce(dir < 0 ? 'Already the first track' : 'Already the last track');
+      return;
+    }
+    [order[at], order[to]] = [order[to], order[at]];
+    commit({ ...doc, trackOrder: order }, `${doc.tracks[trackId].name} moved to position ${to + 1}`);
+  }
+
+  return { docRef, commit, clipEnd, snapStep, moveTrack, move, moveToRow, trim, split, join, joinPair, duplicate, remove };
 }

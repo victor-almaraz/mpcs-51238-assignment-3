@@ -99,6 +99,64 @@ function extensionFor(name, mimeType) {
 }
 
 /**
+ * Returns `doc` with a SourceRef for `source` (a decode.js entry) in
+ * `doc.sources`, setting `doc.audioRate` on the first source. Frames are
+ * recorded at audioRate.
+ */
+export function withSourceRef(doc, source) {
+  const next = doc.audioRate ? doc : { ...doc, audioRate: source.rate };
+  if (next.sources[source.sourceId]) return next;
+  return {
+    ...next,
+    sources: {
+      ...next.sources,
+      [source.sourceId]: {
+        id: source.sourceId,
+        name: source.name,
+        path: `audio/${source.sourceId}.${extensionFor(source.name, source.mimeType)}`,
+        sampleRate: next.audioRate,
+        channels: Array.isArray(source.channels) ? source.channels.length : source.channels,
+        frames: Math.round((source.frames * next.audioRate) / source.rate),
+        format: source.mimeType || '',
+        sha256: source.sourceId,
+      },
+    },
+  };
+}
+
+/** Longest sampler-bound source, seconds, and the mip memory limit, bytes (project limits). */
+export const SAMPLER_MAX_SOURCE_S = 60;
+export const SAMPLER_MIP_BYTES = 64 * 1024 * 1024;
+
+/** Mip memory of the sources sampler devices use: 0.75 × frames × channels × 4 bytes each. */
+export function samplerMipBytes(doc) {
+  const ids = new Set(Object.values(doc.devices).map((d) => d.sampler?.sourceId).filter(Boolean));
+  let bytes = 0;
+  for (const id of ids) {
+    const ref = doc.sources[id];
+    if (ref) bytes += 0.75 * ref.frames * ref.channels * 4;
+  }
+  return bytes;
+}
+
+/**
+ * Sets sampler device `deviceId`'s zone source to `source` (a decode.js
+ * entry), or clears it with null. Enforces the 60 s source and 64 MB mip limits.
+ */
+export function setSamplerSource(doc, deviceId, source) {
+  const device = doc.devices[deviceId];
+  if (!device || device.type !== 'sampler') return fail('missing', 'No sampler.');
+  if (source === null) return { ok: true, doc: pruneSources({ ...doc, devices: { ...doc.devices, [deviceId]: { ...device, sampler: null } } }) };
+  if (source.frames / source.rate > SAMPLER_MAX_SOURCE_S) {
+    return fail('limit', `${source.name} is longer than 60 seconds. A sampler source can be at most 60 seconds long.`);
+  }
+  let next = withSourceRef(doc, source);
+  next = { ...next, devices: { ...next.devices, [deviceId]: { ...device, sampler: { sourceId: source.sourceId, sourceName: source.name } } } };
+  if (samplerMipBytes(next) > SAMPLER_MIP_BYTES) return fail('limit', `${source.name} was not set. Sampler sources can use at most 64 MB of memory.`);
+  return { ok: true, doc: pruneSources(next) };
+}
+
+/**
  * Adds a clip of the whole `source` ({ sourceId, name, frames, rate,
  * channels, mimeType }) at tick `tick` on audio track `trackId`, or on a new
  * audio track when `trackId` is not an audio track. Records the source in
@@ -115,25 +173,8 @@ export function addAudioClip(doc, { trackId, tick, source }, makeId = createId) 
     next = added.doc;
     target = added.trackId;
   }
-  const frames = Math.round((source.frames * next.audioRate) / source.rate);
-  if (!next.sources[source.sourceId]) {
-    next = {
-      ...next,
-      sources: {
-        ...next.sources,
-        [source.sourceId]: {
-          id: source.sourceId,
-          name: source.name,
-          path: `audio/${source.sourceId}.${extensionFor(source.name, source.mimeType)}`,
-          sampleRate: next.audioRate,
-          channels: source.channels.length ?? source.channels,
-          frames,
-          format: source.mimeType || '',
-          sha256: source.sourceId,
-        },
-      },
-    };
-  }
+  next = withSourceRef(next, source);
+  const frames = next.sources[source.sourceId].frames;
   const clipId = makeId('clp');
   const clip = {
     id: clipId,
@@ -174,11 +215,48 @@ function setClip(doc, clip) {
   return { ...doc, clips: { ...doc.clips, [clip.id]: clip } };
 }
 
-/** Drops SourceRefs no clip uses any more. */
-function pruneSources(doc) {
+/** Drops SourceRefs no audio clip or sampler zone uses any more. */
+export function pruneSources(doc) {
   const used = new Set(Object.values(doc.clips).filter((c) => c.kind === 'audio').map((c) => c.sourceId));
+  for (const device of Object.values(doc.devices)) if (device.sampler?.sourceId) used.add(device.sampler.sourceId);
   const keep = Object.fromEntries(Object.entries(doc.sources).filter(([id]) => used.has(id)));
   return Object.keys(keep).length === Object.keys(doc.sources).length ? doc : { ...doc, sources: keep };
+}
+
+/**
+ * Envelope points that shape clip frames [lo, hi): the points inside plus the
+ * nearest point on each side. Points outside a clip are kept as anchors, so a
+ * segment that crosses a split or trim edge keeps its slope.
+ */
+function envelopeWindow(envelope, lo, hi) {
+  let before = -1;
+  let after = -1;
+  envelope.forEach((p, i) => {
+    if (p.frame < lo) before = i;
+    else if (p.frame >= hi && after < 0) after = i;
+  });
+  return envelope.filter((p, i) => i === before || i === after || (p.frame >= lo && p.frame < hi));
+}
+
+const shiftEnvelope = (envelope, d) => envelope.map((p) => ({ ...p, frame: p.frame - d }));
+
+/** Envelope gain at clip frame `p`: linear between points, held outside them, 1 without points. */
+export function envelopeGainAt(envelope, p) {
+  if (envelope.length === 0) return 1;
+  if (p <= envelope[0].frame) return envelope[0].gain;
+  for (let i = 1; i < envelope.length; i++) {
+    const b = envelope[i];
+    if (p < b.frame) {
+      const a = envelope[i - 1];
+      return a.gain + ((p - a.frame) * (b.gain - a.gain)) / (b.frame - a.frame);
+    }
+  }
+  return envelope[envelope.length - 1].gain;
+}
+
+/** Envelope points inside the clip (frames 0 to length − 1), the ones the properties panel edits. */
+export function visibleEnvelope(clip) {
+  return clip.envelope.filter((p) => p.frame >= 0 && p.frame < clip.sourceLength);
 }
 
 /**
@@ -238,7 +316,9 @@ export function deleteClip(doc, clipId) {
 
 /**
  * Splits a clip at tick `tick` (strictly inside it). Audio: d = frameAt(T) −
- * frameAt(start); left keeps d frames, right starts at T with srcStart + d.
+ * frameAt(start); left keeps d frames, right starts at T with srcStart + d;
+ * each part keeps the envelope points that shape it, so both render the same
+ * samples as the unsplit clip. A split inside a fade is refused.
  * MIDI: notes before the split stay left (cropped at it), the rest move right.
  * Returns { ok, doc, leftId, rightId }.
  */
@@ -254,7 +334,10 @@ export function splitClip(doc, clipId, tick, makeId = createId) {
     const tempo = audioTempo(doc);
     const d = tempo.frameAt(tick) - tempo.frameAt(clip.start);
     if (d < MIN_CLIP_FRAMES || clip.sourceLength - d < MIN_CLIP_FRAMES) return fail('invalid', 'Each part of a split needs at least 64 frames.');
-    left = { ...clip, sourceLength: d, fadeOut: { length: 0, curve: clip.fadeOut.curve }, envelope: clip.envelope.filter((p) => p.frame < d) };
+    if (d < clip.fadeIn.length || clip.sourceLength - d < clip.fadeOut.length) {
+      return fail('invalid', 'The split point is inside a fade. Split outside the fades or shorten them first.');
+    }
+    left = { ...clip, sourceLength: d, fadeOut: { length: 0, curve: clip.fadeOut.curve }, envelope: envelopeWindow(clip.envelope, 0, d) };
     right = {
       ...clip,
       id: rightId,
@@ -262,7 +345,7 @@ export function splitClip(doc, clipId, tick, makeId = createId) {
       sourceOffset: clip.sourceOffset + d,
       sourceLength: clip.sourceLength - d,
       fadeIn: { length: 0, curve: clip.fadeIn.curve },
-      envelope: clip.envelope.filter((p) => p.frame >= d).map((p) => ({ ...p, frame: p.frame - d })),
+      envelope: shiftEnvelope(envelopeWindow(clip.envelope, d, clip.sourceLength), d),
     };
   } else {
     const d = tick - clip.start;
@@ -305,8 +388,30 @@ export function joinBlocker(doc, aId, bId) {
   return null;
 }
 
-/** Joins B into A (A keeps its fade-in, takes B's fade-out; envelopes concatenate). */
-export function joinClips(doc, aId, bId) {
+/**
+ * The joined envelope of audio clips A and B. Parts of one split share their
+ * boundary segment's anchor points (by point ID) and rejoin exactly. Otherwise
+ * each side keeps its own gain up to the boundary: A's value at its last frame
+ * and B's at its first become points, and a side without an envelope is 1.
+ */
+function joinEnvelopes(a, b, makeId) {
+  const len = a.sourceLength;
+  if (a.envelope.length === 0 && b.envelope.length === 0) return [];
+  const inA = a.envelope.filter((p) => p.frame < len);
+  const inB = shiftEnvelope(b.envelope, -len).filter((p) => p.frame >= len);
+  const ids = (env) => new Set(env.filter((p) => p.id !== undefined).map((p) => p.id));
+  const aIds = ids(a.envelope);
+  const bIds = ids(b.envelope);
+  const continuous =
+    a.envelope.some((p) => p.frame >= len && bIds.has(p.id)) && b.envelope.some((p) => p.frame < 0 && aIds.has(p.id));
+  if (continuous) return [...inA, ...inB];
+  const edgeA = { id: makeId('env'), frame: len - 1, gain: envelopeGainAt(a.envelope, len - 1) };
+  const edgeB = { id: makeId('env'), frame: len, gain: envelopeGainAt(b.envelope, 0) };
+  return [...inA.filter((p) => p.frame < len - 1), edgeA, edgeB, ...inB.filter((p) => p.frame > len)];
+}
+
+/** Joins B into A (A keeps its fade-in and takes B's fade-out; joinEnvelopes merges the envelopes). */
+export function joinClips(doc, aId, bId, makeId = createId) {
   const blocker = joinBlocker(doc, aId, bId);
   if (blocker) return fail('invalid', blocker);
   const a = doc.clips[aId];
@@ -317,7 +422,7 @@ export function joinClips(doc, aId, bId) {
           ...a,
           sourceLength: a.sourceLength + b.sourceLength,
           fadeOut: b.fadeOut,
-          envelope: [...a.envelope, ...b.envelope.map((p) => ({ ...p, frame: p.frame + a.sourceLength }))],
+          envelope: joinEnvelopes(a, b, makeId),
         }
       : { ...a, length: a.length + b.length, notes: [...a.notes, ...b.notes.map((n) => ({ ...n, tick: n.tick + a.length }))] };
   const removed = deleteClip(setClip(doc, joined), bId);
@@ -345,17 +450,18 @@ export function trimStart(doc, clipId, delta) {
       }),
     };
   }
-  const d = clamp(delta, -clip.sourceOffset, clip.sourceLength - MIN_CLIP_FRAMES);
   const tempo = audioTempo(doc);
-  const startFrame = Math.max(0, tempo.frameAt(clip.start) + d);
+  const startFrame = tempo.frameAt(clip.start);
+  // The start cannot move before the source start or before bar 1.
+  const d = clamp(delta, Math.max(-clip.sourceOffset, -startFrame), clip.sourceLength - MIN_CLIP_FRAMES);
   return {
     ok: true,
     doc: setClip(doc, {
       ...clip,
-      start: tempo.tickAt(startFrame),
+      start: tempo.tickAt(startFrame + d),
       sourceOffset: clip.sourceOffset + d,
       sourceLength: clip.sourceLength - d,
-      envelope: clip.envelope.map((p) => ({ ...p, frame: p.frame - d })).filter((p) => p.frame >= 0),
+      envelope: shiftEnvelope(envelopeWindow(clip.envelope, d, clip.sourceLength), d),
     }),
   };
 }
@@ -368,7 +474,7 @@ export function trimEnd(doc, clipId, delta) {
   if (clip.kind === 'midi') return { ok: true, doc: setClip(doc, { ...clip, length: Math.max(1, clip.length + delta) }) };
   const sourceFrames = doc.sources[clip.sourceId]?.frames ?? clip.sourceOffset + clip.sourceLength;
   const length = clamp(clip.sourceLength + delta, MIN_CLIP_FRAMES, sourceFrames - clip.sourceOffset);
-  return { ok: true, doc: setClip(doc, { ...clip, sourceLength: length, envelope: clip.envelope.filter((p) => p.frame < length) }) };
+  return { ok: true, doc: setClip(doc, { ...clip, sourceLength: length, envelope: envelopeWindow(clip.envelope, 0, length) }) };
 }
 
 /** Sets clip gain in dB, −∞ (the minimum) to +12 dB. */
@@ -392,29 +498,43 @@ export function setFade(doc, clipId, which, length, curve) {
   return { ok: true, doc: setClip(doc, { ...clip, [which]: fade }) };
 }
 
-/** Adds an envelope point at clip-relative `frame` with linear `gain` (0 to +6 dB). Points stay sorted. */
-export function addEnvelopePoint(doc, clipId, frame, gain) {
+/**
+ * Adds an envelope point at clip-relative `frame` (0 to length − 1) with
+ * linear `gain` (0 to +6 dB); a point already at that frame takes the gain.
+ * Points stay sorted. Returns { ok, doc, pointId }.
+ */
+export function addEnvelopePoint(doc, clipId, frame, gain, makeId = createId) {
   requireInt(frame, 'frame');
   const clip = getClip(doc, clipId);
   if (!clip || clip.kind !== 'audio') return fail('missing', 'No audio clip.');
-  const point = { frame: clamp(frame, 0, clip.sourceLength - 1), gain: clamp(gain, 0, ENVELOPE_GAIN_MAX) };
-  const envelope = [...clip.envelope.filter((p) => p.frame !== point.frame), point].sort((a, b) => a.frame - b.frame);
+  const at = clamp(frame, 0, clip.sourceLength - 1);
+  const g = clamp(gain, 0, ENVELOPE_GAIN_MAX);
+  const existing = clip.envelope.find((p) => p.frame === at);
+  const point = existing ? { ...existing, gain: g } : { id: makeId('env'), frame: at, gain: g };
+  const envelope = [...clip.envelope.filter((p) => p !== existing), point].sort((a, b) => a.frame - b.frame);
+  return { ok: true, doc: setClip(doc, { ...clip, envelope }), pointId: point.id };
+}
+
+/**
+ * Sets envelope point `pointId` to `frame` and `gain`. The frame stays inside
+ * the clip and strictly between the neighbouring points, so the order holds.
+ */
+export function setEnvelopePoint(doc, clipId, pointId, frame, gain) {
+  const clip = getClip(doc, clipId);
+  const i = clip?.envelope?.findIndex((p) => p.id === pointId) ?? -1;
+  if (i < 0) return fail('missing', 'No such envelope point.');
+  const lo = Math.max(0, (clip.envelope[i - 1]?.frame ?? -1) + 1);
+  const hi = Math.min(clip.sourceLength - 1, (clip.envelope[i + 1]?.frame ?? clip.sourceLength) - 1);
+  const point = { ...clip.envelope[i], frame: lo <= hi ? clamp(Math.round(frame), lo, hi) : clip.envelope[i].frame, gain: clamp(gain, 0, ENVELOPE_GAIN_MAX) };
+  const envelope = clip.envelope.map((p, j) => (j === i ? point : p));
   return { ok: true, doc: setClip(doc, { ...clip, envelope }) };
 }
 
-/** Sets envelope point `index` to `frame` and `gain`; points stay sorted. */
-export function setEnvelopePoint(doc, clipId, index, frame, gain) {
+/** Removes envelope point `pointId`. */
+export function removeEnvelopePoint(doc, clipId, pointId) {
   const clip = getClip(doc, clipId);
-  if (!clip?.envelope?.[index]) return fail('missing', 'No such envelope point.');
-  const rest = clip.envelope.filter((_, i) => i !== index);
-  return addEnvelopePoint(setClip(doc, { ...clip, envelope: rest }), clipId, frame, gain);
-}
-
-/** Removes envelope point `index`. */
-export function removeEnvelopePoint(doc, clipId, index) {
-  const clip = getClip(doc, clipId);
-  if (!clip?.envelope?.[index]) return fail('missing', 'No such envelope point.');
-  return { ok: true, doc: setClip(doc, { ...clip, envelope: clip.envelope.filter((_, i) => i !== index) }) };
+  if (!clip?.envelope?.some((p) => p.id === pointId)) return fail('missing', 'No such envelope point.');
+  return { ok: true, doc: setClip(doc, { ...clip, envelope: clip.envelope.filter((p) => p.id !== pointId) }) };
 }
 
 /** Renames a clip (1–60 characters after trimming). */

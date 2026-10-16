@@ -53,6 +53,9 @@ export class Engine {
     this.strips = new Map(); // trackId → ChannelStrip, reused across models
     this.clipTracks = new Map(); // trackId → clip player state of the last prepared model
     this.sources = new Map(); // sourceId → [Float32Array] or [L, R], from source-add
+    this.mips = new Map(); // sourceId → [[level 1 channels], [level 2 channels]], from source-mips
+    this.zones = new Map(); // sampler deviceId → { sourceId, sourceName }, from sampler-zones
+    this.reports = []; // source-status and sampler-zone-invalid messages to post
     this.generation = 0;
     this.trackBuf = new Float32Array(BLOCK);
     this.trackBufR = new Float32Array(BLOCK);
@@ -106,7 +109,9 @@ export class Engine {
         if (created) settleSmoothers(kernel);
         kernel.seed = hash32(this.seed, index, 0);
         kernel.generation = generation;
+        kernel.deviceId = track.deviceId;
         kernels.set(track.deviceId, kernel);
+        if (track.type === 'sampler') this.bindSampler(kernel);
         return kernel;
       },
       (track) => {
@@ -150,9 +155,10 @@ export class Engine {
     this.rebindSources(pending);
   }
 
-  /** Drops a source (source-remove); clips that use it fall silent. */
+  /** Drops a source and its mips (source-remove); clips and samplers that use it fall silent. */
   removeSource(sourceId, pending = null) {
     this.sources.delete(sourceId);
+    this.mips.delete(sourceId);
     this.rebindSources(pending);
   }
 
@@ -160,6 +166,74 @@ export class Engine {
     for (const model of pending === null ? [this.model] : [this.model, pending]) {
       for (const track of model.tracks) if (track.audio !== null) bindSources(track.audio, this.sources);
     }
+    this.rebindSamplers();
+  }
+
+  /** Stores mip levels 1 and 2 for a source (source-mips: [{ level, channels }]) and rebinds samplers using it. */
+  addMips(sourceId, levels) {
+    this.mips.set(sourceId, [levels[0].channels, levels[1].channels]);
+    this.rebindSamplers();
+  }
+
+  /** Sets a sampler's zone source (sampler-zones); a null sourceId unbinds it. */
+  setZone(deviceId, zone) {
+    if (zone && zone.sourceId) this.zones.set(deviceId, zone);
+    else this.zones.delete(deviceId);
+    const kernel = this.kernels.get(deviceId);
+    if (kernel?.type === 'sampler') this.bindSampler(kernel);
+  }
+
+  rebindSamplers() {
+    for (const kernel of this.kernels.values()) if (kernel.type === 'sampler') this.bindSampler(kernel);
+  }
+
+  /**
+   * Binds a sampler kernel to its zone's source and mips by reference. A bind
+   * attempt that changes nothing is skipped; others report source-status.
+   */
+  bindSampler(kernel) {
+    const zone = this.zones.get(kernel.deviceId) ?? null;
+    const channels = zone ? (this.sources.get(zone.sourceId) ?? null) : null;
+    const mips = zone ? (this.mips.get(zone.sourceId) ?? null) : null;
+    if (kernel.boundZone === zone && kernel.boundChannels === channels && kernel.boundMips === mips) return;
+    kernel.boundZone = zone;
+    kernel.boundChannels = channels;
+    kernel.boundMips = mips;
+    if (zone === null) {
+      if (kernel.channels) kernel.unbindSource();
+      kernel.takeMissingReport();
+      return;
+    }
+    if (channels === null) {
+      kernel.unbindSource();
+      kernel.takeMissingReport();
+      this.reports.push({ t: 'source-status', deviceId: kernel.deviceId, sourceId: zone.sourceId, status: 'missing' });
+      return;
+    }
+    kernel.bindSource(channels, mips, zone.sourceName);
+    this.reports.push({ t: 'source-status', deviceId: kernel.deviceId, sourceId: zone.sourceId, status: 'bound' });
+  }
+
+  /**
+   * Returns and clears the reports gathered since the last call, adding any
+   * zone a sampler rejected, and `reason: null` once a rejected zone is valid
+   * again (allocates; call from onmessage).
+   */
+  takeReports() {
+    for (const kernel of this.kernels.values()) {
+      if (kernel.type !== 'sampler') continue;
+      const reason = kernel.takeZoneReport();
+      if (reason) {
+        kernel.zoneRejected = true;
+        this.reports.push({ t: 'sampler-zone-invalid', deviceId: kernel.deviceId, zoneIndex: 0, reason });
+      } else if (kernel.zoneRejected && (kernel.zoneOk || !kernel.channels)) {
+        kernel.zoneRejected = false;
+        this.reports.push({ t: 'sampler-zone-invalid', deviceId: kernel.deviceId, zoneIndex: 0, reason: null });
+      }
+    }
+    const out = this.reports;
+    this.reports = [];
+    return out;
   }
 
   /**

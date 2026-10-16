@@ -62,7 +62,15 @@ async function run(mode, fn) {
       resolve(fail('failed', err));
       return;
     }
-    const request = fn(tx.objectStore(STORE));
+    let request;
+    try {
+      request = fn(tx.objectStore(STORE));
+    } catch (err) {
+      // add() throws synchronously for values it cannot clone (DataCloneError).
+      tx.abort();
+      resolve(fail(isQuota(err) ? 'quota' : 'failed', err));
+      return;
+    }
     let value;
     request.onsuccess = () => {
       value = request.result;

@@ -5,6 +5,7 @@ import { sectionHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { instrumentFor } from '@/dsp/instruments/registry';
 import { INSTRUMENT_LABELS } from '@/lib/project/model';
+import SamplerPanel from '@/components/sampler/SamplerPanel';
 import DrumMachinePanel from './DrumMachinePanel';
 import ParamControl from './ParamControl';
 
@@ -23,9 +24,10 @@ function groupParams(defs) {
 /**
  * Parameter panel for a track's instrument, generated from its ParamDefs: a
  * radio group per enum, a slider with unit value text per number.
- * `onParamChange(deviceId, paramId, value)` receives plain, clamped values.
+ * `onParamChange(deviceId, paramId, value)` receives plain, clamped values;
+ * the sampler panel also edits the document through `onEdit`.
  */
-export default function InstrumentPanel({ track, device, onParamChange, disabled }) {
+export default function InstrumentPanel({ project, track, device, onParamChange, onEdit, disabled, loading }) {
   const entry = instrumentFor(device.type);
   const name = INSTRUMENT_LABELS[device.type] ?? device.type;
   const control = (def) => (
@@ -44,6 +46,8 @@ export default function InstrumentPanel({ track, device, onParamChange, disabled
       </h2>
       {device.type === 'drums' ? (
         <DrumMachinePanel device={device} disabled={disabled} onParamChange={onParamChange} />
+      ) : device.type === 'sampler' ? (
+        <SamplerPanel project={project} device={device} onEdit={onEdit} onParamChange={onParamChange} disabled={disabled} loading={loading} />
       ) : entry ? (
         <fieldset disabled={disabled} className="flex flex-col gap-3">
           {groupParams(entry.params).map((item) =>

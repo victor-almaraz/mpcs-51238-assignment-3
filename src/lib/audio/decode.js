@@ -129,6 +129,14 @@ export async function importFiles(files, { rate = DEFAULT_DECODE_RATE, projectSo
     const sourceId = await sha256Hex(bytes);
     const loaded = sources.get(sourceId);
     if (loaded) {
+      // Sources stay in memory across projects, so the limit applies here too.
+      const length = loaded.frames / loaded.rate;
+      if (!known.has(sourceId) && seconds + length > MAX_PROJECT_AUDIO_S) {
+        onResult({ ok: false, name, message: limitReached(name) });
+        continue;
+      }
+      if (!known.has(sourceId)) seconds += length;
+      known.add(sourceId);
       const source = loaded.stored === 'device' ? loaded : await store(loaded);
       onResult(source.stored === 'device' ? { ok: true, source, reused: true } : { ok: true, source, reused: true, message: sessionOnly(name) });
       continue;

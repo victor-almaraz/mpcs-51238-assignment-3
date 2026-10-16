@@ -12,6 +12,7 @@ import {
   addAudioTrack,
   addEnvelopePoint,
   clipEndTick,
+  envelopeGainAt,
   deleteClip,
   duplicateClip,
   joinBlocker,
@@ -25,7 +26,7 @@ import {
   trimEnd,
   trimStart,
 } from '../../src/lib/project/clip-commands.js';
-import { createProject, setTrack } from '../../src/lib/project/model.js';
+import { createProject, setTempo, setTrack } from '../../src/lib/project/model.js';
 import { peak } from '../support/signal.js';
 
 const FS = 48000;
@@ -101,13 +102,17 @@ test('split then join restores the identical clip', () => {
   assert.deepEqual(joined.doc.sources, enveloped.sources);
 });
 
-test('a split clip renders the same as the unsplit clip', () => {
+test('a split clip renders the same as the unsplit clip, envelope and fades included', () => {
   const { doc, clipId, makeId } = docWithClip();
-  const shaped = setClipGain(setFade(doc, clipId, 'fadeIn', 4000, 'linear').doc, clipId, -3).doc;
+  let shaped = setClipGain(setFade(doc, clipId, 'fadeIn', 4000, 'linear').doc, clipId, -3).doc;
+  shaped = setFade(shaped, clipId, 'fadeOut', 3000, 'exp').doc;
+  // A segment from frame 10000 to 30000 crosses the split at frame 25025.
+  shaped = addEnvelopePoint(shaped, clipId, 10000, 0.2, makeId).doc;
+  shaped = addEnvelopePoint(shaped, clipId, 30000, 1.4, makeId).doc;
   const split = splitClip(shaped, clipId, 1001, makeId).doc; // frame 25025, inside a block
   const channels = [tone(96000)];
-  const [al, ar] = render(shaped, channels, 40000);
-  const [bl, br] = render(split, channels, 40000);
+  const [al, ar] = render(shaped, channels, 96000);
+  const [bl, br] = render(split, channels, 96000);
   assert.ok(peak(al) > 0.05);
   assert.deepEqual(bl, al);
   assert.deepEqual(br, ar);
@@ -250,4 +255,71 @@ test('track mixer edits on audio tracks are params, not a new model', () => {
   const { doc, trackId } = docWithClip();
   const next = setTrack(doc, trackId, { gainDb: -6 });
   assert.deepEqual(paramChanges(doc, next), [1, 0, -6]);
+});
+
+test('split refuses points inside a fade', () => {
+  const { doc, clipId } = docWithClip();
+  const faded = setFade(doc, clipId, 'fadeIn', 30000, 'linear').doc;
+  assert.match(splitClip(faded, clipId, 1001).error.message, /inside a fade/);
+});
+
+test('split, trim and join keep the envelope gain at every kept frame', () => {
+  const { doc, clipId, makeId } = docWithClip();
+  let d = addEnvelopePoint(doc, clipId, 0, 0, makeId).doc;
+  d = addEnvelopePoint(d, clipId, 48000, 1, makeId).doc;
+  const env = d.clips[clipId].envelope;
+  const split = splitClip(d, clipId, 960, makeId); // frame 24000
+  const left = split.doc.clips[split.leftId].envelope;
+  const right = split.doc.clips[split.rightId].envelope;
+  for (const p of [0, 12000, 23999]) assert.equal(envelopeGainAt(left, p), envelopeGainAt(env, p));
+  for (const p of [0, 6000, 30000]) assert.equal(envelopeGainAt(right, p), envelopeGainAt(env, p + 24000));
+  const trimmed = trimStart(d, clipId, 30000).doc.clips[clipId].envelope;
+  assert.equal(envelopeGainAt(trimmed, 0), envelopeGainAt(env, 30000));
+  const ended = trimEnd(d, clipId, -60000).doc.clips[clipId].envelope;
+  assert.equal(envelopeGainAt(ended, 20000), envelopeGainAt(env, 20000));
+});
+
+test('join gives a side without an envelope unity gain', () => {
+  const { doc, clipId, makeId } = docWithClip();
+  const split = splitClip(doc, clipId, 960, makeId);
+  const d = addEnvelopePoint(split.doc, split.rightId, 1000, 0.25, makeId).doc;
+  const joined = joinClips(d, split.leftId, split.rightId, makeId).doc.clips[split.leftId].envelope;
+  assert.equal(envelopeGainAt(joined, 100), 1);
+  assert.equal(envelopeGainAt(joined, 23999), 1);
+  assert.equal(envelopeGainAt(joined, 25000), 0.25);
+});
+
+test('trimming the start of a clip at bar 1 never moves its audio', () => {
+  const { doc, clipId } = docWithClip();
+  const inner = trimStart(doc, clipId, 1000).doc;
+  const moved = moveClip(inner, clipId, -40).doc; // back to tick 0, sourceOffset 1000
+  const back = trimStart(moved, clipId, -1000).doc.clips[clipId];
+  assert.equal(back.start, 0);
+  assert.equal(back.sourceOffset, 1000);
+});
+
+test('crossfades only where a later clip outlasts an earlier one, checked against every sounding clip', () => {
+  const { doc, clipId, trackId, makeId } = docWithClip(); // A: frames 0–96000
+  const inner = addAudioClip(doc, { trackId, tick: 960, source: { ...SOURCE, sourceId: 'src_b', frames: 12000 } }, makeId); // B inside A
+  const outer = addAudioClip(inner.doc, { trackId, tick: 3000, source: SOURCE }, makeId); // C from 75000
+  const c = compileModel(outer.doc, FS).model.tracks[1].clips;
+  const ix = (id) => c.id.indexOf(id);
+  assert.equal(c.fadeIn[ix(inner.clipId)], 0);
+  assert.equal(c.fadeOut[ix(inner.clipId)], 0);
+  assert.equal(c.fadeOut[ix(clipId)], 96000 - 75000);
+  assert.equal(c.fadeIn[ix(outer.clipId)], 96000 - 75000);
+});
+
+test('at another context rate, split parts stay contiguous and read the same source frames', () => {
+  const { doc, clipId, makeId } = docWithClip();
+  const slow = setTempo(doc, 97);
+  for (let tick = 101; tick < 3600; tick += 97) {
+    const split = splitClip(slow, clipId, tick, makeId);
+    if (!split.ok) continue;
+    const c = compileModel(split.doc, 44100).model.tracks[1].clips;
+    const [l, r] = [c.id.indexOf(split.leftId), c.id.indexOf(split.rightId)];
+    assert.equal(c.start[l] + c.length[l], c.start[r], `tick ${tick}`);
+    assert.equal(c.srcStart[r] - c.start[r], c.srcStart[l] - c.start[l], `tick ${tick}`);
+    assert.equal(c.fadeIn[r], 0);
+  }
 });

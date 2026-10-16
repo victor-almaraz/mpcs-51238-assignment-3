@@ -22,6 +22,7 @@ import {
   setClipGain,
   setEnvelopePoint,
   setFade,
+  visibleEnvelope,
 } from '@/lib/project/clip-commands';
 
 const CURVES = [
@@ -47,7 +48,10 @@ function timeText(frames, rate) {
 /**
  * Properties of one clip (the clip properties panel): name, colour and mute;
  * for audio clips also the storage status, clip gain, fades with curves and
- * the gain envelope. Every change goes through the clip commands.
+ * the gain envelope (the points inside the clip; points outside it anchor
+ * segments that cross its edges). Every change goes through the clip
+ * commands; point rows are keyed by point ID, so a slider keeps focus while
+ * its point moves.
  */
 export default function ClipProperties({ project, clip, status, editCursor, onEdit, readOnly, nameRef }) {
   const [name, setName] = useState(clip.name);
@@ -79,6 +83,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
   const cursorFrame = audio ? audioTempo(project).frameAt(editCursor) - audioTempo(project).frameAt(clip.start) : -1;
   const cursorInside = cursorFrame >= 0 && cursorFrame < clip.sourceLength;
   const id = `clip-${clip.id}`;
+  const points = audio ? visibleEnvelope(clip) : [];
 
   return (
     <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-3 rounded-ds border border-border-strong bg-surface p-3">
@@ -158,12 +163,12 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
             <h4 id={`${id}-env`} className={sectionHeading}>
               Gain envelope
             </h4>
-            {clip.envelope.length === 0 ? <p className="text-sm">No envelope points. The clip plays at its clip gain.</p> : null}
+            {points.length === 0 ? <p className="text-sm">No envelope points. The clip plays at its clip gain.</p> : null}
             <ol className="flex flex-col gap-2">
-              {clip.envelope.map((point, i) => {
+              {points.map((point, i) => {
                 const db = point.gain <= dbToGain(POINT_MIN_DB) ? POINT_MIN_DB : gainToDb(point.gain);
                 return (
-                  <li key={`${point.frame}-${i}`} className="flex flex-wrap items-center gap-3">
+                  <li key={point.id ?? i} className="flex flex-wrap items-center gap-3">
                     <Slider
                       id={`${id}-pt${i}-time`}
                       label={`Point ${i + 1} time`}
@@ -172,7 +177,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
                       value={Math.round(toMs(point.frame))}
                       valueText={timeText(point.frame, rate)}
                       disabled={readOnly}
-                      onChange={(ms) => apply(setEnvelopePoint(project, clip.id, i, Math.min(clip.sourceLength - 1, toFrames(ms)), point.gain))}
+                      onChange={(ms) => apply(setEnvelopePoint(project, clip.id, point.id, toFrames(ms), point.gain))}
                     />
                     <Slider
                       id={`${id}-pt${i}-gain`}
@@ -183,9 +188,9 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
                       value={Math.round(db * 2) / 2}
                       valueText={faderText(db)}
                       disabled={readOnly}
-                      onChange={(v) => apply(setEnvelopePoint(project, clip.id, i, point.frame, v <= POINT_MIN_DB ? 0 : dbToGain(v)))}
+                      onChange={(v) => apply(setEnvelopePoint(project, clip.id, point.id, point.frame, v <= POINT_MIN_DB ? 0 : dbToGain(v)))}
                     />
-                    <Button size="sm" disabled={readOnly} onClick={() => apply(removeEnvelopePoint(project, clip.id, i))}>
+                    <Button size="sm" disabled={readOnly} onClick={() => apply(removeEnvelopePoint(project, clip.id, point.id))}>
                       Remove point {i + 1}
                     </Button>
                   </li>

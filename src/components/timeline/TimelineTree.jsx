@@ -12,16 +12,19 @@ const rowKey = (kind, id) => `${kind}:${id}`;
  * a treegrid named "Tracks and clips" whose track rows hold their clips in
  * time order. One row is in the tab order (roving tabindex).
  *
- * Keys: Up/Down move between rows and select the clip (Shift extends the
- * range on one track; Ctrl or Cmd moves without selecting); Ctrl/Cmd+Enter
- * adds or removes the focused clip; Right expands a track or enters its first
- * clip; Left collapses or returns to the track; Home/End go to the first or
- * last row. On clips: Alt+Left/Right move by a beat, Alt+Up/Down move to the
- * track above or below of the same kind, [ and ] trim the start, Shift+Alt+
- * Left/Right trim the end, S splits at the edit cursor, J joins, Ctrl/Cmd+D
- * duplicates, Delete removes, Enter opens the clip properties. On a track,
- * Enter selects the clips under the edit cursor and S splits them. Comma and
- * period move the edit cursor by a beat (with Shift, a bar).
+ * Rows: Up/Down move between rows and select the clip (Shift extends the
+ * range on one track; Ctrl or Cmd moves without selecting); Home/End go to
+ * the first or last row; Space or Enter selects the focused clip (Ctrl/Cmd
+ * adds or removes it); Enter on a selected clip opens its properties; Mod+A
+ * selects every clip. On a track row, Right expands or enters the first
+ * clip, Left collapses, Enter selects the clips under the edit cursor and
+ * Alt+Up/Down reorder the track.
+ *
+ * Clip commands (ARR-03): Left/Right move by the snap step; Alt+Left/Right
+ * trim the start; Alt+Shift+Left/Right trim the end; Alt+Up/Down move to the
+ * track above or below of the same kind; Mod+E splits at the edit cursor;
+ * Mod+J joins; Mod+D duplicates; Delete or Backspace removes. Comma and
+ * period move the edit cursor by the snap step (with Shift, a bar).
  */
 export default function TimelineTree({ project, rowIds, meter, selection, setSelection, statusFor, commands, onCursorStep, onOpenProperties, editCursor }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
@@ -74,58 +77,65 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
     }
   }
 
+  function toggle(id) {
+    anchor.current = id;
+    setSelection(selection.includes(id) ? selection.filter((x) => x !== id) : [...selection, id]);
+  }
+
   function onKeyDown(e) {
     const row = current;
     if (!row) return;
     const i = rows.indexOf(row);
     const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const horizontal = key === 'ArrowLeft' || key === 'ArrowRight';
+    const sign = key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 1;
     let handled = true;
-    if (e.key === ',' || e.key === '.' || e.key === '<' || e.key === '>') {
-      onCursorStep(e.key === ',' || e.key === '<' ? -1 : 1, e.shiftKey ? 'bar' : 'beat');
-    } else if (row.kind === 'clip' && e.altKey && e.key.startsWith('Arrow')) {
-      if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) commands.trim('end', e.key === 'ArrowLeft' ? -1 : 1);
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') commands.move(e.key === 'ArrowLeft' ? -meter.beatTicksAt(row.clip.start) : meter.beatTicksAt(row.clip.start));
-      else commands.move(0, e.key === 'ArrowUp' ? -1 : 1);
-      pendingFocus.current = row.key;
-    } else if (e.key === 'ArrowDown') arrive(rows[i + 1], e);
-    else if (e.key === 'ArrowUp') arrive(rows[i - 1], e);
-    else if (e.key === 'Home') arrive(rows[0], e);
-    else if (e.key === 'End') arrive(rows[rows.length - 1], e);
-    else if (e.key === 'ArrowRight' && row.kind === 'track') {
-      if (collapsed.has(row.trackId)) setCollapsed(new Set([...collapsed].filter((id) => id !== row.trackId)));
-      else if (row.clips.length > 0) arrive(rows[i + 1], e);
-    } else if (e.key === 'ArrowLeft') {
-      if (row.kind === 'clip') focusRow(rows.find((r) => r.key === rowKey('t', row.trackId)));
-      else setCollapsed(new Set([...collapsed, row.trackId]));
-    } else if (e.key === 'Enter' && mod && row.kind === 'clip') {
-      const id = row.clip.id;
-      anchor.current = id;
-      setSelection(selection.includes(id) ? selection.filter((x) => x !== id) : [...selection, id]);
-    } else if (e.key === 'Enter') {
-      if (row.kind === 'clip') {
-        if (!selection.includes(row.clip.id)) setSelection([row.clip.id]);
-        onOpenProperties();
-      } else {
-        const hits = row.clips.filter((c) => c.start <= editCursor && editCursor < commands.clipEnd(c));
-        setSelection(hits.map((c) => c.id));
-      }
-    } else if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-      if (row.kind === 'clip') commands.trim('start', e.code === 'BracketLeft' ? -1 : 1);
-      else handled = false;
-    } else if ((e.key === 's' || e.key === 'S') && !mod && !e.altKey) {
+    if (!mod && (key === ',' || key === '.' || key === '<' || key === '>')) {
+      onCursorStep(key === ',' || key === '<' ? -1 : 1, e.shiftKey ? 'bar' : 'step');
+    } else if (mod && key === 'a') {
+      setSelection(Object.keys(project.clips).filter((id) => rowIds.includes(project.clips[id].trackId)));
+    } else if (mod && key === 'e') {
       commands.split(row.kind === 'track' ? row.trackId : null);
-    } else if ((e.key === 'j' || e.key === 'J') && !mod && !e.altKey) {
+    } else if (mod && key === 'j') {
       commands.join();
-    } else if ((e.key === 'd' || e.key === 'D') && mod) {
+    } else if (mod && key === 'd') {
       const copies = commands.duplicate() ?? [];
       if (copies.length > 0) {
         setFocusKey(rowKey('c', copies[0]));
         pendingFocus.current = rowKey('c', copies[0]);
       }
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    } else if (row.kind === 'clip' && horizontal && !mod) {
+      if (e.altKey) commands.trim(e.shiftKey ? 'end' : 'start', sign);
+      else commands.move(sign * commands.snapStep());
+      pendingFocus.current = row.key;
+    } else if (e.altKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
+      if (row.kind === 'clip') commands.move(0, sign);
+      else commands.moveTrack(row.trackId, sign);
+      pendingFocus.current = row.key;
+    } else if (key === 'ArrowDown') arrive(rows[i + 1], e);
+    else if (key === 'ArrowUp') arrive(rows[i - 1], e);
+    else if (key === 'Home') arrive(rows[0], e);
+    else if (key === 'End') arrive(rows[rows.length - 1], e);
+    else if (key === 'ArrowRight' && row.kind === 'track') {
+      if (collapsed.has(row.trackId)) setCollapsed(new Set([...collapsed].filter((id) => id !== row.trackId)));
+      else if (row.clips.length > 0) arrive(rows[i + 1], e);
+    } else if (key === 'ArrowLeft' && row.kind === 'track') {
+      setCollapsed(new Set([...collapsed, row.trackId]));
+    } else if ((key === ' ' || key === 'Enter') && row.kind === 'clip') {
+      const id = row.clip.id;
+      if (mod) toggle(id);
+      else if (key === 'Enter' && selection.includes(id)) onOpenProperties();
+      else {
+        anchor.current = id;
+        setSelection([id]);
+      }
+    } else if (key === 'Enter') {
+      const hits = row.clips.filter((c) => c.start <= editCursor && editCursor < commands.clipEnd(c));
+      setSelection(hits.map((c) => c.id));
+    } else if (key === 'Delete' || key === 'Backspace') {
       if (row.kind === 'clip') {
         const doomed = selection.includes(row.clip.id) ? selection : [row.clip.id];
-        if (!selection.includes(row.clip.id)) setSelection(doomed);
         const keep = (r) => r?.kind === 'clip' && r.trackId === row.trackId && !doomed.includes(r.clip.id);
         const neighbour = rows.slice(i + 1).find(keep) ?? rows.slice(0, i).reverse().find(keep);
         commands.remove(doomed);

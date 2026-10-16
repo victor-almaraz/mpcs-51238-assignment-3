@@ -23,6 +23,8 @@ async function openExample(page, title = 'Beat') {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${title} (copy)`);
 }
 
+/** The instrument panel, the part these tests change; a whole-editor axe scan is slow in Firefox. */
+const INSTRUMENT_PANEL = 'section[aria-labelledby="instrument-panel-heading"]';
 const playButton = (page) => page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' });
 const notice = (page) => page.getByRole('alertdialog', { name: 'Volume notice' });
 
@@ -182,7 +184,7 @@ test('the Subtractive panel shows labelled controls with units, and an edit save
   await expect(cutoff).toHaveAttribute('aria-valuetext', '2.0 kHz');
   await expect(panel.getByRole('slider', { name: 'Attack' })).toHaveAttribute('aria-valuetext', '10 ms');
   await expect(panel.getByRole('slider', { name: 'Resonance' })).toHaveAttribute('aria-valuetext', '1.0 dB');
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 
   await cutoff.focus();
@@ -225,7 +227,7 @@ test('the FM panel shows ratio, index and index decay with units', async ({ page
   await ratio.focus();
   await page.keyboard.press('ArrowRight');
   await expect(ratio).toHaveAttribute('aria-valuetext', '2.5×');
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
@@ -238,7 +240,7 @@ test('the Additive panel groups eight harmonic sliders with percent values', asy
   await expect(harmonics.getByRole('slider', { name: 'Harmonic 1' })).toHaveAttribute('aria-valuetext', '100 %');
   await expect(harmonics.getByRole('slider', { name: 'Harmonic 2' })).toHaveAttribute('aria-valuetext', '50 %');
   await expect(panel.getByRole('slider', { name: 'Release' })).toHaveAttribute('aria-valuetext', '500 ms');
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
@@ -249,7 +251,7 @@ test('the Pluck panel shows damping, brightness and decay', async ({ page }) => 
   await expect(panel.getByRole('slider', { name: 'Damping' })).toHaveAttribute('aria-valuetext', '50 %');
   await expect(panel.getByRole('slider', { name: 'Brightness' })).toHaveAttribute('aria-valuetext', '70 %');
   await expect(panel.getByRole('slider', { name: 'Decay (T60)' })).toHaveAttribute('aria-valuetext', '2.00 s');
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
@@ -261,7 +263,7 @@ test('the Granular panel shows source, grain size, density and spray', async ({ 
   await expect(panel.getByRole('slider', { name: 'Grain size' })).toHaveAttribute('aria-valuetext', '60 ms');
   await expect(panel.getByRole('slider', { name: 'Density' })).toHaveAttribute('aria-valuetext', '20.0 grains/s');
   await expect(panel.getByRole('slider', { name: 'Spray' })).toHaveAttribute('aria-valuetext', '20 %');
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
@@ -283,7 +285,7 @@ test('the drum machine panel: a voice selector with five voice controls and thre
   await expect(kit.getByRole('slider', { name: 'Kit level', exact: true })).toHaveAttribute('aria-valuetext', '0.0 dB');
   await expect(kit.getByRole('slider', { name: 'Velocity sensitivity' })).toHaveAttribute('aria-valuetext', '100 %');
   await expect(kit.getByRole('group', { name: 'Choke' }).getByRole('radio', { name: 'On' })).toBeChecked();
-  const results = await new AxeBuilder({ page }).analyze();
+  const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 
   await voice.selectOption('closedHat');

@@ -8,7 +8,7 @@
  */
 import { smoothingCoeff } from '../core/smoother.js';
 import { fadeInGain, fadeOutGain } from './fades.js';
-import { envelopeSeek } from './gain-envelope.js';
+import { ENV_STATE, envelopeSeek } from './gain-envelope.js';
 
 /** Frames of the fade applied when the transport stops mid-clip (project limit). */
 export const STOP_FADE_FRAMES = 64;
@@ -50,7 +50,7 @@ export function createClipTrack(payload, fs, previous = null) {
     maxLength,
     sourceIds: payload.sourceIds,
     channels: payload.sourceIds.map(() => null), // bound per source: [Float32Array] or [L, R]
-    env: new Float64Array(3),
+    env: new Float64Array(ENV_STATE),
     tailFrame: 0,
     tail: 0,
   };
@@ -104,23 +104,18 @@ function renderClip(track, c, F, n, mono, left, right) {
   const hi = track.envStart[c + 1];
   let p = F + i0 - cs;
   envelopeSeek(track.envFrame, track.envGain, lo, hi, p, env);
-  let e = env[0];
   const stereo = chans.length > 1;
   const l = chans[0];
   const r = stereo ? chans[1] : chans[0];
   const out = stereo ? left : mono;
   for (let i = i0; i < i1; i++, p++) {
-    if (p >= env[2]) {
-      envelopeSeek(track.envFrame, track.envGain, lo, hi, p, env);
-      e = env[0];
-    }
+    if (p >= env[2]) envelopeSeek(track.envFrame, track.envGain, lo, hi, p, env);
     g += a * (target - g);
-    let k = g * e;
+    let k = g * (env[0] + (p - env[3]) * env[1]);
     if (p < fadeIn) k *= fadeInGain(inCurve, p, fadeIn);
     if (fadeOut > 0) k *= fadeOutGain(outCurve, p, len, fadeOut);
     out[i] += l[src0 + p] * k;
     if (stereo) right[i] += r[src0 + p] * k;
-    e += env[1];
   }
   track.gainNow[c] = g;
 }

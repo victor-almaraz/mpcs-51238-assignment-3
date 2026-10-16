@@ -14,7 +14,8 @@ import { CONTROL_CHANGE, CC_ALL_NOTES_OFF, CC_ALL_SOUND_OFF, FloodLimiter, NOTE_
 import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
-import { allSources, redecodeAll, subscribeSources } from './decode.js';
+import { allSources, getSource, redecodeAll, subscribeSources } from './decode.js';
+import { mipsFor } from './peaks-client.js';
 import { paramChanges } from './param-changes.js';
 
 export const WORKLET_URL = '/worklets/worklet/main.js';
@@ -57,6 +58,7 @@ function createClient() {
     masterVolumeDb: getSettings().masterVolumeDb,
     ducked: false,
     error: null,
+    samplers: {}, // deviceId → { status: 'bound' | 'missing', sourceId, reason } from the engine
   };
   let meters = null; // latest engine meters (Float32Array)
   let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
@@ -150,7 +152,9 @@ function createClient() {
     pending
       .catch((err) => console.error('Audio could not be decoded at the context rate', err))
       .then(() => {
-        const loaded = new Map(allSources().filter((s) => s.rate === rate).map((s) => [s.sourceId, s]));
+        // Only the open project's sources go to the engine; others are removed.
+        const used = doc?.sources ?? {};
+        const loaded = new Map(allSources().filter((s) => s.rate === rate && used[s.sourceId]).map((s) => [s.sourceId, s]));
         for (const [id, source] of loaded) {
           if (sentSources.get(id) === source.channels) continue;
           const copies = source.channels.map((c) => c.slice());
@@ -161,11 +165,45 @@ function createClient() {
           if (loaded.has(id)) continue;
           send({ t: 'source-remove', sourceId: id });
           sentSources.delete(id);
+          sentMips.delete(id);
         }
         const again = syncing.again;
         syncing = null;
+        syncZones();
         if (again) syncSources();
       });
+  }
+
+  const sentZones = new Map(); // sampler deviceId → sourceId sent in sampler-zones (or null)
+  const sentMips = new Map(); // sourceId → the channel arrays its sent mips were built from
+  const mipsPending = new Map(); // sourceId → the channel arrays a mips request is building from
+
+  /**
+   * Sends each sampler's zone source when it changes (sampler-zones), and
+   * mip levels for sampler sources at the context rate (source-mips).
+   */
+  function syncZones() {
+    if (!engine || !doc) return;
+    for (const device of Object.values(doc.devices)) {
+      if (device.type !== 'sampler') continue;
+      const zone = device.sampler?.sourceId ? device.sampler : null;
+      const id = zone?.sourceId ?? null;
+      if (sentZones.get(device.id) !== id) {
+        send({ t: 'sampler-zones', deviceId: device.id, selection: 0, zones: zone ? [{ sourceId: zone.sourceId, sourceName: zone.sourceName ?? '' }] : [] });
+        sentZones.set(device.id, id);
+      }
+      const source = id ? getSource(id) : null;
+      if (!source || source.rate !== ctx.sampleRate || sentMips.get(id) === source.channels || mipsPending.get(id) === source.channels) continue;
+      mipsPending.set(id, source.channels);
+      mipsFor(id, source.channels).then((levels) => {
+        if (mipsPending.get(id) !== source.channels) return;
+        mipsPending.delete(id);
+        if (!levels || getSource(id)?.channels !== source.channels) return; // a failed request is retried on the next sync
+        sentMips.set(id, source.channels);
+        const transfer = levels.flatMap((l) => l.channels.map((c) => c.buffer));
+        engine.port.postMessage({ t: 'source-mips', v: PROTOCOL_VERSION, sourceId: id, levels }, transfer);
+      });
+    }
   }
 
   function compile() {
@@ -181,6 +219,11 @@ function createClient() {
     if (msg.t === 'pos') {
       meters = msg.meters;
       if (msg.playing) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
+    } else if (msg.t === 'source-status') {
+      setState({ samplers: { ...state.samplers, [msg.deviceId]: { status: msg.status, sourceId: msg.sourceId, reason: null } } });
+    } else if (msg.t === 'sampler-zone-invalid') {
+      const prev = state.samplers[msg.deviceId] ?? { status: 'bound', sourceId: null };
+      setState({ samplers: { ...state.samplers, [msg.deviceId]: { ...prev, reason: msg.reason } } });
     } else if (msg.t === 'error') console.error(`Engine error: ${msg.code}`, msg.detail);
   }
 
@@ -286,7 +329,9 @@ function createClient() {
     /** Compiles `project` and sends it to the engine (now, or when audio starts). */
     setProject(project) {
       const changes = paramChanges(doc, project);
+      const sourcesChanged = doc?.sources !== project.sources;
       doc = project;
+      if (sourcesChanged) syncSources();
       if (changes) {
         for (let i = 0; i < changes.length; i += 3) pendingParams.set(`${changes[i]}:${changes[i + 1]}`, changes[i + 2]);
       } else {
@@ -294,6 +339,7 @@ function createClient() {
         modelPending = true;
         sendLoop();
       }
+      syncZones();
       scheduleFlush();
     },
 

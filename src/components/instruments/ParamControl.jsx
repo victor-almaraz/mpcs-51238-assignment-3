@@ -35,6 +35,12 @@ const OPTION_LABELS = {
   chord: 'Chord',
   off: 'Off',
   on: 'On',
+  forward: 'Forward',
+  pingpong: 'Ping-pong',
+  gate: 'Gate',
+  trigger: 'Trigger',
+  poly: 'Poly',
+  mono: 'Mono',
 };
 
 /** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×", "50 %", "+2.0 st", "L20". */
@@ -59,6 +65,12 @@ export function formatParam(def, value) {
     }
     case '×':
       return `${value.toFixed(1)}×`;
+    case 'ms':
+      return value < 1000 ? `${value < 10 ? value.toFixed(1) : Math.round(value)} ms` : `${(value / 1000).toFixed(2)} s`;
+    case 'cents':
+      return minus(`${value > 0 ? '+' : ''}${value.toFixed(1)} cents`);
+    case '× 48 st':
+      return minus(`${value > 0 ? '+' : ''}${Math.round(value * 48)} st`);
     default:
       return minus(String(Math.round(value * 100) / 100));
   }
