@@ -30,6 +30,7 @@ export default function TooltipLayer() {
   const leaving = useRef(0);
   const target = useRef(null);
   const layer = useRef(null);
+  const popoverOpen = useRef(false);
 
   useEffect(() => {
     // WebKit does not report :focus-visible for scripted focus, so input modality is tracked here.
@@ -102,13 +103,15 @@ export default function TooltipLayer() {
   useLayoutEffect(() => {
     const el = layer.current;
     if (!el) return;
-    if (!tip) {
-      if (el.matches?.(':popover-open')) el.hidePopover();
-      return;
+    // Track the open state here: some engines lack the :popover-open selector, and matches() would throw.
+    if (popoverOpen.current) {
+      el.hidePopover();
+      popoverOpen.current = false;
     }
+    if (!tip) return;
     if (typeof el.showPopover === 'function') {
-      if (el.matches(':popover-open')) el.hidePopover();
       el.showPopover();
+      popoverOpen.current = true;
     }
     const w = el.offsetWidth;
     const h = el.offsetHeight;

@@ -97,6 +97,7 @@ function createClient() {
 
   let modelPending = false;
   let relocateTick = null; // a playing position to keep in ticks once the next model is sent (tempo edits)
+  let relocating = null; // { frame, ctxFrame } of a relocate the engine has not yet reported back
 
   /**
    * Sends model and params changes at most once per animation frame
@@ -117,6 +118,7 @@ function createClient() {
           const frame = compiled.tempo.frameAt(relocateTick);
           send({ t: 'transport', op: 'locate', frame });
           last = { playFrame: frame, ctxFrame: contextFrame() };
+          relocating = last;
         }
         relocateTick = null;
       } else if (pendingParams.size > 0) {
@@ -233,11 +235,27 @@ function createClient() {
     return Math.round(ctx.currentTime * ctx.sampleRate);
   }
 
+  /**
+   * True for a position report from before a tempo-edit relocate reached the engine: its
+   * frames count at the old tempo. A report within half a second of the relocated position
+   * (or one a second after it) ends the wait.
+   */
+  function staleReport(msg) {
+    if (!relocating) return false;
+    const elapsed = msg.ctxFrame - relocating.ctxFrame;
+    const expected = relocating.playFrame + elapsed;
+    if (Math.abs(msg.playFrame - expected) <= 0.5 * ctx.sampleRate || elapsed > ctx.sampleRate) {
+      relocating = null;
+      return false;
+    }
+    return true;
+  }
+
   function onEngineMessage(event) {
     const msg = event.data;
     if (msg.t === 'pos') {
       meters = msg.meters;
-      if (msg.playing) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
+      if (msg.playing && !staleReport(msg)) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
     } else if (msg.t === 'fault') {
       setState({ faults: [...state.faults, { trackId: msg.trackId, deviceId: msg.deviceId, slot: msg.slot }] });
     } else if (msg.t === 'source-status') {
@@ -364,6 +382,7 @@ function createClient() {
         if (tick !== null && compiled && compiled.tempo.frameAt(tick) !== before.frameAt(tick)) {
           relocateTick = tick;
           last = { playFrame: compiled.tempo.frameAt(tick), ctxFrame: contextFrame() };
+          relocating = last;
         }
         sendLoop();
       }

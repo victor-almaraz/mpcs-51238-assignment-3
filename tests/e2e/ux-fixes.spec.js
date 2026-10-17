@@ -62,14 +62,16 @@ test('a tempo edit while playing keeps the musical position', async ({ page }) =
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
   await page.waitForTimeout(1500);
   const tempo = transport(page).getByRole('textbox', { name: 'Tempo (BPM)' });
-  const before = await page.evaluate(() => globalThis.__wrackEngine.positionTick());
   await tempo.fill('200');
+  const read = () => page.evaluate(() => ({ tick: globalThis.__wrackEngine.positionTick(), at: performance.now() }));
+  const before = await read();
   await tempo.press('Enter');
   await page.waitForTimeout(300);
-  const after = await page.evaluate(() => globalThis.__wrackEngine.positionTick());
-  // At most about half a second of playback at the new tempo, never a jump of bars.
-  expect(after - before).toBeGreaterThanOrEqual(0);
-  expect(after - before).toBeLessThan(BAR);
+  const after = await read();
+  // Playback moves on by the elapsed time at 100 to 200 BPM (plus a beat of slack), never by a jump of bars.
+  const most = ((after.at - before.at) / 1000) * (200 / 60) * PPQ + PPQ;
+  expect(after.tick - before.tick).toBeGreaterThanOrEqual(0);
+  expect(after.tick - before.tick).toBeLessThan(most);
 });
 
 test('the editor page never scrolls, whatever the dock shows', async ({ page }) => {

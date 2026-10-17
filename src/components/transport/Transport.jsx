@@ -26,6 +26,15 @@ const CONTROL_TARGETS = 'input, textarea, select, button, [contenteditable], [co
 /** Escape keeps its own meaning in text entry (SAFE-03: Panic outside text fields). */
 const TEXT_TARGETS = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable], [contenteditable="true"]';
 
+/** True when `el` shows keyboard focus; engines without :focus-visible count as keyboard focus. */
+function focusVisible(el) {
+  try {
+    return el.matches(':focus-visible');
+  } catch {
+    return true;
+  }
+}
+
 /** The loop range in ticks: the saved one, else the first four bars. */
 export function loopRange(project, view) {
   if (view.loop) return view.loop;
@@ -113,7 +122,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
       }
       // A button clicked with the pointer keeps focus without showing it; Space then plays, as in
       // every DAW. A button reached by keyboard (:focus-visible) keeps its own Space.
-      const pointerFocusedButton = e.key === ' ' && e.target.closest?.('button') && !e.target.matches?.(':focus-visible');
+      const pointerFocusedButton = e.key === ' ' && e.target.closest?.('button') && !focusVisible(e.target);
       if (e.target.closest?.(CONTROL_TARGETS) && !pointerFocusedButton) return;
       if (e.key === ' ' && !e.repeat) {
         e.preventDefault();
