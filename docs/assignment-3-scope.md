@@ -258,6 +258,7 @@ Shared by all seven: velocity gain `0.3·(vel/127)²` (drum machine and sampler 
 | Filter | Lowpass, highpass, bandpass; cutoff; resonance |
 | Compressor | Threshold, ratio, attack, release, makeup |
 | Saturation | Drive, tone, mix, output |
+| Distortion | Soft clip, hard clip or foldback; drive, bias, tone, mix, output (at most 0 dB) |
 | Delay | Time in ms or tempo-synced; feedback ≤ 0.9; high-cut; mix |
 | Reverb | Size, decay 0.2–10 s, damping, pre-delay, mix |
 

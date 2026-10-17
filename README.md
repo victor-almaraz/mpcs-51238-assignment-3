@@ -309,11 +309,12 @@ The full results, the feedback and what was not changed are in [`docs/first-run-
 |---|---|
 | Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor |
 | MIDI | Piano roll with keyboard note entry, step input, quantize and clip looping; computer-keyboard and Web MIDI live input |
-| Audio | Multi-file import, waveform timeline with a keyboard treegrid, split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes |
-| Effects | EQ, filter, compressor, saturation, delay and reverb in chains of up to eight on every track and the master |
+| Audio | Multi-file import, waveform timeline with a bar ruler and a keyboard treegrid, marquee selection, a clip menu (right-click, Shift+F10), split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes, editable by on-clip handles or numeric fields |
+| Effects | EQ, filter, compressor, saturation, distortion (soft clip, hard clip, foldback), delay and reverb in chains of up to eight on every track and the master |
 | Mixer | Track gain, pan, mute and solo; master volume and pan; meters; Panic (`Escape`) |
 | Safety | A fixed safety stage after the master: guard, DC blocker, sustained-level duck, −1 dBFS limiter and a 50 ms start fade |
 | Projects | Automatic local saving, restored working state, a personal preset library, `.wrack` archives, WAV export |
+| Commands | A command palette (Ctrl+Shift+P, Cmd+Shift+P on macOS, or the header's Commands button) that searches and runs every command with its shortcut |
 
 All audio runs in one AudioWorklet engine followed by the safety stage; no native Web Audio DSP nodes are used. Implementation details are in [`docs/a3-audio-implementation.md`](docs/a3-audio-implementation.md).
 

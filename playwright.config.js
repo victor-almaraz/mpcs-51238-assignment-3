@@ -11,6 +11,8 @@ const baseURL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Editor pages are large (piano-roll grid, chains, mixer); with two workers a whole-page axe scan can pass 30 s.
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

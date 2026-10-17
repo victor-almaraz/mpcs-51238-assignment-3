@@ -66,7 +66,7 @@ test('an example copy stays unsaved until its first edit', () => {
 test('examples use six synthesized instruments and every effect type, and no audio', () => {
   const types = new Set(EXAMPLES.flatMap((e) => Object.values(e.doc.devices).map((d) => d.type)));
   for (const t of ['subtractive', 'fm', 'additive', 'pluck', 'granular', 'drums']) assert.ok(types.has(t), t);
-  for (const t of ['eq3', 'filter', 'compressor', 'saturation', 'delay', 'reverb']) assert.ok(types.has(t), t);
+  for (const t of ['eq3', 'filter', 'compressor', 'saturation', 'distortion', 'delay', 'reverb']) assert.ok(types.has(t), t);
   assert.ok(!types.has('sampler'));
   for (const e of EXAMPLES) {
     assert.deepEqual(e.doc.sources, {});

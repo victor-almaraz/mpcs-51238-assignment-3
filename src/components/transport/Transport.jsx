@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
 import Toolbar from '@/components/ui/Toolbar';
+import useCommands from '@/components/commands/useCommands';
 import { errorText } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 import { setTempo, setTimeSignature, ticksPerBar } from '@/lib/project/model';
@@ -107,6 +108,14 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useCommands([
+    { id: 'transport.play', group: 'Transport', label: state.playing ? 'Stop' : 'Play', keys: 'Space', run: () => (engine.getState().playing ? stop() : play()) },
+    { id: 'transport.start', group: 'Transport', label: 'Go to start', keys: 'Home', run: () => locate(0) },
+    { id: 'transport.loop', group: 'Transport', label: view.loopEnabled ? 'Turn loop off' : 'Turn loop on', run: () => onViewChange({ loopEnabled: !view.loopEnabled, loop }) },
+    { id: 'transport.metronome', group: 'Transport', label: state.metronome ? 'Turn metronome off' : 'Turn metronome on', run: () => engine.setMetronome(!engine.getState().metronome) },
+    { id: 'transport.panic', group: 'Transport', label: 'Panic: stop all sound', keys: 'Escape', run: () => panic() },
+  ]);
 
   const hint = showExampleHint && !played;
   const signature = `${project.meter[0].numerator}/${project.meter[0].denominator}`;

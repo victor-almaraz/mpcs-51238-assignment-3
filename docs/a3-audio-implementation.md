@@ -533,6 +533,27 @@ LP = v2; BP = v1; HP = x − k·v1 − v2
 | `mix` | 0–1 | 1 |
 | `output` | −24 to +6 dB | −3 dB |
 
+### Distortion (waveshaper with first-order antiderivative anti-aliasing)
+- `u = x·10^(drive/20) + bias`. Curves, each bounded by ±1:
+  - `softclip`: `f(u) = 1.5·(u − u³/3)` for `|u| ≤ 1`, `±1` beyond; `F(u) = 1.5·(u²/2 − u⁴/12)`, `|u| − 0.375` beyond.
+  - `hardclip`: `f(u) = clamp(u, −1, 1)`; `F(u) = u²/2`, `|u| − 1/2` beyond.
+  - `foldback`: `f(u) = sin(π·u/2)`, folding back beyond `|u| = 1`; `F(u) = −(2/π)·cos(π·u/2)`.
+- `wet = (F(u) − F(u1))/(u − u1)`; when `|u − u1| < 1e-5`, `wet = f((u + u1)/2)`. The dry path uses `0.5·(x + x1)`.
+- The wet signal passes a one-pole lowpass at `tone` (coefficient per block) and a 10 Hz DC blocker, which removes the offset the bias adds.
+- `out = (dry·(1 − mix) + wet·mix)·10^(output/20)` with `output ≤ 0 dB`.
+- Safety: the curves stay within ±1, the lowpass keeps that bound and the DC blocker at most doubles it, so with `output ≤ 0 dB` the wet path never exceeds +6 dBFS before the master limiter. The slot's fault check applies as for every effect.
+- A mode change crossfades the curves over 10 ms; the incoming curve's history starts from the current input. Drive, bias, mix and output are smoothed.
+- Cost: one `cos` per sample per channel in foldback.
+
+| Param | Range | Default |
+|---|---|---|
+| `mode` | soft clip, hard clip, foldback | soft clip |
+| `drive` | 0 to +48 dB | 12 dB |
+| `bias` | −0.5 to 0.5 | 0 |
+| `tone` | 500–16 000 Hz (log) | 6000 Hz |
+| `mix` | 0–1 | 1 |
+| `output` | −36 to 0 dB | −6 dB |
+
 ### Delay
 - Stereo ring of `ceil(2·fs) + 4` frames, allocated at init.
 - Time: 1–2000 ms, or synced to 1/32, 1/16, 1/8, 1/4, 1/2, 1/1 with dotted and triplet variants (`beats·60/bpm`, capped at 2000 ms, recomputed on tempo change). Time smoothing τ 50 ms (project limit).
@@ -652,6 +673,7 @@ Target: at most 50% of a 128-frame quantum (1.33 ms at 48 kHz) for the worst-cas
 | Filter | 1 SVF per channel | any slot |
 | Compressor | `log10` + `pow` | any slot |
 | Saturation | `exp` + `log1p` per channel | any slot |
+| Distortion | one polynomial or `cos` per channel | any slot |
 | Delay | 2 interpolated reads + lowpass | any slot |
 | Reverb | 24 delay taps per channel | 4 instances |
 | Tracks | Gain, pan, meter | 16 |

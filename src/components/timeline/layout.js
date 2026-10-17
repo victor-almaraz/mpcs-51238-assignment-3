@@ -3,7 +3,7 @@
  * the command hook. Pure functions; no React.
  */
 import { PPQ } from '@/dsp/core/constants';
-import { clipEndTick } from '@/lib/project/clip-commands';
+import { ENVELOPE_GAIN_MAX, audioTempo, clipEndTick } from '@/lib/project/clip-commands';
 
 /** Row height, bar-number ruler height and pixels per quarter note at zoom 1, CSS pixels. */
 export const TRACK_H = 56;
@@ -72,4 +72,73 @@ export function clipAt(doc, track, tick) {
   let hit = null;
   for (const clip of trackClips(doc, track)) if (clip.start <= tick && tick < clipEndTick(doc, clip)) hit = clip;
   return hit;
+}
+
+/** On-canvas handle target size, CSS px (WCAG 2.5.8 minimum; ARR-05). */
+export const HANDLE = 24;
+/** Envelope point hit radius, CSS px. */
+export const POINT_HIT = 8;
+/** Clip gain change per pixel of vertical drag on the gain handle, dB. */
+export const GAIN_DB_PER_PX = 0.25;
+
+/** A clip's box in content pixels: { x0, x1, top, height } on track row `row`. */
+export function clipRect(doc, clip, row, zoom) {
+  return {
+    x0: tickToX(clip.start, zoom),
+    x1: tickToX(clipEndTick(doc, clip), zoom),
+    top: RULER_H + row * TRACK_H + 3,
+    height: TRACK_H - 6,
+  };
+}
+
+/** Clip-relative frame at content x (audio clips), clamped to the clip. */
+export function frameAtX(doc, clip, x, zoom) {
+  const tempo = audioTempo(doc);
+  const f = tempo.frameAt(xToTick(x, zoom)) - tempo.frameAt(clip.start);
+  return Math.max(0, Math.min(clip.sourceLength - 1, f));
+}
+
+/** Content x of clip-relative frame `frame`. */
+export function xAtFrame(doc, clip, frame, zoom) {
+  const tempo = audioTempo(doc);
+  return tickToX(tempo.tickAt(tempo.frameAt(clip.start) + frame), zoom);
+}
+
+/** Envelope gain ↔ y inside a clip box: 0 at the bottom, ENVELOPE_GAIN_MAX (+6 dB) at the top. */
+export const envelopeY = (rect, gain) => rect.top + rect.height * (1 - gain / ENVELOPE_GAIN_MAX);
+export const gainAtY = (rect, y) => Math.max(0, Math.min(ENVELOPE_GAIN_MAX, ENVELOPE_GAIN_MAX * (1 - (y - rect.top) / rect.height)));
+
+/** True when the clip box is wide enough for the three top handles. */
+export const hasHandles = (rect) => rect.x1 - rect.x0 >= 3 * HANDLE;
+
+/**
+ * The handle of audio clip `clip` under content point x, y: 'fadeIn' (the
+ * target right of the fade-in's end), 'fadeOut' (left of the fade-out's
+ * start), 'gain' (top centre), or null.
+ */
+export function handleAt(doc, clip, rect, x, y, zoom) {
+  if (clip.kind !== 'audio' || !hasHandles(rect) || y < rect.top || y > rect.top + HANDLE) return null;
+  const fadeInX = xAtFrame(doc, clip, clip.fadeIn.length, zoom);
+  const fadeOutX = xAtFrame(doc, clip, clip.sourceLength - clip.fadeOut.length, zoom);
+  const mid = (rect.x0 + rect.x1) / 2;
+  if (x >= mid - HANDLE / 2 && x <= mid + HANDLE / 2) return 'gain';
+  if (x >= fadeInX && x <= fadeInX + HANDLE) return 'fadeIn';
+  if (x >= fadeOutX - HANDLE && x <= fadeOutX) return 'fadeOut';
+  return null;
+}
+
+/** The visible envelope point of `clip` within POINT_HIT px of x, y, or null. */
+export function envelopePointAt(doc, clip, rect, x, y, zoom) {
+  if (clip.kind !== 'audio') return null;
+  let best = null;
+  let bestD = POINT_HIT;
+  for (const p of clip.envelope) {
+    if (p.frame < 0 || p.frame >= clip.sourceLength) continue;
+    const d = Math.hypot(xAtFrame(doc, clip, p.frame, zoom) - x, envelopeY(rect, p.gain) - y);
+    if (d <= bestD) {
+      best = p;
+      bestD = d;
+    }
+  }
+  return best;
 }

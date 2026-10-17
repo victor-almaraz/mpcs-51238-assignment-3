@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
+import useCommands from '@/components/commands/useCommands';
 import { errorText } from '@/design-systems/industrial/classes';
 import { buildArchive } from '@/lib/archive/archive';
 import { getSource, getSourcesVersion, subscribeSources } from '@/lib/audio/decode';
@@ -26,6 +27,7 @@ export default function SaveArchive({ project, disabled }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const state = archiveState(project, (id) => Boolean(getSource(id)));
+  useCommands([{ id: 'project.save-wrack', group: 'Project', label: 'Save .wrack file', run: () => save(), enabled: () => !disabled && !busy }]);
 
   async function save() {
     setBusy(true);

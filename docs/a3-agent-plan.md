@@ -223,7 +223,7 @@ Do not start the next task.
 - **Prohibited:** persisting decoded PCM; audio in `localStorage`; IndexedDB access outside `audio-store.js`; evicting stored audio to make room; passing the original `ArrayBuffer` to `decodeAudioData`; copying source channel data into the sampler; the sampler in any example; recomputing peaks per render; moving clips between MIDI and audio tracks.
 
 ### Phase 10 — Effects
-- **Goal:** six effects in chains of up to eight on every track and the master.
+- **Goal:** seven effects (EQ, filter, compressor, saturation, distortion, delay, reverb) in chains of up to eight on every track and the master.
 - **Context:** `a3-audio-implementation.md` (Effects, CPU budget, Performance pitfalls).
 - **Files:** `src/dsp/effects/*.js`, `src/components/effects/*.jsx`, `src/lib/project/effect-commands.js`, `tests/dsp/effects.test.js`, `tests/support/stress-model.js`, `tests/e2e/{perf,effects}.spec.js`.
 - **Tasks** (one per turn):

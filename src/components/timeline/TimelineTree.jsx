@@ -23,10 +23,11 @@ const rowKey = (kind, id) => `${kind}:${id}`;
  * Clip commands (ARR-03): Left/Right move by the snap step; Alt+Left/Right
  * trim the start; Alt+Shift+Left/Right trim the end; Alt+Up/Down move to the
  * track above or below of the same kind; Mod+E splits at the edit cursor;
- * Mod+J joins; Mod+D duplicates; Delete or Backspace removes. Comma and
+ * Mod+J joins; Mod+D duplicates; Delete or Backspace removes; the
+ * ContextMenu key or Shift+F10 opens the clip menu. Comma and
  * period move the edit cursor by the snap step (with Shift, a bar).
  */
-export default function TimelineTree({ project, rowIds, meter, selection, setSelection, statusFor, commands, onCursorStep, onOpenProperties, editCursor }) {
+export default function TimelineTree({ project, rowIds, meter, selection, setSelection, statusFor, commands, onCursorStep, onOpenProperties, onClipMenu, editCursor }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [focusKey, setFocusKey] = useState(null);
   const anchor = useRef(null);
@@ -91,7 +92,9 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
     const horizontal = key === 'ArrowLeft' || key === 'ArrowRight';
     const sign = key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 1;
     let handled = true;
-    if (!mod && (key === ',' || key === '.' || key === '<' || key === '>')) {
+    if (row.kind === 'clip' && (key === 'ContextMenu' || (e.shiftKey && key === 'F10'))) {
+      onClipMenu(row.clip, rowRefs.current.get(row.key));
+    } else if (!mod && (key === ',' || key === '.' || key === '<' || key === '>')) {
       onCursorStep(key === ',' || key === '<' ? -1 : 1, e.shiftKey ? 'bar' : 'step');
     } else if (mod && key === 'a') {
       setSelection(Object.keys(project.clips).filter((id) => rowIds.includes(project.clips[id].trackId)));
@@ -190,6 +193,8 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
             {...common}
             aria-level={2}
             aria-selected={isSelected}
+            aria-haspopup="menu"
+            data-clip-id={row.clip.id}
             aria-posinset={row.index + 1}
             aria-setsize={row.count}
             onClick={(e) => arrive(row, e)}

@@ -14,6 +14,7 @@ import TrackStrip from '@/components/mixer/TrackStrip';
 import Timeline from '@/components/timeline/Timeline';
 import EffectChain from '@/components/effects/EffectChain';
 import OpenArchive from '@/components/archive/OpenArchive';
+import useCommands from '@/components/commands/useCommands';
 import SaveArchive from '@/components/archive/SaveArchive';
 import ExportDialog from '@/components/export/ExportDialog';
 import { effectFor } from '@/dsp/effects/registry';
@@ -124,8 +125,11 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     }
   }
 
+  // Several view changes in one event (clear the selection, move the cursor) build on each other.
+  const viewRef = useRef(view);
   function changeView(changes) {
-    const next = { ...view, ...changes };
+    const next = { ...viewRef.current, ...changes };
+    viewRef.current = next;
     setView(next);
     saveView(project.id, next);
   }
@@ -149,6 +153,32 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
   const liveTargetIndex = Math.max(0, mixerTrackIds.indexOf(panelTrackId));
   const chainTrackId = view.selectedTrackId && project.tracks[view.selectedTrackId] ? view.selectedTrackId : panelTrackId;
+
+  const focusFirst = (selector) => document.querySelector(selector)?.focus();
+  useCommands([
+    { id: 'view.zoom-in', group: 'View', label: 'Zoom in', keys: 'Alt+=', run: () => changeView({ zoom: stepZoom(view.zoom, 1) }), enabled: () => view.zoom < ZOOM_MAX },
+    { id: 'view.zoom-out', group: 'View', label: 'Zoom out', keys: 'Alt+-', run: () => changeView({ zoom: stepZoom(view.zoom, -1) }), enabled: () => view.zoom > ZOOM_MIN },
+    { id: 'go.pianoroll', group: 'Go to', label: 'Piano roll', run: () => focusFirst('[role="grid"][aria-label="Notes"] [tabindex="0"]'), enabled: () => Boolean(panelDevice) },
+    { id: 'go.mixer', group: 'Go to', label: 'Mixer', run: () => focusFirst('[aria-label="Track strips"] input, [aria-label="Track strips"] button') },
+    { id: 'go.effects', group: 'Go to', label: 'Track effects', run: () => focusFirst('section[aria-labelledby^="chain-"] select, section[aria-labelledby^="chain-"] button') },
+  ]);
+
+  // Alt+= and Alt+- zoom (ARR-06); Ctrl/Cmd with +/- stays with the browser. e.code, since Alt changes e.key on macOS.
+  const zoomKeys = useRef(null);
+  useEffect(() => {
+    zoomKeys.current = (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.target.closest?.('input:not([type="range"]), textarea, select')) return;
+      if (e.code === 'Equal' && view.zoom < ZOOM_MAX) changeView({ zoom: stepZoom(view.zoom, 1) });
+      else if (e.code === 'Minus' && view.zoom > ZOOM_MIN) changeView({ zoom: stepZoom(view.zoom, -1) });
+      else return;
+      e.preventDefault();
+    };
+  });
+  useEffect(() => {
+    const onKeyDown = (e) => zoomKeys.current?.(e);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   /** Applies fn(newest document) when it succeeds; returns its result (effect chains). */
   function command(fn) {

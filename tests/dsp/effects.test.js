@@ -60,11 +60,11 @@ function allFinite(buf) {
 }
 
 /** Output peak bound for full-scale noise input, per effect (largest legal gain plus margin). */
-const BOUND = { eq3: 64, filter: 64, compressor: 16, saturation: 2.01, delay: 11, reverb: 16 };
+const BOUND = { eq3: 64, filter: 64, compressor: 16, saturation: 2.01, distortion: 2.01, delay: 11, reverb: 16 };
 
-test('registry: six effects with labels; effectFor', () => {
-  assert.deepEqual(Object.keys(EFFECTS), ['eq3', 'filter', 'compressor', 'saturation', 'delay', 'reverb']);
-  assert.deepEqual(Object.values(EFFECTS).map((e) => e.label), ['EQ', 'Filter', 'Compressor', 'Saturation', 'Delay', 'Reverb']);
+test('registry: seven effects with labels; effectFor', () => {
+  assert.deepEqual(Object.keys(EFFECTS), ['eq3', 'filter', 'compressor', 'saturation', 'distortion', 'delay', 'reverb']);
+  assert.deepEqual(Object.values(EFFECTS).map((e) => e.label), ['EQ', 'Filter', 'Compressor', 'Saturation', 'Distortion', 'Delay', 'Reverb']);
   assert.equal(effectFor('delay'), EFFECTS.delay);
   assert.equal(effectFor('toString'), undefined);
   assert.equal(effectFor('nope'), undefined);
@@ -363,6 +363,7 @@ test('denormal flush: no subnormal state after silence; tails reach exact zero',
     filter: { cutoff: 50, resonance: 12 },
     compressor: { threshold: -60, ratio: 20 },
     saturation: { tone: 1000 },
+    distortion: { drive: 48, bias: 0.5, tone: 500 },
     delay: { time: 1, feedback: 0.9, highCut: 1000 },
     reverb: { decay: 0.2, size: 0 },
   };
@@ -559,4 +560,65 @@ test('engine: faults past the queue stay pending and post in the next quantum', 
   engine.faultCount = 0;
   engine.process(l, r, 0, 128);
   assert.equal(engine.faultCount, 2);
+});
+
+// Distortion: curves, ADAA, DC removal, mode changes and safety bounds.
+import { DISTORTION_MODES, antiderivative, shape } from '../../src/dsp/effects/distortion.js';
+
+test('distortion: each antiderivative differentiates to its curve, and every curve stays within ±1', () => {
+  for (let m = 0; m < DISTORTION_MODES.length; m++) {
+    for (let u = -4; u <= 4; u += 0.137) {
+      const h = 1e-5;
+      const slope = (antiderivative(m, u + h) - antiderivative(m, u - h)) / (2 * h);
+      assert.ok(Math.abs(slope - shape(m, u)) < 1e-6, `${DISTORTION_MODES[m]} at ${u}`);
+      assert.ok(Math.abs(shape(m, u)) <= 1);
+    }
+  }
+  assert.ok(Math.abs(shape(2, 2)) < 1e-12, 'foldback folds back to zero at u = 2');
+});
+
+test('distortion: the bias adds no DC to the output; the output stays bounded at any setting', () => {
+  const frames = 2 * FS;
+  const sine = Float32Array.from({ length: frames }, (_, i) => 0.8 * Math.sin((2 * Math.PI * 110 * i) / FS));
+  for (let mode = 0; mode < DISTORTION_MODES.length; mode++) {
+    const k = kernel('distortion', { mode, drive: 48, bias: 0.5, tone: 16000, mix: 1, output: 0 });
+    const [L, R] = run(k, sine, sine);
+    let sum = 0;
+    for (let i = FS; i < frames; i++) sum += L[i];
+    assert.ok(Math.abs(sum / FS) < 0.01, `${DISTORTION_MODES[mode]}: DC ${sum / FS}`);
+    assert.ok(peak(L) <= 2 && peak(R) <= 2 && allFinite(L), `${DISTORTION_MODES[mode]}: peak ${peak(L)}`);
+  }
+});
+
+test('distortion: a mode change crossfades instead of stepping', () => {
+  const frames = FS / 2;
+  const sine = Float32Array.from({ length: frames }, (_, i) => 0.5 * Math.sin((2 * Math.PI * 220 * i) / FS));
+  const k = kernel('distortion', { mode: 0, drive: 24, output: 0 });
+  const L = Float32Array.from(sine);
+  const R = Float32Array.from(sine);
+  k.process(L, R, 0, frames / 2);
+  const before = L[frames / 2 - 1];
+  k.setParam('mode', 2);
+  k.process(L, R, frames / 2, frames);
+  const maxStep = (a, b) => {
+    let w = 0;
+    for (let i = a; i < b; i++) w = Math.max(w, Math.abs(L[i + 1] - L[i]));
+    return w;
+  };
+  const steady = Math.max(maxStep(FS / 8, frames / 2 - 1), maxStep(frames / 2 + FS / 50, frames - 1));
+  const across = maxStep(frames / 2 - 64, frames / 2 + 1024);
+  assert.ok(across <= 1.05 * steady, `step across the change ${across}, steady ${steady}`);
+  assert.ok(Number.isFinite(before));
+});
+
+test('distortion: a fault in the kernel resets and bypasses its slot like every effect', () => {
+  const k = kernel('distortion');
+  const slot = new EffectSlot(FS, k);
+  const input = noise(4 * BLOCK, 9, 0.5);
+  run(slot, input, input, (off) => {
+    if (off === 2 * BLOCK) k.lp[0] = Number.NaN;
+  });
+  assert.equal(slot.takeFault(), true);
+  assert.equal(slot.bypassed, true);
+  assert.equal(k.lp[0], 0);
 });

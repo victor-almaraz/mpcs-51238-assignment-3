@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
+import useCommands from '@/components/commands/useCommands';
 import { errorText } from '@/design-systems/industrial/classes';
 import { openArchive } from '@/lib/archive/archive';
 import { loadArchiveSources } from '@/lib/audio/decode';
@@ -32,6 +33,8 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null); // { project, audio } awaiting the restore choice
+
+  useCommands([{ id: 'project.open-wrack', group: 'Project', label: 'Open .wrack file…', run: () => inputRef.current?.click(), enabled: () => !disabled && !busy }]);
 
   async function loadAudio(project, audio) {
     const { loaded, failed } = await loadArchiveSources(audio, project.sources, getEngine().decodeRate());

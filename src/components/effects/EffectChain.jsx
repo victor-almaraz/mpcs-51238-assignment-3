@@ -42,6 +42,7 @@ const LABELS = {
   size: 'Size',
   decay: 'Decay',
   damping: 'Damping',
+  bias: 'Bias',
   preDelay: 'Pre-delay',
 };
 

@@ -46,11 +46,13 @@ Status never depends on color alone: pressed toggles expose `aria-pressed` and a
 | Effects | Add, bypass, move and remove by buttons; sliders by arrows | `effects.spec.js` |
 | Save and open `.wrack` | Buttons; the native file picker | `archive.spec.js` |
 | Export | Export dialog fields and Export WAV | `export.spec.js` |
+| Commands | Ctrl+Shift+P (Cmd+Shift+P) or the header's Commands button; type to filter, Up/Down, Enter | `editor-tools.spec.js` |
+| Clip menu | ContextMenu key or Shift+F10 on a clip row; Up/Down, Enter, Escape returns focus to the row | `editor-tools.spec.js` |
 
-WebKit on macOS moves Tab focus only between form controls unless Alt is held or "Press Tab to highlight each item" is on; the tests use Alt+Tab there.
+Firefox reserves Ctrl+Shift+P for a private window, so the Commands button opens the palette there. WebKit on macOS moves Tab focus only between form controls unless Alt is held or "Press Tab to highlight each item" is on; the tests use Alt+Tab there.
 
 ## Not covered
-- The command palette and editable keymaps (`accessibility.md`, Command system) are not built.
-- Timeline marquee selection, clip context menus and on-canvas fade and gain handles are not built; the clip properties panel provides numeric fade, gain and envelope controls.
+- Keymaps are not editable or exportable (`accessibility.md`, Command system); the command palette lists each command's shortcut.
+- The on-canvas fade, gain and envelope handles are pointer-only; the clip properties panel provides the same edits as labelled sliders.
 - Edit-cursor announcements give bar and beat; they do not include `m:ss.mmm` time.
 - Screen-reader output was not checked with VoiceOver, NVDA or JAWS; checks rely on the accessibility tree that Playwright and axe read.

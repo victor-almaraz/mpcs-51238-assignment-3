@@ -7,6 +7,7 @@ import RadioGroup from '@/components/ui/RadioGroup';
 import Select from '@/components/ui/Select';
 import Slider from '@/components/ui/Slider';
 import StatusRegion from '@/components/ui/StatusRegion';
+import useCommands from '@/components/commands/useCommands';
 import { errorText } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 import { DEFAULT_TAIL_S, MAX_TAIL_S, exportFrames, renderOffline, silentClips } from '@/lib/export/render-offline';
@@ -39,6 +40,7 @@ export default function ExportDialog({ project, loop, disabled }) {
   const buttonRef = useRef(null);
   const exportRef = useRef(null);
   const rendering = progress !== undefined;
+  useCommands([{ id: 'project.export', group: 'Project', label: 'Export WAV…', run: () => setOpen(true), enabled: () => !disabled }]);
   const fs = getEngine().decodeRate();
   // Compiled only while the dialog is open.
   const frames = open ? exportFrames(project, fs, { range, loop, tailS }) : { ok: false, error: null };

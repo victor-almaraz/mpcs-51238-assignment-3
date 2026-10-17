@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Button from '@/components/ui/Button';
 import { controlBase, controlSizes, cx, lamp, lampOff, selectedLook } from '@/design-systems/industrial/classes';
+import { requestPalette } from '@/lib/commands/registry';
 
 const LINKS = [
   { href: '/', label: 'Home' },
@@ -53,6 +55,9 @@ export default function SiteHeader() {
             })}
           </ul>
         </nav>
+        <Button className="ml-auto" aria-keyshortcuts="Control+Shift+P Meta+Shift+P" onClick={requestPalette}>
+          Commands
+        </Button>
       </div>
     </header>
   );

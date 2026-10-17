@@ -91,3 +91,18 @@ test('an example with filter, reverb and delay plays through its chains after th
   await expect.poll(() => page.evaluate(() => globalThis.__wrackEngine.getMasterLevel().peakL), { timeout: 5000 }).toBeGreaterThan(0.001);
   expect(errors).toEqual([]);
 });
+
+test('Distortion: three curves, labelled controls with units, and the Beat lead stab uses it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  await page.getByRole('button', { name: /^Track 3: Lead stab/ }).click();
+  const fx = chain(page, 'Effects: Lead stab');
+  const dist = fx.getByRole('group', { name: 'Distortion, 1 of 1' });
+  await expect(dist).toBeVisible();
+  const mode = dist.getByRole('group', { name: 'Distortion mode' });
+  for (const name of ['Soft clip', 'Hard clip', 'Foldback']) await expect(mode.getByRole('radio', { name })).toBeVisible();
+  await expect(dist.getByRole('slider', { name: 'Distortion drive' })).toHaveAttribute('aria-valuetext', '12.0 dB');
+  await expect(dist.getByRole('slider', { name: 'Distortion output' })).toHaveAttribute('aria-valuetext', '−6.0 dB');
+  await mode.getByText('Foldback').click();
+  await expect(mode.getByRole('radio', { name: 'Foldback' })).toBeChecked();
+});

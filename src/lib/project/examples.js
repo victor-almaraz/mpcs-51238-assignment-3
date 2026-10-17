@@ -4,7 +4,7 @@
  * creates a copy (store.js); these documents never change.
  *
  * Instrument types: subtractive, fm, additive, pluck, granular, drums.
- * Effect types: eq3, filter, compressor, saturation, delay, reverb.
+ * Effect types: eq3, filter, compressor, saturation, distortion, delay, reverb.
  * Device params hold only overrides; every other parameter takes its default.
  */
 import { createDevice, createDocument, createTrack, ticksPerBar } from './model.js';
@@ -128,6 +128,7 @@ const beat = buildExample({
       name: 'Lead stab',
       color: '#895709',
       instrument: 'fm',
+      effects: ['distortion'],
       bars: 2,
       notes: [
         [2, 69, 1, 96], [2, 72, 1, 96], [2, 76, 1, 96],
