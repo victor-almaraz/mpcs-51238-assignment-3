@@ -29,7 +29,7 @@ export default function SiteHeader() {
   return (
     <header className="h-12 overflow-x-auto border-b border-border-strong bg-surface">
       <div className="flex h-full items-center gap-x-6 px-4">
-        <span className="font-display text-lg font-bold uppercase">
+        <span className="shrink-0 font-display text-lg font-bold whitespace-nowrap uppercase">
           W-Rack
         </span>
         <nav aria-label="Main">

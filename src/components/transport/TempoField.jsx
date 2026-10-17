@@ -35,7 +35,8 @@ export default function TempoField({ bpm, onCommit, disabled }) {
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         <label htmlFor="transport-tempo" className={cx(fieldLabel, 'w-auto')}>
-          Tempo (BPM)
+          {/* "(BPM)" stays in the name; narrow windows show "Tempo" only. */}
+          Tempo<span className="sr-only xl:not-sr-only"> (BPM)</span>
         </label>
         <input
           id="transport-tempo"

@@ -289,7 +289,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `ARR-04` Visible snap with bypass
 - **Problem:** Hidden snap state misaligns edits.
-- **Solution:** The toolbar shows "Snap: 1/16". `G` toggles snap; `+` and `-` change the grid; Alt while dragging bypasses snap. Snap is on by default.
+- **Solution:** The toolbar shows "Snap: 1/16". `N` toggles snap; `+` and `-` change the grid; Alt while dragging bypasses snap. Snap is on by default.
 - **Prior art:** BandLab's snap is on by default; Ableton Live changes the grid with plus and minus.
 - **W-Rack application:** One snap setting per project for timeline and piano roll.
 - **Accessibility:** An `aria-pressed` toggle and a labeled select; changes are announced.
@@ -554,20 +554,20 @@ The industrial design system draws attention by mechanical importance. Flair mar
 | Volume notice repetition | No DAW precedent | Once per session, with an opt-out per device | `SAFE-01` |
 
 ## Keyboard shortcuts
-Single-letter keys act only outside text fields.
+Single-letter keys act only outside text fields. No global single-letter shortcut uses a computer-keyboard note key (A W S E D F T G Y H U J K, Z, X), so the shortcuts keep working while Play with keyboard is on; M and S act only on a focused track row.
 
 | Action | Key | Browser conflict | Handling |
 |---|---|---|---|
 | Play / pause | `Space` | Page scroll; activates focused buttons | Not captured in fields or on buttons |
 | Locate to start / loop start | `Home` / `Shift+Home` | Caret movement in fields | Not captured in fields |
 | Loop on/off | `L` | — | — |
-| Metronome | `K` | — | — |
+| Metronome | `C` | — | — |
 | Split | `Mod+E` | Chrome and Edge search shortcut | Captured in the editor; menu alternative |
 | Duplicate | `Mod+D` | Bookmark | Captured in the editor |
 | Join | `Mod+J` | Chrome downloads | Captured in the editor; menu alternative |
 | Trim start / end | `Alt+Left/Right` / `Alt+Shift+Left/Right` | `Alt+Left` is Back on Windows | Only with a clip focused |
 | Grid size | `+` / `-` | — | Unmodified keys |
-| Snap | `G` | — | — |
+| Snap | `N` | — | — |
 | Zoom in / out / fit | `Alt+=` / `Alt+-` / `Alt+0` | `Mod+=`/`-`/`0` page zoom | Alt-modified |
 | Mute / solo | `M` / `S` | — | Focused track |
 | Paint mode / quantize | `B` / `Q` | — | Piano roll |

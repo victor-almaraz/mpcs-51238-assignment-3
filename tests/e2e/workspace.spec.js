@@ -59,7 +59,7 @@ test('an empty timeline offers its next steps; Add instrument track opens a four
   await expect.poll(async () => (await saved(page, id)).trackOrder).toEqual([]);
 });
 
-test('L, G, + and − work anywhere; G and K play notes while keyboard playing is on', async ({ page }) => {
+test('L, N, C, + and − work anywhere, also while keyboard playing is on; G and K stay notes', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open Beat' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
@@ -74,24 +74,26 @@ test('L, G, + and − work anywhere; G and K play notes while keyboard playing i
   await page.keyboard.press('l');
   await expect(loop).toHaveAttribute('aria-pressed', 'false');
 
-  // Keyboard playing is on by default: G and K are notes, and the first note asks for the volume notice.
+  // Keyboard playing is on by default; the snap and metronome keys are not note keys.
+  await expect(page.getByRole('button', { name: 'Play with keyboard' })).toHaveAttribute('aria-pressed', 'true');
   await expect(snap).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('n');
+  await expect(snap).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('status').filter({ hasText: 'Snap off' })).toHaveCount(1);
+  await page.keyboard.press('n');
+  await expect(snap).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('c');
+  await expect(metronome).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('c');
+  await expect(metronome).toHaveAttribute('aria-pressed', 'false');
+
+  // G is a note: it asks for the volume notice and changes no setting.
   await page.keyboard.press('g');
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.press('k');
   await expect(snap).toHaveAttribute('aria-pressed', 'true');
   await expect(metronome).toHaveAttribute('aria-pressed', 'false');
-
-  await page.getByRole('button', { name: 'Play with keyboard' }).click();
-  await page.getByRole('heading', { level: 1 }).click();
-  await page.keyboard.press('g');
-  await expect(snap).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('status').filter({ hasText: 'Snap off' })).toHaveCount(1);
-  await page.keyboard.press('g');
-  await expect(snap).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('k');
-  await expect(metronome).toHaveAttribute('aria-pressed', 'true');
 
   await expect(grid).toHaveValue('1');
   await page.keyboard.press('+');

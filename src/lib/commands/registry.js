@@ -69,7 +69,7 @@ export function matchesQuery(command, query) {
 
 /**
  * The shortcut text of keyboard event `e`, as written in `keys`: "Mod+Shift+E",
- * "Mod+,", "G", "?", "+". Ctrl and Cmd are both Mod. Shift is written only with
+ * "Mod+,", "N", "?", "+". Ctrl and Cmd are both Mod. Shift is written only with
  * letters and named keys, since it already shapes symbols ("?" is Shift+/);
  * "=" reads as "+" and "_" as "-", so the plus and minus keys need no Shift.
  */

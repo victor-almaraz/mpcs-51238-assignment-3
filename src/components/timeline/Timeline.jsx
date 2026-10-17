@@ -171,7 +171,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       run: () => deleteTrack(view.selectedTrackId),
       enabled: () => editable() && Boolean(project.tracks[view.selectedTrackId]),
     },
-    { id: 'timeline.snap', group: 'Timeline', label: view.snapOn ? 'Turn snap off' : 'Turn snap on', keys: 'G', global: true, run: () => setSnap({ snapOn: !view.snapOn }) },
+    { id: 'timeline.snap', group: 'Timeline', label: view.snapOn ? 'Turn snap off' : 'Turn snap on', keys: 'N', global: true, run: () => setSnap({ snapOn: !view.snapOn }) },
     { id: 'timeline.grid-finer', group: 'Timeline', label: 'Finer grid', keys: '+', global: true, run: () => setSnap({ snap: stepGrid(view.snap, 1) }), enabled: () => view.snap !== stepGrid(view.snap, 1) },
     { id: 'timeline.grid-coarser', group: 'Timeline', label: 'Coarser grid', keys: '-', global: true, run: () => setSnap({ snap: stepGrid(view.snap, -1) }), enabled: () => view.snap !== stepGrid(view.snap, -1) },
   ]);
@@ -697,7 +697,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         <MenuButton label="Add" icon="plus" items={() => addItems()} disabled={readOnly} help="Add: an instrument track with a four-bar clip, an audio track, or audio files at the edit cursor." />
         <MenuButton label="Edit" items={editItems} help="Edit: select, mute or rename clips; delete the selected track." />
         <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
-        <IconToggle icon="magnet" label="Snap" shortcut="G" size="sm" pressed={view.snapOn} onClick={() => setSnap({ snapOn: !view.snapOn })} data-help="Snap (G): drags land on the grid; hold Alt while dragging to place freely." />
+        <IconToggle icon="magnet" label="Snap" shortcut="N" size="sm" pressed={view.snapOn} onClick={() => setSnap({ snapOn: !view.snapOn })} data-help="Snap (N): drags land on the grid; hold Alt while dragging to place freely." />
         <Select
           id="timeline-snap"
           label="Grid"

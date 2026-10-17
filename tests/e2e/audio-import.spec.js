@@ -90,6 +90,18 @@ async function importFixtures(page, files = FIXTURES) {
   for (const f of files) await expect(results(page)).toContainText(`Added ${f.name}.`);
 }
 
+test('the same audio imported under two file names keeps each name', async ({ page }) => {
+  const id = await createProject(page, 'Twins');
+  const same = FIXTURES[0].buffer;
+  await page.locator('input[type="file"][accept^="audio"]').first().setInputFiles([
+    { name: 'first.wav', mimeType: 'audio/wav', buffer: same },
+    { name: 'second.wav', mimeType: 'audio/wav', buffer: same },
+  ]);
+  await expect(results(page)).toContainText('Added second.wav.');
+  await expect(clipRows(page)).toHaveCount(2);
+  await expect.poll(async () => Object.values((await saved(page, id)).clips).map((c) => c.name).sort()).toEqual(['first', 'second']);
+});
+
 test('two WAV files import onto a new audio track, persist in IndexedDB and reload from it', async ({ page }) => {
   const id = await createProject(page);
   await importFixtures(page);

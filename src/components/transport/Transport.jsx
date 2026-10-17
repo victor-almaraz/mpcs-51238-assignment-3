@@ -145,7 +145,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     { id: 'transport.start', group: 'Transport', label: 'Go to start', keys: 'Home', run: () => locate(0) },
     { id: 'transport.loop-start', group: 'Transport', label: 'Go to loop start', keys: 'Shift+Home', run: () => locate(loop.start) },
     { id: 'transport.loop', group: 'Transport', label: view.loopEnabled ? 'Turn loop off' : 'Turn loop on', keys: 'L', global: true, run: () => onViewChange({ loopEnabled: !view.loopEnabled, loop }) },
-    { id: 'transport.metronome', group: 'Transport', label: state.metronome ? 'Turn metronome off' : 'Turn metronome on', keys: 'K', global: true, run: () => engine.setMetronome(!engine.getState().metronome) },
+    { id: 'transport.metronome', group: 'Transport', label: state.metronome ? 'Turn metronome off' : 'Turn metronome on', keys: 'C', global: true, run: () => engine.setMetronome(!engine.getState().metronome) },
     { id: 'transport.panic', group: 'Transport', label: 'Panic (stop all sound)', keys: 'Escape', run: () => panic() },
   ]);
 
@@ -164,7 +164,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         Transport
       </h2>
       {/* TRN-01 order: locate, play/pause, stop, loop, metronome, position, tempo, meter, master volume and meter, Panic. */}
-      <Toolbar label="Transport" className="flex items-center gap-2 overflow-x-auto px-3 py-1.5 [&>*]:shrink-0">
+      <Toolbar label="Transport" className="flex items-center gap-1.5 overflow-x-auto px-3 py-1.5 xl:gap-2 [&>*]:shrink-0">
         <IconButton icon="skip-back" label="Go to start" shortcut="Home" onClick={() => locate(0)} data-help="Go to start (Home): moves the playhead to bar 1; Shift+Home goes to the loop start." />
         <IconButton
           icon={state.playing ? 'pause' : 'play'}

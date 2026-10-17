@@ -51,7 +51,7 @@ const EDITOR_KEYS = [
       ['A W S E D F T G Y H U J K', 'Play C to C on the selected track'],
       ['Z, X', 'Octave down or up'],
     ],
-    note: 'While Play with keyboard is on, these letters play notes, so G and K act as shortcuts only when it is off.',
+    note: 'While Play with keyboard is on, these letters play notes; no shortcut uses them.',
   },
 ];
 

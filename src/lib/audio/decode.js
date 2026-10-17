@@ -137,7 +137,9 @@ export async function importFiles(files, { rate = DEFAULT_DECODE_RATE, projectSo
       }
       if (!known.has(sourceId)) seconds += length;
       known.add(sourceId);
-      const source = loaded.stored === 'device' ? loaded : await store(loaded);
+      const stored = loaded.stored === 'device' ? loaded : await store(loaded);
+      // The same audio under another file name: the clip takes the name it was imported as.
+      const source = stored.name === name ? stored : { ...stored, name };
       onResult(source.stored === 'device' ? { ok: true, source, reused: true } : { ok: true, source, reused: true, message: sessionOnly(name) });
       continue;
     }
