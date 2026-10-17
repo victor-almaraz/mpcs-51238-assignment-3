@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { cx, panelShadow } from '@/design-systems/industrial/classes';
 
 /** Delay before a tooltip shows on hover or keyboard focus, ms. */
@@ -8,6 +8,8 @@ const SHOW_DELAY_MS = 400;
 /** Time the pointer has to cross from the element to the tooltip, ms. */
 const LEAVE_GRACE_MS = 250;
 const GAP = 6;
+/** Least distance between a tooltip and the window edge, px. */
+const EDGE = 8;
 
 /**
  * The shared tooltip (HELP-01, WCAG 1.4.13) for every element with
@@ -17,7 +19,10 @@ const GAP = 6;
  * element or the tooltip itself, and Escape, pointer exit, blur and scrolling
  * dismiss it. It is visual only: icon controls carry their name in
  * aria-label and their shortcut as a description (IconButton). One fixed
- * layer serves the page, so scrolling toolbars do not clip it.
+ * layer serves the page, so scrolling toolbars do not clip it. The layer is a
+ * manual popover: it joins the top layer above any open modal <dialog>, and is
+ * re-shown on each tooltip so it stacks above the newest dialog. It is
+ * measured and held inside the window; long text wraps.
  */
 export default function TooltipLayer() {
   const [tip, setTip] = useState(null); // { text, x, y, above }
@@ -32,9 +37,7 @@ export default function TooltipLayer() {
     function show(el) {
       if (!el.isConnected) return;
       const rect = el.getBoundingClientRect();
-      const above = rect.bottom + 40 > window.innerHeight;
-      const x = Math.max(72, Math.min(window.innerWidth - 72, rect.left + rect.width / 2));
-      setTip({ text: el.dataset.tip, x, y: above ? rect.top - GAP : rect.bottom + GAP, above });
+      setTip({ text: el.dataset.tip, rect: { top: rect.top, bottom: rect.bottom, mid: rect.left + rect.width / 2 } });
     }
     function hide() {
       clearTimeout(timer.current);
@@ -95,15 +98,37 @@ export default function TooltipLayer() {
     };
   }, []);
 
-  if (!tip) return null;
+  // Place the shown tooltip: centred on its element, below it (above near the window's foot), inside the window.
+  useLayoutEffect(() => {
+    const el = layer.current;
+    if (!el) return;
+    if (!tip) {
+      if (el.matches?.(':popover-open')) el.hidePopover();
+      return;
+    }
+    if (typeof el.showPopover === 'function') {
+      if (el.matches(':popover-open')) el.hidePopover();
+      el.showPopover();
+    }
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const above = tip.rect.bottom + GAP + h + EDGE > window.innerHeight;
+    el.style.left = `${Math.max(EDGE, Math.min(window.innerWidth - EDGE - w, tip.rect.mid - w / 2))}px`;
+    el.style.top = `${above ? Math.max(EDGE, tip.rect.top - GAP - h) : tip.rect.bottom + GAP}px`;
+  }, [tip]);
+
   return (
     <div
       ref={layer}
+      popover="manual"
       aria-hidden="true"
-      className={cx('fixed z-[60] max-w-64 rounded-ds border border-fg bg-surface px-2 py-1 text-xs whitespace-nowrap text-fg', panelShadow)}
-      style={{ left: tip.x, top: tip.y, transform: `translate(-50%, ${tip.above ? '-100%' : '0'})` }}
+      className={cx(
+        'fixed z-[60] m-0 w-max max-w-64 overflow-visible rounded-ds border border-fg bg-surface px-2 py-1 text-xs text-fg [inset:auto]',
+        panelShadow,
+        !tip && 'hidden',
+      )}
     >
-      {tip.text}
+      {tip?.text}
     </div>
   );
 }

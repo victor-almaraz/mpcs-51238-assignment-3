@@ -1,5 +1,6 @@
 'use client';
 
+import { getEngine } from '@/lib/audio/engine-client';
 import { useEffect, useRef } from 'react';
 import {
   audioTempo,
@@ -25,7 +26,7 @@ const trackKindFor = (clip) => (clip.kind === 'midi' ? 'instrument' : 'audio');
  * announces the result. `selection` is the selected clip IDs in order;
  * `stepTicks` is the snap step that nudges and trims use.
  */
-export default function useTimelineCommands({ project, rowIds, meter, stepTicks, editCursor, selection, setSelection, onEdit, announce, readOnly }) {
+export default function useTimelineCommands({ project, rowIds, meter, stepTicks, editCursor: stoppedCursor, selection, setSelection, onEdit, announce, readOnly }) {
   const docRef = useRef(project);
   useEffect(() => {
     docRef.current = project;
@@ -114,6 +115,9 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
   /** Splits the selected clips (or the clips under the cursor on `trackId`) at the edit cursor. */
   function split(trackId) {
     if (readOnly) return;
+    // While playing, the split falls at the playhead being heard, not where playback started.
+    const engine = getEngine();
+    const editCursor = engine.getState().playing ? engine.positionTick() : stoppedCursor;
     let doc = docRef.current;
     let clips = selectedClips(doc);
     if (clips.length === 0 && trackId) clips = trackClips(doc, doc.tracks[trackId]);
@@ -147,11 +151,11 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
       const a = clips[0];
       const end = clipEndTick(doc, a);
       const others = trackClips(doc, doc.tracks[a.trackId]).filter((c) => c.id !== a.id);
+      // Of the touching neighbours (after, then before), the first that can join; else the first one's reason.
       const next = others.find((c) => c.start === end);
-      if (next) return { a, b: next, reason: joinBlocker(doc, a.id, next.id) };
       const prev = others.find((c) => clipEndTick(doc, c) === a.start);
-      if (prev) return { a: prev, b: a, reason: joinBlocker(doc, prev.id, a.id) };
-      return { a, b: null, reason: 'No clip touches this clip.' };
+      const pairs = [next && { a, b: next }, prev && { a: prev, b: a }].filter(Boolean).map((p) => ({ ...p, reason: joinBlocker(doc, p.a.id, p.b.id) }));
+      return pairs.find((p) => !p.reason) ?? pairs[0] ?? { a, b: null, reason: 'No clip touches this clip.' };
     }
     return { a: null, b: null, reason: 'Select one or two clips to join.' };
   }

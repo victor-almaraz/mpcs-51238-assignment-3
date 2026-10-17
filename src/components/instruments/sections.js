@@ -41,14 +41,19 @@ const SECTIONS = {
   level: 'Output',
 };
 
-/** Consecutive defs of one section become one { section, defs } item, in definition order. */
+/**
+ * Defs grouped by section as { section, defs } items: sections in the order
+ * they first appear, so a section split across the definitions (the
+ * sampler's Playback) still renders once; within a section the enums
+ * (segmented rows) come first, then the knobs, each in definition order.
+ */
 export function sectionParams(defs) {
-  const items = [];
+  const items = new Map();
   for (const def of defs) {
     const section = def.group ?? SECTIONS[def.id] ?? 'Settings';
-    const last = items[items.length - 1];
-    if (last?.section === section) last.defs.push(def);
-    else items.push({ section, defs: [def] });
+    if (!items.has(section)) items.set(section, { section, defs: [] });
+    items.get(section).defs.push(def);
   }
-  return items;
+  const isEnum = (def) => def.scale === 'enum';
+  return [...items.values()].map((item) => ({ ...item, defs: [...item.defs.filter(isEnum), ...item.defs.filter((d) => !isEnum(d))] }));
 }

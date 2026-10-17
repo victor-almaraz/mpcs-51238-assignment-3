@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import { cx } from '@/design-systems/industrial/classes';
+import { taperFraction, taperValue } from './level-scale';
 
 /** dB marks on the scale, where they fall inside the range. */
 const MARKS = [6, 0, -6, -12, -24, -60];
@@ -16,7 +17,8 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
  * jump by `pageStep` (10 % of the range), Home/End go to the ends and Delete
  * resets. Pointer: vertical drag moves the cap (Shift for fine), a click on
  * the track jumps there, double-click resets. `children` render beside the
- * track (the peak meter).
+ * track: the peak meter, given the same `scale={[min, max]}` so its levels
+ * meet the marks.
  */
 export default function Fader({ id, label, value, min, max, step = 0.1, onChange, valueText, onReset, pageStep, disabled = false, className, children }) {
   const trackRef = useRef(null);
@@ -28,9 +30,8 @@ export default function Fader({ id, label, value, min, max, step = 0.1, onChange
     const next = snap(v);
     if (next !== value) onChange(next);
   };
-  // Square taper: the top of the range (+6 to −12 dB) gets most of the travel, as on a console.
-  const fraction = (v) => ((v - min) / (max - min)) ** 2;
-  const valueAt = (f) => min + Math.sqrt(clamp(f, 0, 1)) * (max - min);
+  const fraction = (v) => taperFraction(v, min, max);
+  const valueAt = (f) => taperValue(f, min, max);
   const valueAtY = (clientY) => {
     const r = trackRef.current.getBoundingClientRect();
     return valueAt(1 - (clientY - r.top) / r.height);
@@ -48,7 +49,7 @@ export default function Fader({ id, label, value, min, max, step = 0.1, onChange
   }
 
   return (
-    <div className={cx('flex min-h-28 flex-1 items-stretch gap-1 py-2', disabled && 'opacity-40', className)}>
+    <div className={cx('relative flex min-h-16 flex-1 items-stretch gap-1 py-2', disabled && 'opacity-40', className)}>
       <div aria-hidden="true" className="relative w-6 shrink-0 text-right font-mono text-[0.5625rem] text-muted">
         {MARKS.filter((m) => m >= min && m <= max).map((m) => (
           <span key={m} className="absolute right-0 -translate-y-1/2 leading-none" style={{ top: `${(1 - fraction(m)) * 100}%` }}>

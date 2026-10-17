@@ -3,7 +3,8 @@
  * palette lists is a named command { id, label, group, keys, global, run,
  * enabled }. Components register the commands they own while mounted; the
  * palette reads the current set. `keys` is the shortcut as shown ("Mod+E",
- * "Space"). A `global` command's shortcut works anywhere on the page
+ * "Space"); `altKeys` lists further shortcuts for the same command. A
+ * `global` command's shortcut works anywhere on the page
  * (design-patterns.md, Keyboard shortcuts); other shortcuts belong to the
  * focused editor, which handles them itself.
  */
@@ -107,10 +108,12 @@ export function dispatchShortcut(e) {
   if (e.defaultPrevented || e.repeat || e.isComposing) return false;
   if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return false;
   const modified = e.ctrlKey || e.metaKey || e.altKey;
-  if (!modified && (e.target?.closest?.(TEXT_ENTRY) || [...claims].some((claimed) => claimed(e)))) return false;
+  const inField = e.target?.closest?.(TEXT_ENTRY);
+  if (!modified && (inField || [...claims].some((claimed) => claimed(e)))) return false;
   const key = shortcutOf(e);
-  const command = snapshot.find((c) => c.global && c.keys === key);
-  if (!command) return false;
+  const command = snapshot.find((c) => c.global && (c.keys === key || c.altKeys?.includes(key)));
+  // A field keeps the keys it uses itself (its own undo), for commands marked inFields: false.
+  if (!command || (inField && command.inFields === false)) return false;
   e.preventDefault();
   if (command.enabled()) command.run();
   return true;

@@ -71,6 +71,12 @@ function saveStatusText(unsavedCopy, state) {
  * `unsavedCopy` marks an example copy not edited yet; `readOnly` a project
  * saved by a newer build.
  */
+/** Undo history: steps kept, and the gap in ms within which edits join one step. */
+const UNDO_LIMIT = 200;
+const UNDO_GROUP_MS = 600;
+/** Milliseconds for grouping edits (read in event handlers only). */
+const clock = () => performance.now();
+
 export default function Studio({ project: initialProject, unsavedCopy, readOnly }) {
   const [project, setProject] = useState(initialProject);
   const [view, setView] = useState(() => readView(initialProject));
@@ -83,13 +89,22 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     function handleBeforeUnload(e) {
       flushView();
       flushSaves();
-      // Loaded audio missing from the last .wrack save would be lost with session-only storage.
-      const unarchived = archiveState(projectRef.current, (id) => Boolean(getSource(id))).unarchived;
+      // Session-only audio (not stored on this device) missing from the last .wrack save would be lost.
+      const sessionOnly = (id) => {
+        const source = getSource(id);
+        return Boolean(source) && source.stored !== 'device';
+      };
+      const unarchived = archiveState(projectRef.current, sessionOnly).unarchived;
       if (hasUnsavedEdits() || unarchived.length > 0) e.preventDefault();
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  // The tab names the project.
+  useEffect(() => {
+    document.title = `${project.name} · W-Rack`;
+  }, [project.name]);
 
   const pruneTimer = useRef(0);
   useEffect(() => () => clearTimeout(pruneTimer.current), []);
@@ -100,9 +115,23 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
    * so several edits in one event all take effect. An edit that drops a source removes stored audio no saved
    * project uses, once the save has happened.
    */
-  function edit(next) {
+  /*
+   * Undo and redo (project-model.md, Commands and undo): documents are immutable, so the
+   * history keeps whole documents. Edits within UNDO_GROUP_MS of the last one join its step,
+   * so a knob or fader drag undoes as one.
+   */
+  const history = useRef({ past: [], future: [], last: 0 });
+
+  function edit(next, fromHistory = false) {
     if (readOnly) return;
     const prev = projectRef.current;
+    if (!fromHistory && next !== prev) {
+      const h = history.current;
+      const now = clock();
+      if (now - h.last > UNDO_GROUP_MS || h.past.length === 0) h.past = [...h.past.slice(-(UNDO_LIMIT - 1)), prev];
+      h.future = [];
+      h.last = now;
+    }
     const saved = commitEdit(next);
     projectRef.current = saved;
     setProject(saved);
@@ -110,7 +139,9 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
       clearTimeout(pruneTimer.current);
       pruneTimer.current = setTimeout(() => {
         flushSaves();
-        pruneStoredSources(Object.keys(projectRef.current.sources)).catch((err) => console.error('Stored audio cleanup failed', err));
+        // Audio that an undo step could bring back stays stored.
+        const kept = new Set([projectRef.current, ...history.current.past, ...history.current.future].flatMap((d) => Object.keys(d.sources)));
+        pruneStoredSources([...kept]).catch((err) => console.error('Stored audio cleanup failed', err));
       }, SAVE_DELAY_MS + 100);
     }
   }
@@ -157,6 +188,29 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     changeView({ dock, dockCollapsed: false });
     setTimeout(() => document.querySelector(selector)?.focus(), 50);
   };
+  function undo() {
+    const h = history.current;
+    if (h.past.length === 0) return;
+    h.future = [projectRef.current, ...h.future];
+    h.last = 0;
+    edit(h.past[h.past.length - 1], true);
+    h.past = h.past.slice(0, -1);
+  }
+
+  function redo() {
+    const h = history.current;
+    if (h.future.length === 0) return;
+    h.past = [...h.past, projectRef.current];
+    h.last = 0;
+    edit(h.future[0], true);
+    h.future = h.future.slice(1);
+  }
+
+  useCommands([
+    { id: 'edit.undo', group: 'Edit', label: 'Undo', keys: 'Mod+Z', global: true, inFields: false, run: undo, enabled: () => !readOnly && history.current.past.length > 0 },
+    { id: 'edit.redo', group: 'Edit', label: 'Redo', keys: 'Mod+Shift+Z', altKeys: ['Mod+Y'], global: true, inFields: false, run: redo, enabled: () => !readOnly && history.current.future.length > 0 },
+  ]);
+
   useCommands([
     { id: 'view.zoom-in', group: 'View', label: 'Zoom in', keys: 'Alt+=', run: () => changeView({ zoom: stepZoom(view.zoom, 1) }), enabled: () => view.zoom < ZOOM_MAX },
     { id: 'view.zoom-out', group: 'View', label: 'Zoom out', keys: 'Alt+-', run: () => changeView({ zoom: stepZoom(view.zoom, -1) }), enabled: () => view.zoom > ZOOM_MIN },
@@ -220,10 +274,10 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     let sized = false;
     const observer = new ResizeObserver(() => {
-      // The arrangement keeps at least 180 px; the dock opens at half the workspace.
-      const max = Math.max(DOCK_MIN, el.clientHeight - 300);
+      // The arrangement keeps room for about three tracks; the dock opens at 42 % of the workspace.
+      const max = Math.max(DOCK_MIN, el.clientHeight - 340);
       setMaxDock(max);
-      if (!sized) setDockHeight(Math.min(max, Math.max(DOCK_MIN, Math.round(el.clientHeight * 0.5))));
+      if (!sized) setDockHeight(Math.min(max, Math.max(DOCK_MIN, Math.round(el.clientHeight * 0.42))));
       else setDockHeight((h) => Math.min(h, max));
       sized = true;
     });
@@ -231,6 +285,15 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     return () => observer.disconnect();
   }, []);
   const [chainView, setChainView] = useState('track');
+  // Another track opens on its own chain, scrolled to the top.
+  const [chainFor, setChainFor] = useState(view.selectedTrackId);
+  if (chainFor !== view.selectedTrackId) {
+    setChainFor(view.selectedTrackId);
+    setChainView('track');
+  }
+  useEffect(() => {
+    document.getElementById('dock-panel-devices')?.scrollTo(0, 0);
+  }, [view.selectedTrackId]);
 
   // The Editor tab follows the selected track: a selected clip on another track does not hold it.
   const lastClip = project.clips[view.selectedClipIds[view.selectedClipIds.length - 1]] ?? null;
@@ -292,13 +355,16 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         className="max-w-md"
       />
       {chainView === 'master' || !chainTrack ? (
-        <div className="flex flex-wrap items-start gap-3">
-          <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
+        <div className="flex items-start gap-3">
+          <div className="w-fit shrink-0">
+            <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
+          </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-start gap-3">
+        // DEV-01: the instrument, then its effects, left to right; each card is as wide as its controls and the panel scrolls sideways.
+        <div className="flex items-start gap-3">
           {panelDevice && chainTrackId === panelTrackId ? (
-            <div className="w-full max-w-xl">
+            <div className="w-fit max-w-full shrink-0">
               <InstrumentPanel
                 project={project}
                 track={panelTrack}
@@ -310,7 +376,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
               />
             </div>
           ) : null}
-          <div className="min-w-0 flex-1">
+          <div className="w-fit shrink-0">
             <EffectChain
               key={`chain-${chainTrackId}`}
               project={project}
@@ -327,7 +393,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   );
 
   const mixerPanel = (
-    <section aria-labelledby="studio-mixer" className="flex min-h-[22rem] flex-1 flex-col">
+    <section aria-labelledby="studio-mixer" className="flex min-h-[18rem] flex-1 flex-col">
       <h2 id="studio-mixer" className="sr-only">
         Mixer
       </h2>

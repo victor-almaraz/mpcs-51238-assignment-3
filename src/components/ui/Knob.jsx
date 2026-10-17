@@ -31,10 +31,14 @@ function arc(a0, a1) {
  * (10 % of the range), Home/End go to the ends, Delete resets and Enter opens
  * the value field. Pointer: vertical drag changes the value (Shift for fine),
  * double-click resets, and a click on the value opens a text field whose
- * entry `parse(text)` turns into an input value (null rejects it). Bipolar ranges
- * fill from the centre. `caption` is the visible label (default `label`).
+ * entry `parse(text)` turns into an input value (null rejects it); with
+ * `onTyped(text)` the entry goes there instead, for values between input
+ * steps. In the field Enter or leaving it commits once and Escape cancels.
+ * Bipolar ranges fill from the centre. `caption` is the visible label
+ * (default `label`); it wraps to `captionLines` lines (1 or 2), always
+ * reserved, so knobs in a row line up.
  */
-export default function Knob({ id, label, caption, value, min, max, step = 1, onChange, valueText, display, onReset, pageStep, parse, disabled = false, className }) {
+export default function Knob({ id, label, caption, captionLines = 2, value, min, max, step = 1, onChange, valueText, display, onReset, pageStep, parse, onTyped, disabled = false, className }) {
   if (process.env.NODE_ENV !== 'production' && !valueText) {
     throw new Error(`Knob "${label}" requires a valueText prop with units.`);
   }
@@ -42,6 +46,8 @@ export default function Knob({ id, label, caption, value, min, max, step = 1, on
   const helpId = onReset ? `${id}-reset-help` : undefined;
   const drag = useRef(null);
   const inputRef = useRef(null);
+  const fieldOpen = useRef(false); // the first of Enter, Escape and blur closes the field
+  const typeable = Boolean(parse || onTyped);
   const snap = (v) => clamp(Number((step > 0 ? min + Math.round((v - min) / step) * step : v).toFixed(10)), min, max);
   const set = (v) => {
     const next = snap(v);
@@ -62,24 +68,40 @@ export default function Knob({ id, label, caption, value, min, max, step = 1, on
     } else if (e.key === 'Delete' && onReset) {
       e.preventDefault();
       onReset();
-    } else if (e.key === 'Enter' && parse) {
+    } else if (e.key === 'Enter' && typeable) {
       e.preventDefault();
-      setEditing(display ?? valueText);
+      openField();
     }
   }
 
-  function commit(text) {
+  function openField() {
+    fieldOpen.current = true;
+    setEditing(display ?? valueText);
+  }
+
+  /** Closes the value field, applying `text` unless it is null; `refocus` returns focus to the knob. */
+  function closeField(text, refocus) {
+    if (!fieldOpen.current) return;
+    fieldOpen.current = false;
     setEditing(null);
-    const parsed = parse?.(text);
-    if (parsed !== null && parsed !== undefined && Number.isFinite(parsed)) onChange(clamp(parsed, min, max));
-    inputRef.current?.focus();
+    if (text !== null) {
+      if (onTyped) onTyped(text);
+      else {
+        const parsed = parse(text);
+        if (parsed !== null && parsed !== undefined && Number.isFinite(parsed)) onChange(clamp(parsed, min, max));
+      }
+    }
+    // Focusing the knob blurs the field, whose onBlur then finds it closed.
+    if (refocus) inputRef.current?.focus();
   }
 
   return (
-    <div className={cx('flex w-[4.5rem] flex-col items-center gap-0.5', disabled && 'opacity-40', className)}>
-      <label htmlFor={id} className="w-full truncate text-center text-[0.6875rem] font-bold tracking-[0.04em] text-muted uppercase">
-        {caption ?? label}
-      </label>
+    <div className={cx('relative flex w-20 flex-col items-center gap-0.5', disabled && 'opacity-40', className)}>
+      <div className={cx('flex w-full items-end justify-center text-[0.6875rem] leading-tight font-bold tracking-[0.04em] text-muted uppercase', captionLines > 1 ? 'h-[2lh]' : 'h-[1lh]')}>
+        <label htmlFor={id} className={cx('min-w-0 max-w-full text-center break-words', captionLines > 1 ? 'line-clamp-2' : 'truncate')}>
+          {caption ?? label}
+        </label>
+      </div>
       <div
         className={cx('relative size-12 touch-none select-none', disabled ? 'cursor-not-allowed' : 'cursor-ns-resize')}
         data-help={`${label}: drag up or down (Shift for fine), double-click to reset, click the value to type one.`}
@@ -132,14 +154,15 @@ export default function Knob({ id, label, caption, value, min, max, step = 1, on
           autoFocus
           value={editing}
           onChange={(e) => setEditing(e.target.value)}
-          onBlur={() => commit(editing)}
+          onBlur={() => closeField(editing, false)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') commit(editing);
-            else if (e.key === 'Escape') {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              closeField(editing, true);
+            } else if (e.key === 'Escape') {
               e.preventDefault();
               e.stopPropagation();
-              setEditing(null);
-              inputRef.current?.focus();
+              closeField(null, true);
             }
           }}
           className={cx('min-h-6 w-full rounded-ds border border-border-strong bg-surface px-1 text-center text-xs', focusRing)}
@@ -147,8 +170,8 @@ export default function Knob({ id, label, caption, value, min, max, step = 1, on
       ) : (
         <span
           aria-hidden="true"
-          className={cx('min-h-6 w-full truncate px-1 text-center text-xs leading-6', readout, parse && !disabled ? 'cursor-text' : '')}
-          onClick={() => parse && !disabled && setEditing(display ?? valueText)}
+          className={cx('min-h-6 w-full truncate px-1 text-center text-xs leading-6', readout, typeable && !disabled ? 'cursor-text' : '')}
+          onClick={() => typeable && !disabled && openField()}
         >
           {display ?? valueText}
         </span>

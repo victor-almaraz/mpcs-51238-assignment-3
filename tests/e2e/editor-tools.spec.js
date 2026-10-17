@@ -42,12 +42,16 @@ const clipRows = (page) => page.getByRole('treegrid', { name: 'Tracks and clips'
 const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
 const audioClip = async (page, id) => Object.values((await saved(page, id)).clips).find((c) => c.kind === 'audio');
 
-/** Canvas geometry: 20 px ruler, 56 px rows, clips inset 3 px; 32 px per quarter note at zoom 1. */
+/** Canvas geometry, as in src/components/timeline/layout.js: ruler and track heights. */
+const RULER_H = 24;
+const TRACK_H = 56;
+
+/** Canvas point `x` px right, `dy` px into clip row `row` (clips inset 3 px; 32 px per quarter note at zoom 1). */
 async function canvasPoint(page, x, row, dy) {
   const canvas = page.locator('section[aria-labelledby="studio-timeline"] canvas');
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
-  return { x: box.x + x, y: box.y + 20 + row * 56 + 3 + dy };
+  return { x: box.x + x, y: box.y + RULER_H + row * TRACK_H + 3 + dy };
 }
 
 test('the command palette opens from the header and Mod+K, filters, and runs commands', async ({ page }) => {

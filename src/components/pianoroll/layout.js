@@ -2,7 +2,7 @@
  * Piano-roll geometry and labels, shared by the canvas, the grid mirror and the
  * command hook. Pure functions; no React.
  */
-import { DRUM_MAP, drumRowLabel } from '@/dsp/instruments/drum-map';
+import { DRUM_MAP, DRUM_VOICE_NAMES, drumRowLabel } from '@/dsp/instruments/drum-map';
 import { NOTE_COUNT, PPQ } from '@/dsp/core/constants';
 import { noteName } from '@/lib/audio/keyboard-input';
 
@@ -30,6 +30,13 @@ export function rowPitches(isDrums, showAll) {
 /** Row label: "C4", or "36 Kick (Bass Drum 1)" on drum tracks. */
 export function rowLabel(pitch, isDrums) {
   return isDrums ? drumRowLabel(pitch) : noteName(pitch);
+}
+
+/** Visible row header: "C4", or "36 Kick" on drum rows (the GM name goes in the accessible name and tooltip). */
+export function rowShortLabel(pitch, isDrums) {
+  if (!isDrums) return noteName(pitch);
+  const e = DRUM_MAP.find((x) => x.note === pitch);
+  return e ? `${pitch} ${DRUM_VOICE_NAMES[e.voice]}` : `${pitch} No voice`;
 }
 
 /** Notes 42, 44 and 46 share the hi-hat choke group. */

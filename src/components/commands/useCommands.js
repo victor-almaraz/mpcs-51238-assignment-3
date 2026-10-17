@@ -27,6 +27,8 @@ export default function useCommands(list) {
         group: first.group,
         keys: first.keys ?? '',
         global: first.global === true,
+        altKeys: first.altKeys ?? [],
+        inFields: first.inFields !== false,
         run: () => current()?.run(),
         enabled: () => {
           const c = current();

@@ -22,6 +22,7 @@ export default function Dialog({
   initialFocusRef,
   returnFocusRef,
   className,
+  closeOnBackdrop = false,
   ref,
   ...rest
 }) {
@@ -83,6 +84,16 @@ export default function Dialog({
         'backdrop:bg-[rgb(30_32_26/0.55)]',
         className,
       )}
+      onClick={
+        closeOnBackdrop
+          ? (e) => {
+              // A click on the backdrop targets the dialog itself, outside its box.
+              if (e.target !== e.currentTarget) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose?.();
+            }
+          : undefined
+      }
       {...rest}
     >
       <div className="flex flex-col gap-4">

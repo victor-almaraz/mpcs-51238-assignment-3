@@ -72,7 +72,7 @@ export default function SavePresetDialog({ open, kind, device, onClose, onSaved,
           </p>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
-          <IconButton icon="x" label="Cancel" onClick={close} />
+          <Button onClick={close}>Cancel</Button>
           <Button type="submit" variant="primary">
             Save preset
           </Button>

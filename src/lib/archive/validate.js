@@ -170,7 +170,9 @@ export async function validateArchive(file) {
     return { ok: false, error: { errors: [{ code: 'too-large', message: 'The archive file is larger than 500 MB.' }] } };
   }
   const scan = await scanZip(file);
-  const errors = [...scan.errors, ...entryErrors(scan.entries)];
+  // A file that is not a zip has no entries; its read error alone explains it.
+  const unreadable = scan.entries.length === 0 && scan.errors.some((e) => e.code === 'no-end-record');
+  const errors = unreadable ? scan.errors : [...scan.errors, ...entryErrors(scan.entries)];
   const withinLimits = !errors.some((e) => e.code === 'too-large' || e.code === 'too-many-entries');
 
   let project = null;

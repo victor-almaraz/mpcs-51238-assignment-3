@@ -65,7 +65,8 @@ test('corrupted project JSON shows the guarded message', async ({ page }) => {
   const id = await createProject(page, 'Broken');
   await write(page, `w-rack:v1:project:${id}`, '{"schemaVersion": 1, "id":');
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('A saved project could not be read.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Project could not open');
+  await expect(page.getByRole('main')).toContainText('A saved project could not be read.');
   await expect(page.getByRole('main').getByRole('link', { name: 'Projects' })).toBeVisible();
 });
 

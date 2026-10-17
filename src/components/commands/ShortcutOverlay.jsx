@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
@@ -69,7 +70,8 @@ function KeyList({ title, keys, note }) {
   return (
     <section className="flex flex-col gap-1">
       <h3 className="text-sm font-bold">{title}</h3>
-      <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-3 gap-y-0.5 text-sm">
+      {/* One key-column width for every section, so the descriptions line up. */}
+      <dl className="grid grid-cols-[12rem_1fr] gap-x-3 gap-y-0.5 text-sm">
         {keys.map(([key, text]) => (
           <div key={`${key}|${text}`} className="contents">
             <dt>
@@ -86,10 +88,12 @@ function KeyList({ title, keys, note }) {
 
 /**
  * Shortcut overlay (HELP-02): `?` opens a dialog listing every registered
- * command's shortcut by group, then the keys of the focused editors.
+ * command's shortcut by group, then, in the editor, the keys of the focused editors.
  */
 export default function ShortcutOverlay() {
   const all = useSyncExternalStore(subscribeCommands, getCommands, () => EMPTY);
+  // The focused-editor keys apply only in the editor (/projects/<id>).
+  const inEditor = /^\/projects\/[^/]+/.test(usePathname() ?? '');
   const [open, setOpen] = useState(false);
   const closeRef = useRef(null);
 
@@ -103,12 +107,12 @@ export default function ShortcutOverlay() {
       initialFocusRef={closeRef}
       className="w-[min(60rem,95vw)]"
       actions={
-        <IconButton icon="x" label="Close" ref={closeRef} onClick={() => setOpen(false)} />
+        <Button ref={closeRef} onClick={() => setOpen(false)}>Close</Button>
       }
     >
       {/* The list scrolls on short windows, so it takes focus for keyboard scrolling. */}
       <div role="group" aria-label="Shortcut list" tabIndex={0} className={cx('grid max-h-[70dvh] gap-4 overflow-y-auto md:grid-cols-2', focusRing)}>
-        {[...groupsOf(all), ...EDITOR_KEYS].map((g) => (
+        {[...groupsOf(all), ...(inEditor ? EDITOR_KEYS : [])].map((g) => (
           <KeyList key={g.title} {...g} />
         ))}
       </div>

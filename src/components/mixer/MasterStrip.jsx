@@ -8,6 +8,9 @@ import { getEngine } from '@/lib/audio/engine-client';
 import PanKnob from './PanKnob';
 import { faderText } from './TrackStrip';
 
+/** How long the limiter readout holds its deepest reduction, ms. */
+const HOLD_MS = 1000;
+
 /**
  * Master strip (MIX-01, MIX-02), laid out like the track strips: master pan
  * (balance, saved with the project), the limiter's gain reduction ("Limiter
@@ -21,13 +24,17 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
 
   useEffect(() => {
     let frame = 0;
-    let shownUntil = 0;
+    let held = 0; // dB of reduction on show, 0 for none
+    let heldUntil = 0;
     function draw(now) {
       const reductionDb = -20 * Math.log10(Math.max(1e-6, engine.getMasterLevel().reduction));
-      if (reductionDb > 0.5) shownUntil = now + 1000;
-      if (reductionRef.current) {
-        reductionRef.current.textContent = now < shownUntil ? `Limiter −${reductionDb.toFixed(1)} dB` : '';
-      }
+      // The deepest reduction holds for 1 s; a lighter one replaces it only after that.
+      if (reductionDb > 0.5 && (reductionDb >= held || now >= heldUntil)) {
+        held = reductionDb;
+        heldUntil = now + HOLD_MS;
+      } else if (now >= heldUntil) held = 0;
+      const text = held > 0 ? `Limiter −${held.toFixed(1)} dB` : '';
+      if (reductionRef.current && reductionRef.current.textContent !== text) reductionRef.current.textContent = text;
       frame = requestAnimationFrame(draw);
     }
     frame = requestAnimationFrame(draw);
@@ -54,7 +61,7 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
         onChange={onVolume}
         onReset={() => onVolume(MASTER_VOLUME.default)}
       >
-        <Meter read={readMeter} className="h-full w-3" />
+        <Meter read={readMeter} scale={[MASTER_VOLUME.min, MASTER_VOLUME.max]} className="h-full w-3" />
       </Fader>
       <output aria-hidden="true" className="min-h-6 w-full rounded-ds bg-window text-center font-mono text-xs leading-6 text-lamp">
         {faderText(volumeDb)}

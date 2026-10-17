@@ -73,7 +73,7 @@ export default function SettingsPanel() {
           Storage
         </h2>
         {usage === null ? null : (
-          <p>
+          <p className="text-sm">
             Projects, presets and settings use about {kib(usage)} of {mib(STORAGE_QUOTA_BYTES)} browser storage.
           </p>
         )}

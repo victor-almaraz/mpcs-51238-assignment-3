@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { cx, errorText, fieldLabel, focusRing } from '@/design-systems/industrial/classes';
 import { validateTempo, parseTempo } from '@/lib/project/validate';
 
@@ -12,6 +12,13 @@ import { validateTempo, parseTempo } from '@/lib/project/validate';
 export default function TempoField({ bpm, onCommit, disabled }) {
   const [text, setText] = useState(null); // null while showing `bpm`
   const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+  const [errorAt, setErrorAt] = useState(undefined);
+  useLayoutEffect(() => {
+    if (!error || !inputRef.current) return;
+    const r = inputRef.current.getBoundingClientRect();
+    setErrorAt({ left: r.left, top: r.bottom + 4 });
+  }, [error]);
   const value = text ?? String(bpm);
 
   function commit() {
@@ -42,7 +49,13 @@ export default function TempoField({ bpm, onCommit, disabled }) {
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commit();
+            else if (e.key === 'Escape') {
+              // Escape reverts the typed text (and, being in a field, does not panic).
+              setText(null);
+              setError(null);
+            }
           }}
+          ref={inputRef}
           className={cx(
             'min-h-8 w-16 rounded-ds border bg-surface px-2 text-sm text-fg tabular-nums',
             error ? 'border-danger' : 'border-border-strong',
@@ -51,7 +64,8 @@ export default function TempoField({ bpm, onCommit, disabled }) {
         />
       </div>
       {error ? (
-        <p id="transport-tempo-error" className={errorText}>
+        // Anchored under the field without growing the transport bar, which scrolls sideways and would clip it.
+        <p id="transport-tempo-error" className={cx(errorText, 'fixed z-50 whitespace-nowrap shadow-md')} style={errorAt}>
           <span aria-hidden="true">▲</span>
           <span>{error}</span>
         </p>

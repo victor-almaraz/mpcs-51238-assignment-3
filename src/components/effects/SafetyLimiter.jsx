@@ -32,13 +32,13 @@ export default function SafetyLimiter() {
     <div
       role="group"
       aria-label={`Safety limiter, always on, gain reduction ${reduction}`}
-      className="flex w-full flex-col gap-1 rounded-ds border-2 border-fg bg-surface-2 p-2 sm:w-80"
+      className="flex w-72 shrink-0 flex-col gap-1 rounded-ds border-2 border-fg bg-surface-2 p-2"
     >
       <h3 className={sectionHeading} aria-hidden="true">
         Safety limiter (always on)
       </h3>
       <p className="text-sm" aria-hidden="true">
-        Ceiling −1 dBFS · Gain reduction <span className="tabular-nums">{reduction}</span>
+        <span className="whitespace-nowrap">Ceiling −1 dBFS</span> · <span className="whitespace-nowrap">Gain reduction <span className="tabular-nums">{reduction}</span></span>
       </p>
       <p className="text-xs text-muted" aria-hidden="true">
         Last in the chain; it takes no slot and cannot be bypassed.

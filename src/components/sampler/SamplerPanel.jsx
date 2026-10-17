@@ -184,6 +184,7 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
             <Select
               id={`sampler-${device.id}-source`}
               label="Choose project source"
+              labelClassName="w-auto whitespace-nowrap"
               value={zone?.sourceId && project.sources[zone.sourceId] ? zone.sourceId : ''}
               options={[{ value: '', label: 'None' }, ...sourceOptions]}
               onChange={chooseProjectSource}

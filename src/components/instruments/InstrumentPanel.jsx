@@ -12,9 +12,8 @@ import { applyPreset } from '@/lib/presets/store';
 import { setSamplerSource } from '@/lib/project/clip-commands';
 import DrumMachinePanel from './DrumMachinePanel';
 import GranularSource from './GranularSource';
-import ParamControl from './ParamControl';
+import ParamControl, { paramLabel } from './ParamControl';
 import { sectionParams } from './sections';
-
 
 /**
  * Parameter panel for a track's instrument, generated from its ParamDefs:
@@ -26,6 +25,8 @@ import { sectionParams } from './sections';
 export default function InstrumentPanel({ project, track, device, onParamChange, onEdit, disabled, loading }) {
   const entry = instrumentFor(device.type);
   const name = INSTRUMENT_LABELS[device.type] ?? device.type;
+  const sourceDef = device.type === 'granular' ? entry?.params.find((d) => d.id === 'source') : null;
+  const fileSource = sourceDef ? sourceDef.options[clampParam(sourceDef, device.params.source)] === 'sample' : false;
   const control = (def) => (
     <ParamControl
       key={def.id}
@@ -57,15 +58,26 @@ export default function InstrumentPanel({ project, track, device, onParamChange,
         <SamplerPanel project={project} device={device} onEdit={onEdit} onParamChange={onParamChange} disabled={disabled} loading={loading} />
       ) : entry ? (
         <fieldset disabled={disabled} className="flex flex-wrap items-start gap-3">
-          {sectionParams(entry.params).map((item, i) => (
-            <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
-              <legend className={sectionHeading}>{item.section}</legend>
-              {item.defs.map((def) => control(def))}
-            </fieldset>
-          ))}
-          {device.type === 'granular' && entry.params[0].options[clampParam(entry.params[0], device.params.source)] === 'sample' ? (
-            <GranularSource project={project} device={device} onEdit={onEdit} loading={loading} />
-          ) : null}
+          {sectionParams(entry.params).map((item, i) => {
+            // The granular File source's controls sit beside the Source selector.
+            const extra = item.section === 'Source' && fileSource ? <GranularSource project={project} device={device} onEdit={onEdit} loading={loading} /> : null;
+            // A section holding one control of the same name ("Source") shows that name once, on the control.
+            if (item.defs.length === 1 && paramLabel(item.defs[0]) === item.section) {
+              return (
+                <div key={`${item.section}-${i}`} className="flex flex-col gap-3 rounded-ds border border-border p-2">
+                  {control(item.defs[0])}
+                  {extra}
+                </div>
+              );
+            }
+            return (
+              <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
+                <legend className={sectionHeading}>{item.section}</legend>
+                {item.defs.map((def) => control(def))}
+                {extra}
+              </fieldset>
+            );
+          })}
         </fieldset>
       ) : (
         <p className="text-sm text-muted">This instrument has no controls yet.</p>

@@ -44,6 +44,7 @@ Status never depends on color alone: pressed toggles expose `aria-pressed` and a
 | Empty project | "No tracks" region with Add instrument track and Add audio file; Add instrument track opens a four-bar clip with focus on the first piano-roll cell | `workspace.spec.js` |
 | Notes | Piano roll grid: arrows, Enter, Delete, Alt+arrows, Shift+arrows, Q | `pianoroll.spec.js` |
 | Velocity | Velocity lane slider on the selected note: arrows, Page Up/Down, Home/End; Shift+Left/Right pick another note | `velocity.spec.js` |
+| Loop range | "Loop start" and "Loop end" handles in the ruler: arrows (grid steps), Page Up/Down (bars), Home/End | `loop.spec.js` |
 | Tracks | Track rows in the treegrid: M and S mute and solo; Delete deletes the track, after a confirmation when it has clips | `workspace.spec.js` |
 | Audio clips | Timeline treegrid: arrows, Shift+arrows, Mod+E, Mod+J, Mod+D, Delete, Alt+arrows, comma and period | `audio-import.spec.js` |
 | Global shortcuts | L loop, K metronome, G snap, + and − grid, Mod+S, Mod+O, Mod+Shift+E, Mod+, (design-patterns.md, Keyboard shortcuts); none acts in text fields; while Play with keyboard is on, its note letters (G and K among them) play notes | `workspace.spec.js` |

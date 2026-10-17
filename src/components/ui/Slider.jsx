@@ -64,7 +64,7 @@ export default function Slider({
   }
 
   return (
-    <div className={cx('flex min-w-0 items-center gap-2', className)}>
+    <div className={cx('relative flex min-w-0 items-center gap-2', className)}>
       <label htmlFor={id} className={labelHidden ? 'sr-only' : fieldLabel}>
         {label}
       </label>

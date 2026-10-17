@@ -21,7 +21,7 @@ export default function RestoreDialog({ open, name, onRestore, onReplace, onCanc
       returnFocusRef={returnFocusRef}
       actions={
         <>
-          <IconButton icon="x" label="Cancel" onClick={onCancel} />
+          <Button onClick={onCancel}>Cancel</Button>
           <Button variant="danger" onClick={onReplace}>
             Replace project
           </Button>

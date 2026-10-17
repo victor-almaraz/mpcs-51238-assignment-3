@@ -7,6 +7,7 @@ import IconButton from '@/components/ui/IconButton';
 import Toolbar from '@/components/ui/Toolbar';
 import useCommands from '@/components/commands/useCommands';
 import Meter from '@/components/ui/Meter';
+import Icon from '@/components/ui/icons/Icon';
 import Slider from '@/components/ui/Slider';
 import { faderText } from '@/components/mixer/TrackStrip';
 import { cx, errorText } from '@/design-systems/industrial/classes';
@@ -50,7 +51,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
   const [initialPlayhead] = useState(view.playhead);
   const loop = loopRange(project, view);
   // Stop has nothing to do when stopped at bar 1.
-  const stopDisabled = !state.playing && !state.paused && view.playhead === 0;
+  const stopDisabled = !state.playing && !state.paused && view.playhead === (view.loopEnabled ? loop.start : 0);
 
   useEffect(() => {
     engine.setProject(project);
@@ -110,7 +111,10 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         panic();
         return;
       }
-      if (e.target.closest?.(CONTROL_TARGETS)) return;
+      // A button clicked with the pointer keeps focus without showing it; Space then plays, as in
+      // every DAW. A button reached by keyboard (:focus-visible) keeps its own Space.
+      const pointerFocusedButton = e.key === ' ' && e.target.closest?.('button') && !e.target.matches?.(':focus-visible');
+      if (e.target.closest?.(CONTROL_TARGETS) && !pointerFocusedButton) return;
       if (e.key === ' ' && !e.repeat) {
         e.preventDefault();
         togglePlay();
@@ -133,7 +137,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     { id: 'transport.loop-start', group: 'Transport', label: 'Go to loop start', keys: 'Shift+Home', run: () => locate(loop.start) },
     { id: 'transport.loop', group: 'Transport', label: view.loopEnabled ? 'Turn loop off' : 'Turn loop on', keys: 'L', global: true, run: () => onViewChange({ loopEnabled: !view.loopEnabled, loop }) },
     { id: 'transport.metronome', group: 'Transport', label: state.metronome ? 'Turn metronome off' : 'Turn metronome on', keys: 'K', global: true, run: () => engine.setMetronome(!engine.getState().metronome) },
-    { id: 'transport.panic', group: 'Transport', label: 'Panic: stop all sound', keys: 'Escape', run: () => panic() },
+    { id: 'transport.panic', group: 'Transport', label: 'Panic (stop all sound)', keys: 'Escape', run: () => panic() },
   ]);
 
   const hint = showExampleHint && !played;
@@ -179,10 +183,12 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
           onChange={(value) => onEdit(setTimeSignature(project, value))}
         />
         {/* When the bar is short, the status line gives up width first, then the volume. */}
-        <div className="flex w-80 min-w-56" style={{ flexShrink: 1 }}>
+        <div className="flex w-64 min-w-44 items-center gap-1" style={{ flexShrink: 1 }} data-tip="Master volume">
+          <Icon name="volume-2" className="size-4 text-muted" />
           <Slider
             id="transport-master-volume"
             label="Master volume"
+            labelHidden
             className="w-full"
             min={MASTER_VOLUME.min}
             max={MASTER_VOLUME.max}
@@ -195,17 +201,18 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
           />
         </div>
         <Meter read={readMaster} className="h-8 w-4 shrink-0" />
-        <Button variant="danger" onClick={panic} data-help="Panic (Escape): stops the transport and every sound at once.">
+        <Button variant="danger" size="sm" onClick={panic} data-help="Panic (Escape): stops the transport and every sound at once.">
           Panic
         </Button>
         {/* The status line may shorten to its first word. */}
         <span className="min-w-[4.5rem] truncate text-sm whitespace-nowrap" style={{ flexShrink: 10 }}>
           {status}
           {hint ? (
-            <>
+            // Wide windows show the hint; Play stays highlighted and described by it everywhere.
+            <span className="hidden 2xl:inline">
               {' · '}
               <strong id="transport-play-hint">Press Play to hear this example</strong>
-            </>
+            </span>
           ) : null}
         </span>
       </Toolbar>

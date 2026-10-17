@@ -9,6 +9,7 @@ import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import { removeStoredSource, storedSources } from '@/lib/audio/source-cleanup';
 import { deleteDatabase, usage } from '@/lib/storage/audio-store';
 import { listWrackKeys, removeKey } from '@/lib/storage/storage';
+import { focusAfterRemoval } from '@/components/ui/focusAfterRemoval';
 import IconButton from '@/components/ui/IconButton';
 
 const noSubscription = () => () => {};
@@ -53,8 +54,9 @@ export default function StoredAudio() {
     };
   }, [version]);
 
-  async function remove(source) {
+  async function remove(source, index) {
     const result = await removeStoredSource(source.sourceId);
+    focusAfterRemoval(() => document.querySelector('[aria-label="Stored audio files"]'), index, '[aria-label^="Delete "]', () => document.getElementById('settings-audio'));
     setMessage(result.ok ? `Deleted ${source.name} from this device` : `${source.name} could not be deleted`);
     setVersion((v) => v + 1);
   }
@@ -73,16 +75,16 @@ export default function StoredAudio() {
 
   return (
     <Card as="section" aria-labelledby="settings-audio">
-      <h2 id="settings-audio" className={sectionHeading}>
+      <h2 id="settings-audio" tabIndex={-1} className={sectionHeading}>
         Stored audio
       </h2>
       {estimate ? (
-        <p>
+        <p className="text-sm">
           This site uses about {mb(estimate.used)} of {mb(estimate.quota)} available to it, including stored audio.
         </p>
       ) : null}
       {safari ? (
-        <p>Safari can delete this site&apos;s stored data after 7 days without a visit. Save .wrack files as backups.</p>
+        <p className="text-sm">Safari can delete this site&apos;s stored data after 7 days without a visit. Save .wrack files as backups.</p>
       ) : null}
       {error ? (
         <p role="alert" className={errorText}>
@@ -95,7 +97,7 @@ export default function StoredAudio() {
         <p className="text-sm">No audio is stored on this device.</p>
       ) : (
         <ul aria-label="Stored audio files" className="flex flex-col divide-y divide-border rounded-ds border border-border-strong bg-surface">
-          {sources.map((s) => (
+          {sources.map((s, i) => (
             <li key={s.sourceId} className="flex flex-wrap items-center justify-between gap-2 p-2">
               <div className="flex flex-col">
                 <span className="font-bold">{s.name}</span>
@@ -103,9 +105,7 @@ export default function StoredAudio() {
                   {mb(s.size)} · {s.projects.length === 0 ? 'Used by no saved project' : `Used by ${s.projects.join(', ')}`}
                 </span>
               </div>
-              <Button size="sm" aria-label={`Delete ${s.name} from this device`} onClick={() => remove(s)}>
-                Delete
-              </Button>
+              <IconButton icon="trash-2" size="sm" label={`Delete ${s.name} from this device`} onClick={() => remove(s, i)} />
             </li>
           ))}
         </ul>
@@ -124,7 +124,7 @@ export default function StoredAudio() {
         returnFocusRef={clearRef}
         actions={
           <>
-            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setConfirming(false)} />
+            <Button ref={cancelRef} onClick={() => setConfirming(false)}>Cancel</Button>
             <Button variant="danger" onClick={clearAll}>
               Clear all data
             </Button>

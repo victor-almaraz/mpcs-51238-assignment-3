@@ -20,7 +20,7 @@ export const metadata = { title: 'Project' };
 export default function ProjectPage() {
   return (
     // The editor fills the viewport below the 48 px site header; its regions scroll inside it.
-    <main id={MAIN_ID} tabIndex={-1} className="flex h-[calc(100dvh-3rem)] flex-col overflow-hidden">
+    <main id={MAIN_ID} tabIndex={-1} className="relative flex h-[calc(100dvh-3rem)] flex-col overflow-hidden">
       <StudioLoader shellId={SHELL_ID} />
     </main>
   );

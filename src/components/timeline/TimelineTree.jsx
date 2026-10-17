@@ -215,7 +215,8 @@ export default function TimelineTree({
                 'pointer-events-auto absolute left-0 z-10 flex items-stretch border-r border-b border-border-strong',
                 isCurrent ? 'bg-hover' : 'bg-surface',
                 t.mute ? 'opacity-70' : '',
-                focusRing,
+                // Inside the row: an outer ring would be clipped at the left edge and hidden by the neighbouring rows.
+                'outline-none focus-visible:z-20 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
               )}
               style={{ top: RULER_H + row.row * TRACK_H, width: HEADER_W, height: TRACK_H, transform: 'translateX(var(--sx, 0px))' }}
             >

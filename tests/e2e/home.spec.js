@@ -28,7 +28,8 @@ test('an example opens as an unsaved copy, stopped, and saves nothing', async ({
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
   await expect(page.getByText('Copy of example — saved on first edit')).toBeVisible();
   await expect(page.getByText('Stopped')).toBeVisible();
-  await expect(page.getByText('Press Play to hear this example')).toBeVisible();
+  // The hint is visible on wide windows; Play carries it as its description everywhere.
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play', exact: true })).toHaveAccessibleDescription(/Press Play to hear this example/);
   const tracks = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]');
   await expect(tracks).toHaveCount(3);
   await expect(tracks.nth(0)).toHaveAccessibleName(/^Track 1: Drums, Drum machine/);

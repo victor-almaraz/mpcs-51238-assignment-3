@@ -8,8 +8,10 @@ import StatusRegion from '@/components/ui/StatusRegion';
  * Clip indicator (MIX-02): latches once a peak from `read()` ([left, right]
  * linear, or null) passes 0 dBFS and stays lit until pressed. While lit it is a
  * button, "Clear clip indicator, Bass clipped"; the latch is announced once.
+ * Clearing it removes the button, so focus moves to the element with id
+ * `focusId` (the strip's fader).
  */
-export default function ClipIndicator({ name, read }) {
+export default function ClipIndicator({ name, read, focusId }) {
   const [clipped, setClipped] = useState(false);
   const clippedRef = useRef(false);
   const readRef = useRef(read);
@@ -31,7 +33,8 @@ export default function ClipIndicator({ name, read }) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  function clear() {
+  function clear(e) {
+    if (e.currentTarget === document.activeElement) document.getElementById(focusId)?.focus();
     clippedRef.current = false;
     setClipped(false);
   }

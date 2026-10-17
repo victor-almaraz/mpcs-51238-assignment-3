@@ -9,6 +9,15 @@ import useCommands from './useCommands';
 
 const EMPTY = [];
 
+/** Palette group order; other groups follow in registration order. */
+const GROUP_ORDER = ['Transport', 'Project', 'Timeline', 'Clip', 'Edit', 'View', 'Go to', 'Help'];
+const rank = (group) => {
+  const i = GROUP_ORDER.indexOf(group);
+  return i < 0 ? GROUP_ORDER.length : i;
+};
+/** Commands grouped (stable: registration order within a group). */
+const byGroup = (list) => list.map((c, i) => [c, i]).sort((a, b) => rank(a[0].group) - rank(b[0].group) || a[1] - b[1]).map(([c]) => c);
+
 /** True for Ctrl+K or Ctrl+Shift+P (Cmd on macOS). */
 const isPaletteKey = (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
@@ -47,7 +56,14 @@ export default function CommandPalette() {
     { id: 'nav.projects', group: 'Go to', label: 'Projects', run: () => router.push('/projects') },
     { id: 'nav.new', group: 'Go to', label: 'New project', run: () => router.push('/new') },
     { id: 'nav.settings', group: 'Go to', label: 'Settings', keys: 'Mod+,', global: true, run: () => router.push('/settings') },
+    // Listed for the shortcut overlay; the palette's own key handler opens it.
+    { id: 'help.palette', group: 'Help', label: 'Command palette', keys: 'Mod+K', run: () => requestPalette() },
   ]);
+
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -56,13 +72,15 @@ export default function CommandPalette() {
         return;
       }
       e.preventDefault();
-      if (!document.querySelector('dialog[open]')) requestPalette();
+      // The palette key toggles: it closes an open palette; other open dialogs keep it shut.
+      if (openRef.current) setOpen(false);
+      else if (!document.querySelector('dialog[open]')) requestPalette();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const matches = all.filter((c) => matchesQuery(c, query));
+  const matches = byGroup(all.filter((c) => matchesQuery(c, query)));
   const current = Math.min(active, Math.max(0, matches.length - 1));
 
   function run(command) {
@@ -85,7 +103,7 @@ export default function CommandPalette() {
   const optionId = (i) => `${listId}-option-${i}`;
 
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} title="Commands" initialFocusRef={inputRef} className="w-[min(36rem,95vw)]">
+    <Dialog open={open} onClose={() => setOpen(false)} title="Commands" initialFocusRef={inputRef} closeOnBackdrop className="w-[min(36rem,95vw)]">
       <div className="flex flex-col gap-2">
         <label htmlFor={`${listId}-input`} className="text-sm font-bold">
           Search commands
@@ -107,7 +125,7 @@ export default function CommandPalette() {
           onKeyDown={onKeyDown}
           className={cx('min-h-8 rounded-ds border border-border-strong bg-surface px-2 text-sm', focusRing)}
         />
-        <ul id={listId} role="listbox" aria-label="Commands" className="flex max-h-80 flex-col overflow-y-auto rounded-ds border border-border">
+        <ul id={listId} role="listbox" aria-label="Commands" className={cx('flex max-h-80 flex-col overflow-y-auto rounded-ds border border-border', matches.length === 0 && 'hidden')}>
           {matches.map((c, i) => {
             const enabled = c.enabled();
             return (

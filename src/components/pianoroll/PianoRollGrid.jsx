@@ -12,7 +12,7 @@ import { getEngine } from '@/lib/audio/engine-client';
 import { noteAt, notesStartingIn } from '@/lib/project/midi-commands';
 import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
-import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, positionText, rowLabel, rowPitches } from './layout';
+import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, positionText, rowLabel, rowPitches, rowShortLabel } from './layout';
 import usePianoRollCommands from './usePianoRollCommands';
 import VelocityLane from './VelocityLane';
 import IconButton from '@/components/ui/IconButton';
@@ -31,6 +31,10 @@ const LOOP_OPTIONS = [
 ];
 /** Cursor tick that marks the row header. */
 const HEADER = -1;
+/** Smallest note-grid height: three rows and the border; below it the panel scrolls. */
+const GRID_MIN_H = 3 * ROW_H + 2;
+/** Width of a note's resize zone at its end, px (the last third of a one-step note). */
+const EDGE_PX = 8;
 
 /**
  * Piano roll (PR-01 to PR-04): a canvas for the picture and a role="grid"
@@ -42,9 +46,11 @@ const HEADER = -1;
  * Keys on a cell: arrows move the cursor (Left from the first column reaches
  * the row header); Enter adds or removes a note; Delete removes it;
  * Alt+arrows move it; Shift+Left/Right change its length; Shift+Up/Down change
- * its velocity by 8; Q quantizes the clip. A drag moves (or, from a note's last
- * cell, resizes) a note in one edit on release. The cursor is a pitch and a
- * tick, so it stays put when the grid or the row set changes.
+ * its velocity by 8; Q quantizes the clip. Pointer: a drag from an empty
+ * cell draws a note as long as the drag (grid steps); a drag from a note's
+ * right edge (the last 8 px, cursor ew-resize) resizes it and from its body
+ * moves it, in one edit on release. Drum notes keep one length. The cursor is
+ * a pitch and a tick, so it stays put when the grid or the row set changes.
  * `stepInsertRef.current(pitch)` is set while step input is on.
  */
 export default function PianoRollGrid({ project, trackId, view, onViewChange, onEdit, readOnly, stepInsertRef }) {
@@ -270,8 +276,20 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     return { r: Math.max(0, Math.min(rows.length - 1, r)), c: Math.max(0, Math.min(cols - 1, c)) };
   }
 
-  /** The note a drag would leave: the origin note moved or resized by the drag, clamped like the commands. */
+  /** True when the pointer is on the resize zone at the end of `note` (pitched tracks only). */
+  function onNoteEdge(e, note) {
+    if (!note || isDrums) return false;
+    const x = e.clientX - gridRef.current.getBoundingClientRect().left - LABEL_W;
+    const end = ((note.tick + note.length) / grid) * CELL_W;
+    return x <= end && end - x <= EDGE_PX;
+  }
+
+  /** Steps of a note drawn from the origin cell to cell `c`: at least one, within the clip. */
+  const drawSteps = (d) => Math.max(1, Math.min(cols, d.c + 1) - d.originC);
+
+  /** The note a drag would leave: the origin note moved or resized by the drag, or the drawn note; clamped like the commands. */
   function dragResult(d) {
+    if (d.mode === 'add') return { id: null, tick: d.originC * grid, pitch: rows[d.originR], length: drawSteps(d) * grid, velocity: 100 };
     const n = d.note;
     const dTick = (d.c - d.originC) * grid;
     if (d.mode === 'resize') return { ...n, length: Math.max(grid, n.length + dTick) };
@@ -290,8 +308,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     const [r, c] = cell.dataset.cell.split(':').map(Number);
     if (c < 0) return; // row headers keep their native click (preview or audition)
     const note = cellNote(r, c);
-    const lastCell = note ? Math.floor((note.tick + note.length - 1) / grid) : -1;
-    const mode = note ? (c === lastCell && note.length > grid && !isDrums ? 'resize' : 'move') : 'add';
+    const mode = note ? (onNoteEdge(e, note) ? 'resize' : 'move') : 'add';
     drag.current = { originR: r, originC: c, r, c, note, mode, moved: false };
     gridRef.current.setPointerCapture(e.pointerId);
     moveCursor(r, c);
@@ -299,20 +316,26 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
 
   function onPointerMove(e) {
     const d = drag.current;
-    if (!d) return;
+    if (!d) {
+      // Hover: the resize cursor over a note's right edge.
+      const cell = e.target.closest?.('[data-cell]');
+      const [r, c] = cell ? cell.dataset.cell.split(':').map(Number) : [-1, -1];
+      gridRef.current.style.cursor = !readOnly && c >= 0 && onNoteEdge(e, cellNote(r, c)) ? 'ew-resize' : '';
+      return;
+    }
     if (!(e.buttons & 1)) {
       endDrag();
       return;
     }
-    if (!d.note) return;
+    if (d.mode === 'add' && isDrums) return; // drum notes have one length
     const { r, c } = cellFromPoint(e);
     if (r === d.r && c === d.c) return;
     d.moved = true;
-    d.r = d.mode === 'resize' ? d.originR : r;
+    d.r = d.mode === 'move' ? r : d.originR;
     d.c = c;
     const next = dragResult(d);
     setGhost(next);
-    setCursor({ pitch: next.pitch, tick: next.tick + (d.mode === 'resize' ? next.length - grid : 0) });
+    setCursor({ pitch: next.pitch, tick: next.tick + (d.mode === 'move' ? 0 : next.length - grid) });
   }
 
   function onPointerUp() {
@@ -330,7 +353,10 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       setSelectedId(d.note.id);
       commands.select(d.note);
     } else {
-      const added = commands.add(d.c * grid, rows[d.r]);
+      // A drawn note is added at one step, then given the drawn length.
+      const drawn = dragResult(d);
+      const added = commands.add(drawn.tick, drawn.pitch);
+      if (added && drawn.length > added.length) commands.resize(added.id, drawn.length - added.length);
       setSelectedId(added?.id ?? null);
     }
   }
@@ -371,134 +397,143 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
         <IconButton icon="grid-3x3" label="Quantize" shortcut="Q" onClick={() => commands.quantize()} disabled={!clip || readOnly} data-help="Quantize (Q): moves every note to the grid." />
         {isDrums ? <IconToggle icon="list" label="Show all notes" pressed={showAll} onClick={() => setShowAll(!showAll)} data-help="Show all notes: every General MIDI drum row, not only the kit's." /> : null}
       </Toolbar>
-      {(clip?.notes.length ?? 0) === 0 ? (
-        <div className="flex flex-wrap items-baseline gap-x-4 text-sm">
-          <p>Press a key or click the grid to add a note.</p>
-          <section aria-labelledby="keyboard-map-heading" className="flex items-baseline gap-2">
-            <h3 id="keyboard-map-heading" className={sectionHeading}>
-              Keyboard map
-            </h3>
-            <p className="text-xs">Keys A to K play the notes C to C. Z and X move the keyboard down or up an octave.</p>
-          </section>
-        </div>
-      ) : null}
       </div>
       <p id="pianoroll-help" className="sr-only">
         {PIANO_ROLL_HELP}
       </p>
-      <div
-        ref={scroller}
-        data-help={PIANO_ROLL_HELP}
-        className="relative min-h-0 flex-1 overflow-auto rounded-ds border border-border-strong bg-surface"
-        style={{ scrollPaddingLeft: LABEL_W }}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
-        }}
-      >
-        <div className="relative" style={{ width: LABEL_W + cols * CELL_W, height: rows.length * ROW_H }}>
-          <PianoRollCanvas
-            view={scroll}
-            rows={rows}
-            clip={clip}
-            clipStart={clip?.start ?? 0}
-            grid={grid}
-            barTicks={barTicks}
-            beatTicks={beatTicks}
-            isDrums={isDrums}
-            selectedId={selectedId}
-            ghost={ghost}
-          />
-          <div
-            ref={gridRef}
-            role="grid"
-            aria-label="Notes"
-            aria-describedby="pianoroll-help"
-            aria-rowcount={rows.length}
-            aria-colcount={cols + 1}
-            className="absolute inset-0"
-            style={{ touchAction: 'none' }}
-            onKeyDown={onKeyDown}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={endDrag}
-            onLostPointerCapture={() => {
-              if (drag.current && !drag.current.moved) return;
-              endDrag();
-            }}
-            onDoubleClick={onDoubleClick}
-            onFocus={() => (focused.current = true)}
-            onBlur={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget)) focused.current = false;
-            }}
-          >
-            {visibleRows.map((r) => {
-              const pitch = rows[r];
-              const label = rowLabel(pitch, isDrums);
-              const cellCols = r === row && col >= 0 && !visibleCols.includes(col) ? [...visibleCols, col] : visibleCols;
-              return (
-                <div key={pitch} role="row" aria-rowindex={r + 1} className="absolute left-0" style={{ top: r * ROW_H, height: ROW_H, width: LABEL_W + cols * CELL_W }}>
-                  <div
-                    role="rowheader"
-                    aria-colindex={1}
-                    className="absolute z-10 flex items-center gap-1 border-r border-b border-border bg-surface-2 px-1 text-xs"
-                    style={{ left: scroll.scrollX, width: LABEL_W, height: ROW_H }}
-                  >
-                    <button
-                      type="button"
-                      data-cell={`${r}:-1`}
-                      tabIndex={r === row && col < 0 ? 0 : -1}
-                      title={isDrums ? `Audition ${label}` : `Preview ${label}`}
-                      className={cx('min-h-6 truncate rounded-ds px-1 text-left hover:bg-hover', focusRing)}
-                      onClick={() => engine.preview(pitch, 100)}
+      {/* The grid keeps three rows at the smallest dock; the panel scrolls below that. */}
+      <div className="relative flex flex-1 flex-col" style={{ minHeight: GRID_MIN_H }}>
+        <div
+          ref={scroller}
+          data-help={PIANO_ROLL_HELP}
+          className="relative min-h-0 flex-1 overflow-auto rounded-ds border border-border-strong bg-surface"
+          style={{ scrollPaddingLeft: LABEL_W }}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
+          }}
+        >
+          <div className="relative" style={{ width: LABEL_W + cols * CELL_W, height: rows.length * ROW_H }}>
+            <PianoRollCanvas
+              view={scroll}
+              rows={rows}
+              clip={clip}
+              clipStart={clip?.start ?? 0}
+              grid={grid}
+              barTicks={barTicks}
+              beatTicks={beatTicks}
+              isDrums={isDrums}
+              selectedId={selectedId}
+              ghost={ghost}
+            />
+            <div
+              ref={gridRef}
+              role="grid"
+              aria-label="Notes"
+              aria-describedby="pianoroll-help"
+              aria-rowcount={rows.length}
+              aria-colcount={cols + 1}
+              className="absolute inset-0"
+              style={{ touchAction: 'none' }}
+              onKeyDown={onKeyDown}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={endDrag}
+              onLostPointerCapture={() => {
+                if (drag.current && !drag.current.moved) return;
+                endDrag();
+              }}
+              onDoubleClick={onDoubleClick}
+              onFocus={() => (focused.current = true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) focused.current = false;
+              }}
+            >
+              {visibleRows.map((r) => {
+                const pitch = rows[r];
+                const label = rowLabel(pitch, isDrums);
+                const cellCols = r === row && col >= 0 && !visibleCols.includes(col) ? [...visibleCols, col] : visibleCols;
+                return (
+                  <div key={pitch} role="row" aria-rowindex={r + 1} className="absolute left-0" style={{ top: r * ROW_H, height: ROW_H, width: LABEL_W + cols * CELL_W }}>
+                    <div
+                      role="rowheader"
+                      aria-colindex={1}
+                      className="absolute z-10 flex items-center gap-1 border-r border-b border-border bg-surface-2 px-1 text-xs"
+                      style={{ left: scroll.scrollX, width: LABEL_W, height: ROW_H }}
                     >
-                      {label}
-                    </button>
-                    {isDrums && inChokeGroup(pitch) ? <span className="ml-auto pr-1 text-[0.625rem] text-muted uppercase">Choke group</span> : null}
+                      {/* Drum rows show "36 Kick"; the name and tooltip keep the GM name. */}
+                      <button
+                        type="button"
+                        data-cell={`${r}:-1`}
+                        tabIndex={r === row && col < 0 ? 0 : -1}
+                        aria-label={isDrums ? label : undefined}
+                        title={isDrums ? `Audition ${label}` : `Preview ${label}`}
+                        className={cx('min-h-6 min-w-0 truncate rounded-ds px-1 text-left hover:bg-hover', focusRing)}
+                        onClick={() => engine.preview(pitch, 100)}
+                      >
+                        {rowShortLabel(pitch, isDrums)}
+                      </button>
+                      {isDrums && inChokeGroup(pitch) ? (
+                        <span className="ml-auto shrink-0 pr-1 text-[0.625rem] whitespace-nowrap text-muted uppercase" title="Hi-hat choke group: one cuts the others off">
+                          Choke<span className="sr-only"> group</span>
+                        </span>
+                      ) : null}
+                    </div>
+                    {cellCols.map((c) => {
+                      const note = cellNote(r, c);
+                      const starts = note && note.tick >= c * grid && note.tick < (c + 1) * grid;
+                      return (
+                        <div
+                          key={c}
+                          role="gridcell"
+                          data-cell={`${r}:${c}`}
+                          data-note={starts ? 'start' : note ? 'held' : undefined}
+                          aria-colindex={c + 2}
+                          aria-selected={note ? note.id === selectedId : false}
+                          aria-label={cellLabel(r, c)}
+                          tabIndex={r === row && c === col ? 0 : -1}
+                          className={cx('absolute', focusRing, 'focus-visible:z-20')}
+                          style={{ left: LABEL_W + c * CELL_W, top: 0, width: CELL_W, height: ROW_H }}
+                        />
+                      );
+                    })}
                   </div>
-                  {cellCols.map((c) => {
-                    const note = cellNote(r, c);
-                    const starts = note && note.tick >= c * grid && note.tick < (c + 1) * grid;
-                    return (
-                      <div
-                        key={c}
-                        role="gridcell"
-                        data-cell={`${r}:${c}`}
-                        data-note={starts ? 'start' : note ? 'held' : undefined}
-                        aria-colindex={c + 2}
-                        aria-selected={note ? note.id === selectedId : false}
-                        aria-label={cellLabel(r, c)}
-                        tabIndex={r === row && c === col ? 0 : -1}
-                        className={cx('absolute', focusRing, 'focus-visible:z-20')}
-                        style={{ left: LABEL_W + c * CELL_W, top: 0, width: CELL_W, height: ROW_H }}
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
+        {(clip?.notes.length ?? 0) === 0 ? (
+          // Over the grid rather than above it, so adding the first note does not move the grid.
+          <div className="pointer-events-none absolute top-1 right-2 z-30 flex flex-col gap-0.5 rounded-ds border border-border bg-surface/95 px-2 py-1 text-sm" style={{ left: LABEL_W + 8 }}>
+            <p>Press a key or click the grid to add a note. Drag to draw a longer one.</p>
+            <section aria-labelledby="keyboard-map-heading" className="flex flex-wrap items-baseline gap-x-2">
+              <h3 id="keyboard-map-heading" className={sectionHeading}>
+                Keyboard map
+              </h3>
+              <p className="text-xs">Keys A to K play the notes C to C. Z and X move the keyboard down or up an octave.</p>
+            </section>
+          </div>
+        ) : null}
       </div>
-      {clip && clip.notes.length > 0 ? (
-        <VelocityLane
-          clip={clip}
-          isDrums={isDrums}
-          meter={meter}
-          grid={grid}
-          cols={cols}
-          scrollX={scroll.scrollX}
-          selectedId={selectedId}
-          onSelect={(id) => {
-            const note = clip.notes.find((n) => n.id === id);
-            setSelectedId(id);
-            if (note) setCursor({ pitch: note.pitch, tick: note.tick });
-          }}
-          commands={commands}
-          readOnly={readOnly}
-        />
-      ) : null}
+      {/* The lane stays with an empty clip ("No notes"), so the layout does not jump. */}
+      <VelocityLane
+        clip={clip}
+        isDrums={isDrums}
+        meter={meter}
+        grid={grid}
+        cols={cols}
+        scrollX={scroll.scrollX}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          const note = clip?.notes.find((n) => n.id === id);
+          setSelectedId(id);
+          if (note) setCursor({ pitch: note.pitch, tick: note.tick });
+        }}
+        commands={commands}
+        readOnly={readOnly}
+      />
       <StatusRegion visuallyHidden>{announcement}</StatusRegion>
     </section>
   );

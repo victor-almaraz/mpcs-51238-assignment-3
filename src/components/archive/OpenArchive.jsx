@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import useCommands from '@/components/commands/useCommands';
-import { errorText } from '@/design-systems/industrial/classes';
+import { cx, errorText } from '@/design-systems/industrial/classes';
 import { openArchive } from '@/lib/archive/archive';
 import { loadArchiveSources } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -137,7 +137,7 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
         }}
       />
       {errors.length > 0 ? (
-        <div role="alert" className={errorText}>
+        <div role="alert" className={cx(errorText, 'flex-col')}>
           <p>Nothing was imported:</p>
           <ul className="list-disc pl-5">
             {errors.map((text, i) => (

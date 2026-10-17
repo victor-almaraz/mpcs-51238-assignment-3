@@ -12,6 +12,7 @@ import { NAME_MAX, copyDocument, createId } from '@/lib/project/model';
 import { deleteProject, getIndexSnapshot, listProjects, loadProject, saveProject, subscribeProjects } from '@/lib/project/store';
 import { validateProjectName } from '@/lib/project/validate';
 import { pruneStoredSources } from '@/lib/audio/source-cleanup';
+import { focusAfterRemoval } from '@/components/ui/focusAfterRemoval';
 import IconButton from '@/components/ui/IconButton';
 
 /**
@@ -28,6 +29,7 @@ export default function ProjectList() {
   const [renaming, setRenaming] = useState(null); // { entry, draft, error }
   const cancelRef = useRef(null);
   const triggerRef = useRef(null);
+  const listRef = useRef(null);
   const nameRef = useRef(null);
 
   /** Loads the saved document of `entry`, applies `change(doc)` and saves the result under its ID. */
@@ -61,7 +63,9 @@ export default function ProjectList() {
   }
 
   function confirmDelete() {
+    const index = listed.value.findIndex((p) => p.id === pending.id);
     const result = deleteProject(pending.id);
+    focusAfterRemoval(() => listRef.current, index, '[aria-label^="Delete "]', () => document.querySelector('main h1'));
     if (result.ok) {
       pruneStoredSources().catch((err) => console.error('Stored audio cleanup failed', err));
       setMessage(`Deleted ${pending.name}`);
@@ -98,7 +102,7 @@ export default function ProjectList() {
           </div>
         </div>
       ) : (
-        <ul aria-label="Saved projects" className="flex flex-col divide-y divide-border rounded-ds border border-border-strong bg-surface">
+        <ul ref={listRef} aria-label="Saved projects" className="flex flex-col divide-y divide-border rounded-ds border border-border-strong bg-surface">
           {listed.value.map((p) => {
             const details = describedBy(p, `project-${p.id}`);
             return (
@@ -139,7 +143,7 @@ export default function ProjectList() {
         returnFocusRef={triggerRef}
         actions={
           <>
-            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setPending(null)} />
+            <Button ref={cancelRef} onClick={() => setPending(null)}>Cancel</Button>
             <Button variant="danger" onClick={confirmDelete}>
               Delete project
             </Button>
@@ -156,7 +160,7 @@ export default function ProjectList() {
         returnFocusRef={triggerRef}
         actions={
           <>
-            <IconButton icon="x" label="Cancel" onClick={() => setRenaming(null)} />
+            <Button onClick={() => setRenaming(null)}>Cancel</Button>
             <Button variant="primary" onClick={confirmRename}>
               Rename project
             </Button>

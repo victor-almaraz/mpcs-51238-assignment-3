@@ -39,7 +39,7 @@ export default function VolumeNotice() {
       initialFocusRef={continueRef}
       actions={
         <>
-          <IconButton icon="x" label="Cancel" onClick={cancel} />
+          <Button onClick={cancel}>Cancel</Button>
           <Button ref={continueRef} variant="primary" onClick={confirm}>
             Continue
           </Button>

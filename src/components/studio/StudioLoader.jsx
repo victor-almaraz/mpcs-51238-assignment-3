@@ -2,7 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useMemo, useSyncExternalStore } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { buttonVariants, controlBase, controlSizes, cx, pageHeading } from '@/design-systems/industrial/classes';
 import { isUnsavedCopy, loadProject, openExampleCopy } from '@/lib/project/store';
 
@@ -43,11 +44,14 @@ export function projectIdFromPath(pathname) {
 
 /**
  * Resolves what the editor route shows for `location` (path plus query):
- * { kind: 'project', doc, readOnly } | { kind: 'missing' } | { kind: 'error', message }.
+ * { kind: 'project', doc, readOnly } | { kind: 'missing' } | { kind: 'error', message },
+ * or null while the address bar does not yet show a project path.
  * A missing project with ?example=<slug> opens an unsaved copy of that example.
  */
 function resolve(location, shellId) {
   const url = new URL(location, 'http://localhost');
+  // During an in-app navigation the address bar can still hold the previous page's path.
+  if (!url.pathname.startsWith('/projects/')) return null;
   const id = projectIdFromPath(url.pathname);
   if (id === null || id === shellId) return { kind: 'missing' };
   const loaded = loadProject(id);
@@ -58,10 +62,15 @@ function resolve(location, shellId) {
   return copy ? { kind: 'project', doc: copy } : { kind: 'missing' };
 }
 
-function Problem({ title }) {
+/** A project that cannot open: the site's page column, a short heading, the reason and the ways on. */
+function Problem({ title, detail }) {
+  useEffect(() => {
+    document.title = `${title} · W-Rack`;
+  }, [title]);
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 overflow-y-auto px-4 py-8">
       <h1 className={pageHeading}>{title}</h1>
+      <p>{detail}</p>
       <ul className="flex flex-wrap gap-2">
         <li>
           <Link href="/projects" className={linkButton}>
@@ -84,10 +93,12 @@ function Problem({ title }) {
  * `shellId` is the ID of the prerendered shell page, which is never a real project.
  */
 export default function StudioLoader({ shellId }) {
+  // Next.js client navigation changes the path without popstate; usePathname re-renders, and the store re-reads the address bar.
+  usePathname();
   const location = useSyncExternalStore(subscribe, getLocation, getServerLocation);
   const state = useMemo(() => (location === null ? null : resolve(location, shellId)), [location, shellId]);
   if (state === null) return <Opening />;
-  if (state.kind === 'missing') return <Problem title="Project not found" />;
-  if (state.kind === 'error') return <Problem title={state.message} />;
+  if (state.kind === 'missing') return <Problem title="Project not found" detail="No project with this address is saved on this device. Projects live in this browser only." />;
+  if (state.kind === 'error') return <Problem title="Project could not open" detail={state.message} />;
   return <Studio key={state.doc.id} project={state.doc} unsavedCopy={isUnsavedCopy(state.doc.id)} readOnly={state.readOnly === true} />;
 }

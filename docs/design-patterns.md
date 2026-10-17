@@ -38,6 +38,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 | `LIB-03` | Audition at a controlled level | Preset pickers |
 | `TRN-01` | Transport bar anatomy | Transport |
 | `TRN-02` | Play, pause, stop and locate | Transport, global keys |
+| `TRN-03` | Loop range in the ruler | Timeline ruler |
 | `ARR-01` | Track header controls | Track headers |
 | `ARR-02` | Clip selection model | Timeline |
 | `ARR-03` | Conventional edit commands | Timeline |
@@ -247,6 +248,18 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **W-Rack application:** Global key handler excluding `input`, `textarea`, `select`, `button` and `[contenteditable]`.
 - **Accessibility:** A focused native button keeps its own Space behavior.
 - **Anti-patterns:** Capturing Space in fields; Enter as play.
+
+### `TRN-03` Loop range in the ruler
+- **Problem:** A loop toggle without a visible range plays an unknown span.
+- **Solution:**
+  - The ruler shows the loop range as a band: lit while the loop is on, grey while it is off. While on, its edges continue down the lanes.
+  - Dragging empty ruler space draws a loop and turns the loop on. Dragging the band's edges resizes it; dragging its body moves it. Edges snap to the grid while snap is on; Alt bypasses snap. A click without a drag moves the edit cursor.
+  - The loop is at least one grid step long.
+  - Playback wraps at the loop end only when it reaches the end from before it. Playback that starts after the loop end, or passes it before the loop is on, continues.
+- **Prior art:** Logic Pro's cycle area and Ableton Live's loop brace in the ruler; both continue past a loop that playback starts after.
+- **W-Rack application:** Timeline ruler; the range is part of the working state and sets the Export loop range.
+- **Accessibility:** "Loop start" and "Loop end" are `slider` handles on the band's edges, valued in bars ("bar 3 beat 2"). Arrow keys move by a grid step, Page Up and Page Down by a bar, Home and End to the limits. Changes are announced ("Loop bar 3 to bar 5, on").
+- **Anti-patterns:** A loop range set only in a dialog; a loop that jumps back from beyond its end.
 
 ## Arrangement
 

@@ -65,8 +65,11 @@ function Waveform({ source, markers, loopOn, crossfade }) {
     ctx.font = '10px ui-monospace, monospace';
     for (const { id, label } of MARKERS) {
       if (!loopOn && (id === 'loopStart' || id === 'loopEnd')) continue;
-      ctx.fillRect(x(markers[id]), 0, 1, WAVE_H);
-      ctx.fillText(label, Math.min(w - 60, x(markers[id]) + 3), id.startsWith('loop') ? WAVE_H - 4 : 11);
+      // The line stays on the canvas at the last frame; its label sits right of it, or left where it would run off.
+      const lx = Math.min(w - 1, x(markers[id]));
+      const tw = ctx.measureText(label).width;
+      ctx.fillRect(lx, 0, 1, WAVE_H);
+      ctx.fillText(label, lx + 4 + tw <= w ? lx + 3 : lx - 3 - tw, id.startsWith('loop') ? WAVE_H - 4 : 11);
     }
   });
   return <canvas ref={ref} aria-hidden="true" className="block w-full rounded-ds" style={{ height: WAVE_H }} />;
@@ -193,6 +196,7 @@ export default function SampleEditor({ deviceId, source, params, loopMode, onMar
         step={1}
         value={Math.round(crossfadeMs)}
         valueText={`${Math.round(crossfadeMs)} ms, ${crossfadeFrames} frames`}
+        display={`${Math.round(crossfadeMs)} ms`}
         disabled={disabled || loopMode !== LOOP_FORWARD}
         onChange={(v) => onCrossfade(Math.min(v, maxCrossfadeMs))}
       />

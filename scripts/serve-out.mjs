@@ -60,7 +60,8 @@ const headerRules = (vercel.headers ?? []).map((h) => ({ test: compile(h.source)
 
 /** Returns the file under out/ for a URL path, or null. Paths outside out/ are rejected. */
 function resolveFile(urlPath) {
-  const base = normalize(join(outDir, urlPath));
+  // "/projects/" and "/projects" name the same page.
+  const base = normalize(join(outDir, urlPath)).replace(/[\\/]+$/, '');
   if (base !== outDir && !base.startsWith(outDir + sep)) return null;
   for (const candidate of [base, `${base}.html`, join(base, 'index.html')]) {
     try {

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { CELL_W, LABEL_W, rowLabel } from './layout';
+import { CELL_W, LABEL_W, rowLabel, rowShortLabel } from './layout';
 
 export const LANE_H = 48;
 const VELOCITY_MIN = 1;
@@ -92,7 +92,7 @@ export default function VelocityLane({ clip, isDrums, meter, grid, cols, scrollX
       >
         <span className="font-bold uppercase">Velocity</span>
         <span aria-hidden="true" className="truncate tabular-nums text-muted">
-          {shown ? `${shown.note.velocity} · ${rowLabel(shown.note.pitch, isDrums)} ${barBeat(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
+          {shown ? `${shown.note.velocity} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeat(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
         </span>
       </div>
       <div

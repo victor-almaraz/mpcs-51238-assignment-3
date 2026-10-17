@@ -96,6 +96,7 @@ function createClient() {
   }
 
   let modelPending = false;
+  let relocateTick = null; // a playing position to keep in ticks once the next model is sent (tempo edits)
 
   /**
    * Sends model and params changes at most once per animation frame
@@ -110,6 +111,14 @@ function createClient() {
         modelPending = false;
         pendingParams.clear();
         sendModel();
+        // The engine keeps its playhead in frames across a model swap; a tempo edit while playing
+        // would move it to another bar, so playback carries on from the same tick instead.
+        if (relocateTick !== null && compiled) {
+          const frame = compiled.tempo.frameAt(relocateTick);
+          send({ t: 'transport', op: 'locate', frame });
+          last = { playFrame: frame, ctxFrame: contextFrame() };
+        }
+        relocateTick = null;
       } else if (pendingParams.size > 0) {
         const values = new Float64Array(3 * pendingParams.size);
         let i = 0;
@@ -348,8 +357,14 @@ function createClient() {
       if (changes) {
         for (let i = 0; i < changes.length; i += 3) pendingParams.set(`${changes[i]}:${changes[i + 1]}`, changes[i + 2]);
       } else {
+        const before = compiled?.tempo ?? null;
+        const tick = state.playing && before ? this.positionTick() : null;
         compile();
         modelPending = true;
+        if (tick !== null && compiled && compiled.tempo.frameAt(tick) !== before.frameAt(tick)) {
+          relocateTick = tick;
+          last = { playFrame: compiled.tempo.frameAt(tick), ctxFrame: contextFrame() };
+        }
         sendLoop();
       }
       syncZones();
@@ -518,9 +533,11 @@ function createClient() {
           : (ctx.currentTime - (ctx.baseLatency ?? 0) - (ctx.outputLatency ?? 0)) * rate;
       let frame = last.playFrame + Math.max(0, audible - last.ctxFrame);
       if (loop.on) {
+        // As in the engine, only a pass that reaches the loop end from before it wraps;
+        // playback that started after the loop end, or passed it before the loop was on, plays on.
         const start = compiled.tempo.frameAt(loop.startTick);
         const end = compiled.tempo.frameAt(loop.endTick);
-        if (end > start && frame >= end) frame = start + ((frame - start) % (end - start));
+        if (end > start && last.playFrame < end && frame >= end) frame = start + ((frame - start) % (end - start));
       }
       return compiled.tempo.tickAt(Math.floor(frame));
     },

@@ -2,16 +2,17 @@
 
 import { useRef } from 'react';
 import IconButton from '@/components/ui/IconButton';
+import Icon from '@/components/ui/icons/Icon';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 
 const TABS = [
-  { id: 'editor', label: 'Editor', help: 'Editor: the piano roll of the selected instrument track, or the selected audio clip.' },
-  { id: 'devices', label: 'Devices', help: 'Devices: the instrument and effects of the selected track, or the master chain.' },
-  { id: 'mixer', label: 'Mixer', help: 'Mixer: volume, pan, mute and solo of every track and the master.' },
+  { id: 'editor', label: 'Editor', icon: 'piano', help: 'Editor: the piano roll of the selected instrument track, or the selected audio clip.' },
+  { id: 'devices', label: 'Devices', icon: 'sliders-horizontal', help: 'Devices: the instrument and effects of the selected track, or the master chain.' },
+  { id: 'mixer', label: 'Mixer', icon: 'sliders-vertical', help: 'Mixer: volume, pan, mute and solo of every track and the master.' },
 ];
 
 /** Dock height limits, CSS px. */
-export const DOCK_MIN = 160;
+export const DOCK_MIN = 200;
 const DOCK_STEP = 40;
 
 /**
@@ -72,10 +73,12 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
         onPointerUp={() => {
           drag.current = null;
         }}
-        className={cx('h-2 shrink-0 cursor-row-resize bg-border hover:bg-border-strong', focusRing)}
-      />
-      <div className="flex shrink-0 items-end gap-1 border-b border-border-strong bg-surface-2 px-3 pt-1">
-        <div role="tablist" aria-label="Panels" className="flex gap-1">
+        className={cx('group flex h-2 shrink-0 cursor-row-resize items-center justify-center bg-surface-2 hover:bg-hover', focusRing)}
+      >
+        <span aria-hidden="true" className="h-0.5 w-10 rounded-full bg-border-strong group-hover:bg-fg" />
+      </div>
+      <div className="flex h-9 shrink-0 items-stretch gap-1 border-b border-border bg-surface-2 px-2">
+        <div role="tablist" aria-label="Panels" className="flex items-stretch gap-1">
           {TABS.map((t, i) => {
             const selected = t.id === tab;
             return (
@@ -98,11 +101,14 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
                 }}
                 onKeyDown={(e) => onTabKey(e, i)}
                 className={cx(
-                  'min-h-8 rounded-t-ds border border-b-0 px-4 text-xs font-bold tracking-[0.06em] uppercase',
-                  selected ? 'border-fg bg-bg text-fg' : 'border-transparent text-muted hover:bg-hover',
+                  // Underline tabs: the open panel's tab has full-contrast text and a 2 px rule along its bottom edge.
+                  'relative flex items-center gap-1.5 px-3 text-xs font-bold tracking-[0.06em] uppercase transition-colors',
+                  "after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:content-['']",
+                  selected && !collapsed ? 'text-fg after:bg-fg' : 'text-muted hover:text-fg after:bg-transparent hover:after:bg-border-strong',
                   focusRing,
                 )}
               >
+                <Icon name={t.icon} className="size-4" />
                 {t.label}
               </button>
             );
@@ -118,7 +124,7 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
           aria-controls={`dock-panel-${tab}`}
           onClick={() => onCollapse(!collapsed)}
           data-help="Collapse or expand the panels; a click on the open tab does the same."
-          className="mb-1 ml-auto"
+          className="my-auto ml-auto"
         />
       </div>
       <div
@@ -126,7 +132,7 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
         role="tabpanel"
         id={`dock-panel-${tab}`}
         aria-labelledby={`dock-tab-${tab}`}
-        className="flex min-h-0 flex-1 flex-col overflow-auto p-3"
+        className="relative flex min-h-0 flex-1 flex-col overflow-auto p-3"
       >
         {collapsed ? null : children}
       </div>

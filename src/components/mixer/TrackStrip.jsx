@@ -24,7 +24,7 @@ export default function TrackStrip({ track, readMeter, onChange, disabled }) {
   return (
     <li className="flex h-full w-24 shrink-0 flex-col items-center gap-1.5 rounded-ds border border-border-strong bg-surface px-1.5 py-2" style={{ borderTop: `3px solid ${track.color}` }}>
       <PanKnob id={`pan-${track.id}`} name={name} value={track.pan} onChange={(pan) => onChange({ pan })} disabled={disabled} />
-      <ClipIndicator name={name} read={readMeter} />
+      <ClipIndicator name={name} read={readMeter} focusId={`fader-${track.id}`} />
       <Fader
         id={`fader-${track.id}`}
         label={`${name} volume`}
@@ -37,7 +37,7 @@ export default function TrackStrip({ track, readMeter, onChange, disabled }) {
         onReset={() => onChange({ gainDb: 0 })}
         disabled={disabled}
       >
-        <Meter read={readMeter} className="h-full w-3" />
+        <Meter read={readMeter} scale={[TRACK_GAIN.min, TRACK_GAIN.max]} className="h-full w-3" />
       </Fader>
       <output aria-hidden="true" className="min-h-6 w-full rounded-ds bg-window text-center font-mono text-xs leading-6 text-lamp">
         {faderText(track.gainDb)}

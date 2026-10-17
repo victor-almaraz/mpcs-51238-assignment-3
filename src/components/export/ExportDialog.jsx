@@ -50,7 +50,7 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
   const [ready, setReady] = useState(null); // { blob, name } of the finished render
-  const [cancelling, setCancelling] = useState(false);
+  const cancelRef = useRef(null);
   const [elapsed, setElapsed] = useState(0);
   const buttonRef = useRef(null);
   const exportRef = useRef(null);
@@ -66,13 +66,13 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
     return () => clearInterval(timer);
   }, [rendering]);
 
-  // A finished render moves focus to Download (EXP-02); Cancel leaves it on Close.
+  // Focus follows the export (EXP-02): Cancel while rendering, Download when the file is ready.
+  useEffect(() => {
+    if (rendering) cancelRef.current?.focus();
+  }, [rendering]);
   useEffect(() => {
     if (ready) downloadRef.current?.focus();
   }, [ready]);
-  useEffect(() => {
-    if (cancelling) closeRef.current?.focus();
-  }, [cancelling]);
   useCommands([{ id: 'project.export', group: 'Project', label: 'Export WAV…', keys: 'Mod+Shift+E', global: true, run: () => setOpen(true), enabled: () => !disabled }]);
   const fs = getEngine().decodeRate();
   // Compiled only while the dialog is open.
@@ -118,15 +118,18 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
       if (current()) setError('The export failed. Reload the page and try again.');
     } finally {
       if (current()) setProgress(undefined);
-      else setCancelling(false);
     }
   }
 
+  /**
+   * Cancels the export at once. An offline render cannot be aborted, so the
+   * running one finishes unseen and its result is discarded; a new export can start now.
+   */
   function cancel() {
     runRef.current++;
     setProgress(undefined);
-    setCancelling(true);
     setMessage('Export cancelled');
+    requestAnimationFrame(() => exportRef.current?.focus());
   }
 
   async function download() {
@@ -219,12 +222,12 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
           <StatusRegion className="text-sm">{message}</StatusRegion>
           <div className="flex flex-wrap justify-end gap-2">
             {rendering ? (
-              <IconButton icon="x" label="Cancel" onClick={cancel} />
+              <Button ref={cancelRef} onClick={cancel}>Cancel</Button>
             ) : (
-              <IconButton icon="x" label="Close" ref={closeRef} onClick={close} />
+              <Button ref={closeRef} onClick={close}>Close</Button>
             )}
-            <Button ref={exportRef} variant={ready ? 'secondary' : 'primary'} onClick={run} disabled={rendering || cancelling || !frames.ok}>
-              {rendering ? 'Exporting…' : cancelling ? 'Cancelling…' : 'Export WAV'}
+            <Button ref={exportRef} variant={ready ? 'secondary' : 'primary'} onClick={run} disabled={rendering || !frames.ok}>
+              {rendering ? 'Exporting…' : 'Export WAV'}
             </Button>
             {ready ? (
               <Button ref={downloadRef} variant="primary" onClick={download}>

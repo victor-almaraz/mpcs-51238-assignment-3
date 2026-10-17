@@ -13,6 +13,23 @@ import IconToggle from '@/components/ui/IconToggle';
 const DEFAULTS = '__defaults';
 const EMPTY = [];
 
+/** List size and its gap to the field, px (w-56, max-h-64). */
+const LIST_W = 224;
+const LIST_MAX_H = 256;
+const GAP = 4;
+
+/**
+ * Fixed-position style for the list under the field `rect`, or above it when
+ * there is more room there, so a scrolling panel never clips it.
+ */
+function listPlace(rect) {
+  const below = window.innerHeight - rect.bottom - 2 * GAP;
+  const above = rect.top - 2 * GAP;
+  const left = Math.max(GAP, Math.min(rect.left, window.innerWidth - LIST_W - GAP));
+  if (below < LIST_MAX_H && above > below) return { left, bottom: window.innerHeight - rect.top + GAP, maxHeight: Math.max(64, Math.min(LIST_MAX_H, above)) };
+  return { left, top: rect.bottom + GAP, maxHeight: Math.max(64, Math.min(LIST_MAX_H, below)) };
+}
+
 /** One-bar audition phrases (LIB-03), one note per beat. */
 const DRUM_PHRASE = [36, 42, 38, 42];
 const PITCHED_PHRASE = [60, 64, 67, 72];
@@ -36,7 +53,8 @@ const matches = (entry, query) => entry.label.toLocaleLowerCase().includes(query
  * safety limiter, with the project left unchanged; it stops on Escape, on
  * another choice and after the bar. `onApply(preset)` receives a library
  * preset, or null for the built-in defaults. `label` names the picker
- * ("Delay preset" inside a chain); `owner` extends the Save button's name
+ * ("Delay preset" inside a chain). The list is fixed to the viewport, below
+ * the field or above it when the room is there. `owner` extends the Save button's name
  * ("Save preset: Delay") so it keeps the visible text.
  */
 export default function PresetPicker({ kind, device, onApply, disabled, label = 'Preset', owner = null }) {
@@ -45,7 +63,8 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
   const all = useSyncExternalStore(subscribePresets, getPresets, () => EMPTY);
   const mine = all.filter((p) => p.type === device.type);
   const entries = entriesFor(mine);
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const [place, setPlace] = useState(null); // the open list's fixed position
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [highlighted, setHighlighted] = useState(null); // entry id kept after the list closes, for Preview
@@ -53,6 +72,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const saveRef = useRef(null);
+  const inputRef = useRef(null);
   const audition = useRef(null); // { timers }
   const projectRef = useRef(project);
   const listId = useId();
@@ -65,6 +85,23 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
+
+  function setOpen(next) {
+    if (next && inputRef.current) setPlace(listPlace(inputRef.current.getBoundingClientRect()));
+    setOpenState(next);
+  }
+
+  // The open list follows the field as the page or a panel scrolls.
+  useEffect(() => {
+    if (!open) return undefined;
+    const follow = () => inputRef.current && setPlace(listPlace(inputRef.current.getBoundingClientRect()));
+    window.addEventListener('resize', follow);
+    window.addEventListener('scroll', follow, true);
+    return () => {
+      window.removeEventListener('resize', follow);
+      window.removeEventListener('scroll', follow, true);
+    };
+  }, [open]);
 
   function stopPreview() {
     const a = audition.current;
@@ -143,6 +180,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
         </label>
         <div className="relative">
           <input
+            ref={inputRef}
             id={inputId}
             role="combobox"
             aria-expanded={open}
@@ -168,7 +206,8 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
               id={listId}
               role="listbox"
               aria-label={`${label} list`}
-              className={cx('absolute top-full left-0 z-40 mt-1 flex max-h-64 w-56 flex-col overflow-y-auto rounded-ds border border-border-strong bg-surface p-1 text-sm', panelShadow)}
+              className={cx('fixed z-50 flex w-56 flex-col overflow-y-auto rounded-ds border border-border-strong bg-surface p-1 text-sm', panelShadow)}
+              style={place ?? undefined}
             >
               {groups.length === 0 ? <p className="px-2 py-1 text-muted">No matching presets.</p> : null}
               {groups.map(([group, list]) => (

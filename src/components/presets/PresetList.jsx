@@ -10,6 +10,7 @@ import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import { deletePreset, getPresets, renamePreset, subscribePresets } from '@/lib/presets/store';
 import { MAX_PRESETS } from '@/lib/presets/validate';
 import { typeLabel } from './labels';
+import { focusAfterRemoval } from '@/components/ui/focusAfterRemoval';
 import IconButton from '@/components/ui/IconButton';
 
 const EMPTY = [];
@@ -54,7 +55,16 @@ export default function PresetList() {
   }
 
   function confirmDelete() {
+    const group = [...groups.values()].find((g) => g.items.some((x) => x.id === deleting.id));
+    const index = group.items.findIndex((x) => x.id === deleting.id);
+    const label = group.label;
     const result = deletePreset(deleting.id);
+    focusAfterRemoval(
+      () => document.querySelector(`[aria-label="${label} presets"] ul`),
+      index,
+      '[aria-label^="Delete "]',
+      () => document.getElementById('settings-presets'),
+    );
     if (result.ok) setMessage(`Deleted ${deleting.name}`);
     else setError(result.error.message);
     setDeleting(null);
@@ -62,7 +72,7 @@ export default function PresetList() {
 
   return (
     <Card as="section" aria-labelledby="settings-presets">
-      <h2 id="settings-presets" className={sectionHeading}>
+      <h2 id="settings-presets" tabIndex={-1} className={sectionHeading}>
         Presets
       </h2>
       <p className="text-sm">
@@ -109,7 +119,7 @@ export default function PresetList() {
         <form noValidate onSubmit={submitRename} className="flex flex-col gap-3">
           <Field id="rename-preset-name" ref={nameRef} label="Name" value={name} error={nameError} autoComplete="off" onChange={(e) => setName(e.target.value)} />
           <div className="flex flex-wrap justify-end gap-2">
-            <IconButton icon="x" label="Cancel" onClick={() => setRenaming(null)} />
+            <Button onClick={() => setRenaming(null)}>Cancel</Button>
             <Button type="submit" variant="primary">
               Rename
             </Button>
@@ -124,7 +134,7 @@ export default function PresetList() {
         returnFocusRef={trigger}
         actions={
           <>
-            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setDeleting(null)} />
+            <Button ref={cancelRef} onClick={() => setDeleting(null)}>Cancel</Button>
             <Button variant="danger" onClick={confirmDelete}>
               Delete preset
             </Button>

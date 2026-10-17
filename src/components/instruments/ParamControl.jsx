@@ -60,6 +60,11 @@ const OPTION_LABELS = {
   mono: 'Mono',
 };
 
+/** The default label of `def`: its own label, else the label for its id ("Cutoff"). */
+export function paramLabel(def) {
+  return def.label ?? LABELS[def.id] ?? def.id;
+}
+
 /** Value text with units: "440 Hz", "2.0 kHz", "10 ms", "1.20 s", "−6.0 dB", "2.5×", "50 %", "+2.0 st", "L20". */
 export function formatParam(def, value) {
   const minus = (s) => s.replace('-', '−');
@@ -101,6 +106,12 @@ export function formatParam(def, value) {
   }
 }
 
+/** Readout text where it is shorter than the value text, so it fits under a knob ("20.0/s"); else undefined. */
+export function shortParam(def, value) {
+  if (def.unit === 'grains/s') return `${value.toFixed(1)}/s`;
+  return undefined;
+}
+
 /** Multipliers from a typed unit to the def's unit ("2 kHz" → 2000 Hz, "20 ms" → 0.02 s). */
 function unitScale(def, unit) {
   const u = unit.toLowerCase();
@@ -120,12 +131,13 @@ function unitScale(def, unit) {
 export function parseParam(def, text, shown = '') {
   const t = text.trim().replace(/−/g, '-');
   if (def.unit === 'pan') {
-    const m = /^([lr])?\s*(\d+(?:\.\d+)?)$/i.exec(t);
+    const m = /^([lr])?\s*([-+]?\d+(?:\.\d+)?)$/i.exec(t);
     if (/^c$/i.test(t)) return 0;
     if (!m) return null;
+    // A bare number is a percentage: 20 is R20, −20 is L20.
     return (m[1]?.toLowerCase() === 'l' ? -1 : 1) * (Number(m[2]) / 100);
   }
-  const m = /^([-+]?\d*\.?\d+)\s*(khz|hz|ms|s|%|db|st|cents|oct|×|x|:1|q|grains\/s)?$/i.exec(t);
+  const m = /^([-+]?\d*\.?\d+)\s*(khz|hz|ms|s|%|db|st|cents|oct|×|x|:1|q|grains\/s|\/s)?$/i.exec(t);
   if (!m) return null;
   const typed = m[2] ?? /(khz|hz|ms|s|%|db|st|cents|oct)\s*$/i.exec(shown)?.[1] ?? '';
   return Number(m[1]) * unitScale(def, typed);
@@ -134,16 +146,19 @@ export function parseParam(def, text, shown = '') {
 /**
  * One parameter as a labelled control (DEV-02): segmented radio buttons for
  * an enum, otherwise a knob (log and pow3 params move over 1000 positions)
- * with unit value text and a typed-value field. `label` overrides the def's
+ * with unit value text and a typed-value field; a typed value is set exactly,
+ * clamped, rather than at the nearest position. `label` overrides the def's
  * own label and the default label for `def.id` as the accessible name; the
  * knob's caption stays the short label.
  */
 export default function ParamControl({ def, value, onChange, idPrefix, label: labelOverride, caption: captionOverride }) {
-  const label = labelOverride ?? def.label ?? LABELS[def.id] ?? def.id;
+  const label = labelOverride ?? paramLabel(def);
   if (def.scale === 'enum') {
     return (
       <div className="basis-full">
+        {/* Content-sized, with roomy segments, so every segmented control looks alike. */}
         <RadioGroup
+          className="max-w-full sm:w-fit [&_label]:px-3"
           legend={label}
           options={def.options.map((name, i) => ({ value: i, label: OPTION_LABELS[name] ?? name }))}
           value={value}
@@ -154,7 +169,6 @@ export default function ParamControl({ def, value, onChange, idPrefix, label: la
   }
   const stepped = def.scale === 'lin';
   const valueText = formatParam(def, value);
-  const toPosition = (v) => (stepped ? clampParam(def, v) : Math.round(toNorm(def, clampParam(def, v)) * NORM_STEPS));
   return (
     <Knob
       id={`${idPrefix}-${def.id}`}
@@ -165,9 +179,10 @@ export default function ParamControl({ def, value, onChange, idPrefix, label: la
       step={stepped ? (def.step ?? (def.max - def.min) / NORM_STEPS) : 1}
       value={stepped ? value : Math.round(toNorm(def, value) * NORM_STEPS)}
       valueText={valueText}
-      parse={(text) => {
+      display={shortParam(def, value)}
+      onTyped={(text) => {
         const v = parseParam(def, text, valueText);
-        return v === null ? null : toPosition(v);
+        if (v !== null && Number.isFinite(v)) onChange(def.id, clampParam(def, v));
       }}
       onChange={(position) => onChange(def.id, stepped ? clampParam(def, position) : fromNorm(def, position / NORM_STEPS))}
       onReset={() => onChange(def.id, def.default)}

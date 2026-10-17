@@ -68,8 +68,8 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
   const keep = (role) => `${device.id}:${role}`;
   if (!entry) {
     return (
-      <li>
-        <div role="group" aria-label={groupLabel} className="flex flex-col gap-2 rounded-ds border border-border p-2">
+      <li className="shrink-0">
+        <div role="group" aria-label={groupLabel} className="flex w-64 flex-col gap-2 rounded-ds border border-border p-2">
         <p className="text-sm">Unknown effect “{String(device.type)}”. It passes the signal through unchanged.</p>
         <div>
           <IconButton icon="x" label={`Remove ${name}`} size="sm" data-focus={keep('remove')} disabled={disabled} onClick={() => onCommand((doc, trackId) => removeEffect(doc, trackId, device.id), `Removed ${name}`, { removed: device.id })} />
@@ -79,8 +79,9 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
     );
   }
   return (
-    <li>
-      <div role="group" aria-label={groupLabel} className="flex w-full flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2 sm:w-[26rem]">
+    // The device keeps its natural width; a long chain scrolls the panel sideways rather than squeezing it.
+    <li className="shrink-0">
+      <div role="group" aria-label={groupLabel} className="flex w-fit min-w-64 flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2">
       {/* Title bar: bypass (power), name, move and remove, as in a DAW device header. */}
       <div className="flex items-center gap-1">
         <IconToggle icon="power" label={`Bypass ${name}`} size="sm" data-focus={keep('bypass')} pressed={device.bypass === true} disabled={disabled} onClick={() => onCommand((doc) => setEffectBypass(doc, device.id, !device.bypass), `${name} ${device.bypass ? 'on' : 'bypassed'}`)} />
@@ -147,8 +148,10 @@ function chainNames(devices) {
  * Insert chain of one track or the master (assignment-3-scope.md, Effects;
  * DEV-01): devices left to right, up to 8 (at most 4 reverbs per project),
  * each with bypass, move, preset and remove, every control a labelled native
- * input. Focus follows a moved device and moves on from a removed one. The
- * master chain ends in the fixed safety limiter (SAFE-02).
+ * input. Focus follows a moved device and moves on from a removed one; when
+ * an added device disables Add (a full chain), focus moves to that device's
+ * Bypass. The master chain ends in the fixed safety limiter (SAFE-02), last
+ * in the left-to-right row.
  * `onCommand(fn)` applies fn(latestDoc) when it succeeds and returns its
  * result; `onParam(deviceId, id, value)` edits one parameter.
  */
@@ -172,16 +175,22 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
     if (!key) return;
     pendingFocus.current = null;
     const find = (k) => listRef.current?.querySelector(`[data-focus="${k}"]:not(:disabled)`);
+    if (key.endsWith(':added')) {
+      // Add keeps focus unless the new device just disabled it.
+      if (addRef.current?.disabled) find(key.replace(':added', ':bypass'))?.focus();
+      return;
+    }
     // A move that reaches either end disables its button; the other move button takes focus.
     const other = key.endsWith(':left') ? key.replace(':left', ':right') : key.replace(':right', ':left');
     (find(key) ?? find(other) ?? addRef.current)?.focus();
   });
 
-  function run(fn, success, { focus, removed } = {}) {
+  function run(fn, success, { focus, removed, added } = {}) {
     const result = onCommand((doc) => fn(doc, trackId));
     setMessage(result.ok ? success : result.error.message);
     if (!result.ok) return;
     if (focus) pendingFocus.current = focus;
+    if (added && result.deviceId) pendingFocus.current = `${result.deviceId}:added`;
     if (removed) {
       const i = ids.indexOf(removed);
       const next = ids[i + 1] ?? ids[i - 1];
@@ -190,29 +199,31 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
   }
 
   return (
-    <Card as="section" aria-labelledby={headingId}>
+    <Card as="section" aria-labelledby={headingId} className="w-max">
       <h2 id={headingId} className={sectionHeading}>
         {title}
       </h2>
       {ids.length === 0 ? <p className="text-sm">{isMaster ? 'No effects before the safety limiter.' : 'No effects. The signal passes through unchanged.'}</p> : null}
-      <ol ref={listRef} className="flex flex-wrap items-start gap-2">
-        {devices.map((device, i) => (
-          <EffectSlot
-            key={device.id}
-            device={device}
-            name={names[i]}
-            position={i + 1}
-            count={ids.length}
-            disabled={disabled}
-            onParam={onParam}
-            onCommand={run}
-          />
-        ))}
-      </ol>
-      {isMaster ? <SafetyLimiter /> : null}
+      <div className="flex items-start gap-2">
+        <ol ref={listRef} className="flex items-start gap-2">
+          {devices.map((device, i) => (
+            <EffectSlot
+              key={device.id}
+              device={device}
+              name={names[i]}
+              position={i + 1}
+              count={ids.length}
+              disabled={disabled}
+              onParam={onParam}
+              onCommand={run}
+            />
+          ))}
+        </ol>
+        {isMaster ? <SafetyLimiter /> : null}
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <Select id={`chain-${trackId}-type`} label="Effect" value={type} options={TYPE_OPTIONS} onChange={setType} disabled={disabled} />
-        <IconButton ref={addRef} icon="plus" label="Add effect" disabled={disabled || blocker !== null} aria-describedby={`chain-${trackId}-limit`} onClick={() => run((doc, id) => addEffect(doc, id, type), `Added ${effectFor(type).label}`)} />
+        <IconButton ref={addRef} icon="plus" label="Add effect" disabled={disabled || blocker !== null} aria-describedby={`chain-${trackId}-limit`} onClick={() => run((doc, id) => addEffect(doc, id, type), `Added ${effectFor(type).label}`, { added: true })} />
       </div>
       <p id={`chain-${trackId}-limit`} className="text-sm text-muted">
         {full ? `Chain full (${MAX_EFFECTS} of ${MAX_EFFECTS})` : (blocker ?? `${ids.length} of ${MAX_EFFECTS} slots used.`)}

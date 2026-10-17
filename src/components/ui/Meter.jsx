@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { cx } from '@/design-systems/industrial/classes';
+import { taperFraction } from './level-scale';
 
 /** Peak hold time, s, and fall rate, dB/s (mixer-and-routing.md, Metering). */
 const HOLD_S = 1.5;
@@ -9,17 +10,26 @@ const FALL_DB_PER_S = 20;
 const FLOOR_DB = -60;
 
 const toDb = (x) => (x > 0 ? 20 * Math.log10(x) : -Infinity);
-const toFraction = (db) => (db <= FLOOR_DB ? 0 : Math.min(1, (db - FLOOR_DB) / -FLOOR_DB));
+const linearFraction = (db) => (db <= FLOOR_DB ? 0 : Math.min(1, (db - FLOOR_DB) / -FLOOR_DB));
 
 /**
  * Stereo peak meter: two LED-window bars with a 1.5 s hold and a 20 dB/s fall,
  * drawn through refs in a requestAnimationFrame loop. `read()` returns the
- * latest linear peaks [left, right] or null. Hidden from the accessibility
- * tree (MIX-02); a level is never announced.
+ * latest linear peaks [left, right] or null. Without `scale` the bars run
+ * linearly from −60 to 0 dBFS; with `scale={[min, max]}` (dB) they follow the
+ * fader scale beside them (level-scale.js), 0 dBFS level with the fader's 0
+ * mark, and span the full height so the marks line up. Hidden from the
+ * accessibility tree (MIX-02); a level is never announced.
  */
-export default function Meter({ read, className = 'h-24 w-5' }) {
+export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
   const bars = [useRef(null), useRef(null)];
   const holds = [useRef(null), useRef(null)];
+  const [lo, hi] = scale ?? [];
+  const toFraction = scale ? (db) => (db <= lo ? 0 : taperFraction(db, lo, hi)) : linearFraction;
+  const toFractionRef = useRef(toFraction);
+  useEffect(() => {
+    toFractionRef.current = toFraction;
+  });
 
   useEffect(() => {
     const shown = [FLOOR_DB, FLOOR_DB];
@@ -31,6 +41,7 @@ export default function Meter({ read, className = 'h-24 w-5' }) {
       const dt = (now - last) / 1000;
       last = now;
       const peaks = read();
+      const toFraction = toFractionRef.current;
       for (let ch = 0; ch < 2; ch++) {
         const db = peaks ? toDb(peaks[ch]) : -Infinity;
         shown[ch] = Math.max(db, shown[ch] - FALL_DB_PER_S * dt);
@@ -50,7 +61,7 @@ export default function Meter({ read, className = 'h-24 w-5' }) {
   }, []);
 
   return (
-    <div aria-hidden="true" className={cx('flex gap-0.5 rounded-ds bg-window p-0.5', className)}>
+    <div aria-hidden="true" className={cx('flex gap-0.5 rounded-ds bg-window', scale ? 'px-0.5' : 'p-0.5', className)}>
       {[0, 1].map((ch) => (
         <div key={ch} className="relative flex-1 overflow-hidden">
           <div
