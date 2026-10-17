@@ -1,14 +1,14 @@
 'use client';
 
 import { useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
-import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
 import { cx, fieldLabel, focusRing, panelShadow } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 import { applyPreset, getPresets, presetLabel, subscribePresets } from '@/lib/presets/store';
 import ProjectContext from './ProjectContext';
 import SavePresetDialog from './SavePresetDialog';
+import IconButton from '@/components/ui/IconButton';
+import IconToggle from '@/components/ui/IconToggle';
 
 const DEFAULTS = '__defaults';
 const EMPTY = [];
@@ -199,20 +199,17 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
           ) : null}
         </div>
       </div>
-      <Toggle
+      <IconToggle
+        icon="volume-2"
         size="sm"
         pressed={target !== null && previewing === target.id}
         disabled={disabled || !target || !project}
-        aria-label={`${target ? `Preview ${target.label}` : 'Preview a preset'}${owner ? ` for ${owner}` : ''}`}
+        label={`${target ? `Preview ${target.label}` : 'Preview a preset'}${owner ? ` for ${owner}` : ''}`}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => (previewing === target.id ? stopPreview() : startPreview(target))}
         data-help="Preview: plays one bar with the highlighted preset at the track's level; nothing changes until you choose it."
-      >
-        Preview
-      </Toggle>
-      <Button ref={saveRef} size="sm" disabled={disabled} aria-label={owner ? `Save preset: ${owner}` : undefined} onClick={() => setSaving(true)}>
-        Save preset
-      </Button>
+      />
+      <IconButton ref={saveRef} icon="save" size="sm" label={owner ? `Save preset: ${owner}` : 'Save preset'} disabled={disabled} onClick={() => setSaving(true)} />
       <span className="text-sm">Preset: {presetLabel(device) ?? 'none'}</span>
       <StatusRegion visuallyHidden>{message}</StatusRegion>
       <SavePresetDialog

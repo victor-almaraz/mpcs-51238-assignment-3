@@ -8,6 +8,7 @@ import { errorText } from '@/design-systems/industrial/classes';
 import { savePreset } from '@/lib/presets/store';
 import { MAX_PRESET_NAME } from '@/lib/presets/validate';
 import { typeLabel } from './labels';
+import IconButton from '@/components/ui/IconButton';
 
 /**
  * Save preset dialog (assignment-3-scope.md, Presets): one Name field with
@@ -71,7 +72,7 @@ export default function SavePresetDialog({ open, kind, device, onClose, onSaved,
           </p>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
-          <Button onClick={close}>Cancel</Button>
+          <IconButton icon="x" label="Cancel" onClick={close} />
           <Button type="submit" variant="primary">
             Save preset
           </Button>

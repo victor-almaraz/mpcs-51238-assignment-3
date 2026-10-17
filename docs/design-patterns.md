@@ -37,7 +37,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 | `LIB-02` | Save preset dialog | Save preset |
 | `LIB-03` | Audition at a controlled level | Preset pickers |
 | `TRN-01` | Transport bar anatomy | Transport |
-| `TRN-02` | Space play/stop, separate locate | Global keys |
+| `TRN-02` | Play, pause, stop and locate | Transport, global keys |
 | `ARR-01` | Track header controls | Track headers |
 | `ARR-02` | Clip selection model | Timeline |
 | `ARR-03` | Conventional edit commands | Timeline |
@@ -49,7 +49,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 | `PR-03` | Velocity lane and quantize | Piano roll |
 | `PR-04` | Drum rows | Piano roll on drum tracks |
 | `DEV-01` | Linear chain with bypass | Track and master chains |
-| `DEV-02` | Controls with units and reset | Device panels, mixer |
+| `DEV-02` | Knobs with units and reset | Device panels, mixer pan |
 | `DEV-03` | Sample editor with keyboard markers | Sampler device |
 | `MIX-01` | Channel strip and master defaults | Mixer |
 | `MIX-02` | Peak meters with clip hold | Mixer |
@@ -62,7 +62,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 | `A11Y-02` | Position and edit announcements | Live region, `/settings` |
 | `A11Y-03` | Unique names, color-independent state | All regions |
 | `A11Y-04` | Alternatives to dragging | Timeline, chains |
-| `HELP-01` | Contextual help text | All controls |
+| `HELP-01` | Icon controls, tooltips and help text | All controls |
 | `HELP-02` | Command palette and shortcut overlay | Global |
 
 ## First screen
@@ -228,16 +228,22 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `TRN-01` Transport bar anatomy
 - **Problem:** Inconsistent layouts slow recognition.
-- **Solution:** Order: Locate to start, Play/Stop, Loop, Metronome, Position, Tempo, Time signature, master volume, meter, Panic. Position shows bars.beats.sixteenths (`1.1.1`) with a `mm:ss.mmm` toggle.
-- **Prior art:** Soundtrap's bottom bar groups transport, tempo and metronome. Logic Pro sets tempo by field or tap.
+- **Solution:** Icon buttons in this order: Go to start (⏮), Play/Pause (▶/⏸), Stop (■), Loop, Metronome; then Position, Tempo, Time signature, master volume, meter and Panic. Position shows bars.beats.sixteenths (`1.1.1`) in a monospace readout, with a `mm:ss.mmm` toggle; the status reads "Playing", "Paused" or "Stopped".
+- **Prior art:** GarageBand, Logic Pro's control bar and BandLab pair one Play/Pause button with a separate Stop. Soundtrap's bottom bar groups transport, tempo and metronome. Logic Pro sets tempo by field or tap.
 - **W-Rack application:** `role="toolbar"` named "Transport".
-- **Accessibility:** Play is one `aria-pressed` toggle; the position is text, read on demand.
-- **Anti-patterns:** Two controls both named "Play"; the position rendered as an image.
+- **Accessibility:** Play/Pause is one button named for the action it performs, "Play" or "Pause", without `aria-pressed`. Each icon button has a name and a tooltip with its key. The position is text, read on demand.
+- **Anti-patterns:** A Play toggle that is also the only way to stop; changing the name and `aria-pressed` together; the position rendered as an image.
 
-### `TRN-02` Space play/stop, separate locate
+### `TRN-02` Play, pause, stop and locate
 - **Problem:** Products disagree on where stop returns the playhead.
-- **Solution:** Space plays from and stops at the playhead. `Home` locates to bar 1; `Shift+Home` to the loop start. Space does nothing special inside text fields or on focused buttons.
-- **Prior art:** Space is play/stop in Ableton Live, Logic Pro, BandLab and Song Maker.
+- **Solution:**
+  - Space toggles Play and Pause. Pause holds the playhead; Play resumes from it.
+  - Stop, while playing or paused, halts and returns the playhead to where playback started; resuming from a pause keeps that start.
+  - Stop while stopped goes to bar 1, or to the loop start when the loop is on. Stop is disabled when stopped at bar 1.
+  - `Home` locates to bar 1; `Shift+Home` to the loop start.
+  - Escape and Panic stop every sound and leave the transport stopped, not paused.
+  - Space does nothing special inside text fields or on focused buttons.
+- **Prior art:** Space is play/pause in GarageBand, Logic Pro and BandLab; Logic Pro's Stop returns to the play start and a second Stop goes to the beginning.
 - **W-Rack application:** Global key handler excluding `input`, `textarea`, `select`, `button` and `[contenteditable]`.
 - **Accessibility:** A focused native button keeps its own Space behavior.
 - **Anti-patterns:** Capturing Space in fields; Enter as play.
@@ -348,13 +354,18 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Accessibility:** Devices are `group`s named "Delay, 3 of 5"; move buttons are named "Move Delay left" (WCAG 2.5.7); bypass uses `aria-pressed` and shows "Bypassed".
 - **Anti-patterns:** Drag-only reordering; bypass shown only by greying.
 
-### `DEV-02` Controls with units and reset
-- **Problem:** Knobs resist mouse and keyboard use; unitless values mislead.
-- **Solution:** Horizontal sliders by default. Values show units ("−6.0 dB", "1.2 kHz", "250 ms"). Shift gives fine steps; double-click or Delete resets to default; clicking the value opens text entry.
-- **Prior art:** Logic Pro's Controls view for VoiceOver; DAWproject records parameter units.
-- **W-Rack application:** Device panels; mixer gain and pan on every track and the master.
-- **Accessibility:** Native range inputs or `role="slider"` with unit-bearing `aria-valuetext`; Arrow, Page Up/Down and Home/End keys.
-- **Anti-patterns:** Circular-drag knobs; values visible only while dragging.
+### `DEV-02` Knobs with units and reset
+- **Problem:** Unfamiliar control shapes slow recognition; unitless values mislead.
+- **Solution:**
+  - Device parameters are rotary knobs in a grid, grouped in sections with a heading (Oscillator, Filter, Envelope, Tuning).
+  - Each knob shows its caption above and its value with units below ("−6.0 dB", "1.2 kHz", "250 ms").
+  - Vertical drag changes the value; Shift gives fine steps. Double-click or Delete resets to the default.
+  - Clicking the value, or Enter on the knob, opens a text field that accepts a number with or without a unit ("2 kHz", "40 ms").
+  - Enums are segmented buttons.
+- **Prior art:** Knobs in Ableton Live's devices, Logic Pro's plug-in windows, FL Studio and Reason; DAWproject records parameter units.
+- **W-Rack application:** Instrument panels, the sampler, the drum machine, effect devices and mixer pan.
+- **Accessibility:** Each knob is a visually hidden native range input under the SVG arc, with the parameter's name and unit-bearing `aria-valuetext`; Arrow, Page Up/Down, Home/End and Delete keys. Enums are radio groups.
+- **Anti-patterns:** Circular drag, which jumps when the pointer passes the centre; values visible only while dragging.
 
 ### `DEV-03` Sample editor with keyboard markers
 - **Problem:** Drag-only waveform markers exclude keyboard and screen-reader users; imprecise loop points click.
@@ -375,10 +386,14 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `MIX-01` Channel strip and master defaults
 - **Problem:** Hot defaults clip the master on first playback.
-- **Solution:** Each track strip shows name, chain summary, pan ("C", "L20", "R20"), fader in dB, meter, mute and solo. The master strip shows chain summary, pan, fader and meter. Tracks default to 0 dB; the master defaults to −12 dB; every pan defaults to centre. Double-click resets.
+- **Solution:**
+  - Vertical channel strips, top to bottom: pan knob ("C", "L20", "R20"), clip indicator, a vertical fader with a dB scale beside a vertical peak meter, the dB readout, M and S buttons, and the track name.
+  - The master strip has the same layout, with limiter gain reduction in place of the clip indicator and no M or S.
+  - Faders follow a square taper, so the range from +6 to −12 dB has most of the travel.
+  - Tracks default to 0 dB; the master defaults to −12 dB; every pan defaults to centre. Double-click resets.
 - **Prior art:** BandLab's master meter turns red on clipping; FL Studio's default template places a limiter on the master.
 - **W-Rack application:** Mixer panel with the master strip separated at the right.
-- **Accessibility:** "Bass volume" slider with `aria-valuetext="−6.0 dB"`; "Bass pan" with "Left 20"; "Master volume" and "Master pan" on the master strip.
+- **Accessibility:** The fader is a native range input with `aria-orientation="vertical"`: "Bass volume" with `aria-valuetext="−6.0 dB"`. The pan knob is "Bass pan" with "Left 20". M and S are named "Mute Bass" and "Solo Bass". The master strip has "Master volume" and "Master pan".
 - **Anti-patterns:** A 0 dB master without a limiter; raw −1 to 1 pan values.
 
 ### `MIX-02` Peak meters with clip hold
@@ -472,12 +487,21 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ## Help
 
-### `HELP-01` Contextual help text
-- **Problem:** Dense controls lack explanation where they are used.
-- **Solution:** One-sentence descriptions appear as tooltips on hover and focus (500 ms delay, Escape dismisses) and through `aria-describedby`. A collapsible Info strip shows the description of the focused or hovered control.
-- **Prior art:** Ableton Live's Info View; Bitwig's in-app device documentation.
-- **W-Rack application:** All controls; the editor's Info strip.
-- **Accessibility:** Tooltips are dismissible, hoverable and persistent (WCAG 1.4.13).
+### `HELP-01` Icon controls, tooltips and help text
+- **Problem:** Text labels on every button crowd the editor; dense controls lack explanation where they are used.
+- **Solution:**
+  - Controls with a recognisable icon are icon-only (Lucide icons): transport, timeline tools, device headers, piano-roll tools, preset and sampler actions, the mixer and secondary dialog actions.
+  - Text stays where an icon would be ambiguous: dialog primary actions, Panic, empty-state calls to action and the home page.
+  - Less frequent commands live in the File, Add and Edit menus.
+  - One shared tooltip shows each icon control's name with its shortcut ("Play (Space)") after a short delay on hover or keyboard focus.
+  - The Info strip shows a one-sentence description of the focused or hovered control.
+- **Prior art:** Icon toolbars with tooltips in Logic Pro, Ableton Live and BandLab; Ableton Live's Info View.
+- **W-Rack application:** All icon controls; the editor's Info strip.
+- **Accessibility:**
+  - Each icon control has an `aria-label`, with the names used before the icons ("Split at edit cursor", "Bypass Delay").
+  - A shortcut is the control's description through `aria-describedby`; a control without one has no description, so the name is not read twice.
+  - Tooltips are dismissible with Escape, hoverable and persistent (WCAG 1.4.13).
+  - Targets are at least 24 × 24 px. Toggles expose `aria-pressed` and show a lit lamp on a filled cap, never colour alone.
 - **Anti-patterns:** Hover-only tooltips; tooltips that repeat the label.
 
 ### `HELP-02` Command palette and shortcut overlay
@@ -498,8 +522,8 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 | Autosave or explicit save | Logic Pro autosaves; Ableton Live saves on command | Autosave plus explicit `.wrack` file | `SAVE-01`, `SAVE-02` |
 | Media references | Ableton Live references unless collected | Archives always include audio | `SAVE-02` |
 | Master limiter | FL Studio inserts one by default | Fixed limiter plus −12 dB master | `SAFE-02`, `MIX-01` |
-| Knobs or sliders | Knobs in FL Studio and Reason; sliders in Logic Pro's Controls view | Sliders | `DEV-02` |
-| Play key | Space in Live, Logic Pro, BandLab, Song Maker | Space, stopping in place | `TRN-02` |
+| Knobs or sliders | Knobs in Ableton Live, Logic Pro, FL Studio and Reason; sliders in Logic Pro's Controls view | Knobs for device parameters and pan; vertical faders in the mixer; each is a native range input for keyboards and assistive technology | `DEV-02`, `MIX-01` |
+| Play key | Space in Live, Logic Pro, BandLab, Song Maker | Space toggles Play and Pause; Stop returns to the play start, then to bar 1 | `TRN-02` |
 | Preset apply while browsing | REAPER applies on move; OSARA's dialog does not | Apply on Enter or click | `LIB-01` |
 | Volume notice repetition | No DAW precedent | Once per session, with an opt-out per device | `SAFE-01` |
 
@@ -508,7 +532,7 @@ Single-letter keys act only outside text fields.
 
 | Action | Key | Browser conflict | Handling |
 |---|---|---|---|
-| Play / stop | `Space` | Page scroll; activates focused buttons | Not captured in fields or on buttons |
+| Play / pause | `Space` | Page scroll; activates focused buttons | Not captured in fields or on buttons |
 | Locate to start / loop start | `Home` / `Shift+Home` | Caret movement in fields | Not captured in fields |
 | Loop on/off | `L` | — | — |
 | Metronome | `K` | — | — |

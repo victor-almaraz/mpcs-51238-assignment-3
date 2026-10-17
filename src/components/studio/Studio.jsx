@@ -18,6 +18,8 @@ import OpenArchive from '@/components/archive/OpenArchive';
 import useCommands from '@/components/commands/useCommands';
 import SaveArchive from '@/components/archive/SaveArchive';
 import ExportDialog from '@/components/export/ExportDialog';
+import MenuButton from '@/components/ui/MenuButton';
+import { commandEnabled, runCommand } from '@/lib/commands/registry';
 import { effectFor } from '@/dsp/effects/registry';
 import { setEffectBypass } from '@/lib/project/effect-commands';
 import { sourceStatus } from '@/components/timeline/layout';
@@ -142,13 +144,26 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const liveTargetIndex = Math.max(0, mixerTrackIds.indexOf(panelTrackId));
   const chainTrackId = view.selectedTrackId && project.tracks[view.selectedTrackId] ? view.selectedTrackId : panelTrackId;
 
-  const focusFirst = (selector) => document.querySelector(selector)?.focus();
+  /** "File" menu items: the registered save, open and export commands. */
+  const fileItems = () =>
+    [
+      ['project.save-wrack', 'Save .wrack file', 'Mod+S', 'save'],
+      ['project.open-wrack', 'Open .wrack file…', 'Mod+O', 'folder-open'],
+      ['project.export', 'Export WAV…', 'Mod+Shift+E', 'download'],
+    ].map(([id, label, keys, icon]) => ({ label, keys, icon, disabled: !commandEnabled(id), run: () => runCommand(id) }));
+
+  /** Opens dock tab `dock`, expanded, and focuses the first match of `selector` once it renders. */
+  const goTo = (dock, selector) => {
+    changeView({ dock, dockCollapsed: false });
+    setTimeout(() => document.querySelector(selector)?.focus(), 50);
+  };
   useCommands([
     { id: 'view.zoom-in', group: 'View', label: 'Zoom in', keys: 'Alt+=', run: () => changeView({ zoom: stepZoom(view.zoom, 1) }), enabled: () => view.zoom < ZOOM_MAX },
     { id: 'view.zoom-out', group: 'View', label: 'Zoom out', keys: 'Alt+-', run: () => changeView({ zoom: stepZoom(view.zoom, -1) }), enabled: () => view.zoom > ZOOM_MIN },
-    { id: 'go.pianoroll', group: 'Go to', label: 'Piano roll', run: () => focusFirst('[role="grid"][aria-label="Notes"] [tabindex="0"]'), enabled: () => Boolean(panelDevice) },
-    { id: 'go.mixer', group: 'Go to', label: 'Mixer', run: () => focusFirst('[aria-label="Track strips"] input, [aria-label="Track strips"] button') },
-    { id: 'go.effects', group: 'Go to', label: 'Track effects', run: () => focusFirst('section[aria-labelledby^="chain-"] select, section[aria-labelledby^="chain-"] button') },
+    { id: 'go.pianoroll', group: 'Go to', label: 'Piano roll', run: () => goTo('editor', '[role="grid"][aria-label="Notes"] [tabindex="0"]'), enabled: () => Boolean(panelDevice) },
+    { id: 'go.mixer', group: 'Go to', label: 'Mixer', run: () => goTo('mixer', '[aria-label="Track strips"] input, [aria-label="Track strips"] button') },
+    { id: 'go.effects', group: 'Go to', label: 'Track effects', run: () => goTo('devices', 'section[aria-labelledby^="chain-"] select, section[aria-labelledby^="chain-"] button') },
+    { id: 'view.dock', group: 'View', label: view.dockCollapsed ? 'Expand the panels' : 'Collapse the panels', run: () => changeView({ dockCollapsed: !view.dockCollapsed }) },
   ]);
 
   // Alt+= and Alt+- zoom (ARR-06); Ctrl/Cmd with +/- stays with the browser. e.code, since Alt changes e.key on macOS.
@@ -225,7 +240,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
   /** Opens the Editor tab and focuses one of its fields once it renders. */
   function openProperties(field) {
-    changeView({ dock: 'editor' });
+    changeView({ dock: 'editor', dockCollapsed: false });
     setTimeout(() => {
       const id = view.selectedClipIds[view.selectedClipIds.length - 1];
       document.getElementById(field === 'name' && id ? `clip-${id}-name` : 'dock-tab-editor')?.focus();
@@ -312,12 +327,13 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   );
 
   const mixerPanel = (
-    <section aria-labelledby="studio-mixer" className="flex min-h-0 flex-col gap-2">
+    <section aria-labelledby="studio-mixer" className="flex min-h-[22rem] flex-1 flex-col">
       <h2 id="studio-mixer" className="sr-only">
         Mixer
       </h2>
-      <div className="flex items-start gap-2 overflow-x-auto">
-        <ul aria-label="Track strips" className="flex gap-2">
+      {/* Vertical strips side by side; the master stays at the right. */}
+      <div className="flex min-h-0 flex-1 items-stretch gap-2">
+        <ul aria-label="Track strips" className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
           {mixerTrackIds.map((id, index) => (
             <TrackStrip
               key={id}
@@ -350,9 +366,10 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         onRename={(name) => edit({ ...projectRef.current, name })}
         actions={
           <>
-            <SaveArchive project={project} disabled={readOnly} />
-            <OpenArchive size="sm" inline currentId={project.id} />
-            <ExportDialog project={project} loop={loopRange(project, view)} />
+            <MenuButton label="File" icon="file" items={fileItems} help="File: save or open a .wrack file, or export WAV." />
+            <SaveArchive project={project} disabled={readOnly} trigger={false} />
+            <OpenArchive inline trigger={false} currentId={project.id} />
+            <ExportDialog project={project} loop={loopRange(project, view)} trigger={false} />
           </>
         }
       />
@@ -390,7 +407,12 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
       <Timeline project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} loading={loading} onOpenProperties={openProperties} />
 
-      <Dock tab={view.dock} onTab={(t) => changeView({ dock: t })} height={dockHeight} maxHeight={maxDock} onHeight={setDockHeight}>
+      <Dock
+        tab={view.dock}
+        onTab={(t) => changeView({ dock: t })}
+        collapsed={view.dockCollapsed}
+        onCollapse={(c) => changeView({ dockCollapsed: c })}
+        height={dockHeight} maxHeight={maxDock} onHeight={setDockHeight}>
         <ProjectContext value={project}>{view.dock === 'editor' ? editorPanel : view.dock === 'devices' ? devicesPanel : mixerPanel}</ProjectContext>
       </Dock>
 

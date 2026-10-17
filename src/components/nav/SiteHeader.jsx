@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 import { controlBase, controlSizes, cx, lamp, lampOff, selectedLook } from '@/design-systems/industrial/classes';
-import { requestPalette } from '@/lib/commands/registry';
+import { requestPalette, runCommand } from '@/lib/commands/registry';
 
 const LINKS = [
   { href: '/', label: 'Home' },
@@ -55,9 +55,10 @@ export default function SiteHeader() {
             })}
           </ul>
         </nav>
-        <Button className="ml-auto" aria-keyshortcuts="Control+K Meta+K Control+Shift+P Meta+Shift+P" onClick={requestPalette}>
-          Commands
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <IconButton icon="command" label="Commands" shortcut="Ctrl/Cmd+K" aria-keyshortcuts="Control+K Meta+K Control+Shift+P Meta+Shift+P" onClick={requestPalette} data-help="Commands (Ctrl/Cmd+K): search and run any command." />
+          <IconButton icon="circle-question-mark" label="Keyboard shortcuts" shortcut="?" onClick={() => runCommand('help.shortcuts')} />
+        </div>
       </div>
     </header>
   );

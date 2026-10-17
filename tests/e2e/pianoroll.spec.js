@@ -141,7 +141,7 @@ test('Space on a drum row header auditions the voice', async ({ page }) => {
   // auditions are measured over a longer window.
   await page.keyboard.press(' ');
   await page.waitForTimeout(500);
-  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
   const measuring = page.evaluate(async () => {
     let most = 0;
     const until = performance.now() + 2000;

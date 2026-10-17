@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 import Field from '@/components/ui/Field';
 import Select from '@/components/ui/Select';
 import Slider from '@/components/ui/Slider';
-import Toggle from '@/components/ui/Toggle';
+import IconToggle from '@/components/ui/IconToggle';
 import { faderText } from '@/components/mixer/TrackStrip';
 import { sectionHeading } from '@/design-systems/industrial/classes';
 import { dbToGain, gainToDb } from '@/dsp/core/math';
@@ -113,9 +113,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
           disabled={readOnly}
           onChange={(value) => onEdit(value ? setClipColor(project, clip.id, value).doc : { ...project, clips: { ...project.clips, [clip.id]: { ...clip, color: undefined } } })}
         />
-        <Toggle pressed={clip.muted} disabled={readOnly} onClick={() => onEdit({ ...project, clips: { ...project.clips, [clip.id]: { ...clip, muted: !clip.muted } } })}>
-          Mute clip
-        </Toggle>
+        <IconToggle icon="volume-x" label="Mute clip" pressed={clip.muted} disabled={readOnly} onClick={() => onEdit({ ...project, clips: { ...project.clips, [clip.id]: { ...clip, muted: !clip.muted } } })} />
       </div>
       {audio ? (
         <>
@@ -190,17 +188,13 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
                       disabled={readOnly}
                       onChange={(v) => apply(setEnvelopePoint(project, clip.id, point.id, point.frame, v <= POINT_MIN_DB ? 0 : dbToGain(v)))}
                     />
-                    <Button size="sm" disabled={readOnly} onClick={() => apply(removeEnvelopePoint(project, clip.id, point.id))}>
-                      Remove point {i + 1}
-                    </Button>
+                    <IconButton icon="x" label={`Remove point ${i + 1}`} size="sm" disabled={readOnly} onClick={() => apply(removeEnvelopePoint(project, clip.id, point.id))} />
                   </li>
                 );
               })}
             </ol>
             <div>
-              <Button disabled={readOnly || !cursorInside} onClick={() => apply(addEnvelopePoint(project, clip.id, cursorFrame, 1))}>
-                Add point at edit cursor
-              </Button>
+              <IconButton icon="plus" label="Add point at edit cursor" disabled={readOnly || !cursorInside} onClick={() => apply(addEnvelopePoint(project, clip.id, cursorFrame, 1))} />
             </div>
           </section>
         </>

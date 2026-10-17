@@ -58,6 +58,8 @@ export default function Dialog({
       onCloseRef.current?.();
     }
     function handleClose() {
+      // The close event is a later task: a dialog reopened before it arrives stays open.
+      if (dialog.open) return;
       const target = restoreFocusRef.current;
       restoreFocusRef.current = null;
       if (target?.isConnected) target.focus();

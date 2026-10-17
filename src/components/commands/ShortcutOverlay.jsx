@@ -6,6 +6,7 @@ import Dialog from '@/components/ui/Dialog';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { displayKeys, getCommands, subscribeCommands } from '@/lib/commands/registry';
 import useCommands from './useCommands';
+import IconButton from '@/components/ui/IconButton';
 
 const EMPTY = [];
 
@@ -102,9 +103,7 @@ export default function ShortcutOverlay() {
       initialFocusRef={closeRef}
       className="w-[min(60rem,95vw)]"
       actions={
-        <Button ref={closeRef} onClick={() => setOpen(false)}>
-          Close
-        </Button>
+        <IconButton icon="x" label="Close" ref={closeRef} onClick={() => setOpen(false)} />
       }
     >
       {/* The list scrolls on short windows, so it takes focus for keyboard scrolling. */}

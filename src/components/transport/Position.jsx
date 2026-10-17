@@ -42,7 +42,7 @@ export default function Position() {
       <span
         ref={textRef}
         data-testid="position"
-        className="min-w-20 rounded-ds bg-window px-2 py-1 text-center text-sm text-lamp tabular-nums"
+        className="min-w-20 rounded-ds bg-window px-2 py-1 text-center font-mono text-sm text-lamp tabular-nums"
       >
         1.1.1
       </span>

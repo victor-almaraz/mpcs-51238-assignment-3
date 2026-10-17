@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
 import { getEngine } from '@/lib/audio/engine-client';
 import { createKeyboardInput, isNoteKey, noteName } from '@/lib/audio/keyboard-input';
 import { claimKeys } from '@/lib/commands/registry';
 import { MIDI_FIREFOX, connectMidi, isFirefox, midiSupported, MIDI_UNSUPPORTED } from '@/lib/audio/midi-input';
 import { getSettings, updateSettings } from '@/lib/settings/store';
+import IconButton from '@/components/ui/IconButton';
+import IconToggle from '@/components/ui/IconToggle';
 
 /**
  * Live input (midi.md): computer-keyboard playing with an on/off toggle and the
@@ -86,13 +86,9 @@ export default function LiveInputControls({ onNote }) {
       <h2 id="live-input-heading" className="sr-only">
         Live input
       </h2>
-      <Toggle size="sm" pressed={enabled} onClick={toggleKeyboard} data-help="Keys A to K play notes C to C on the selected track; Z and X change the octave.">
-        Play with keyboard
-      </Toggle>
+      <IconToggle icon="keyboard" label="Play with keyboard" size="sm" pressed={enabled} onClick={toggleKeyboard} data-help="Keys A to K play notes C to C on the selected track; Z and X change the octave." />
       <StatusRegion className="shrink-0 text-xs whitespace-nowrap">Keyboard octave: {noteName(12 * (octave + 1))}</StatusRegion>
-      <Button size="sm" onClick={connect} data-help="Asks the browser for MIDI devices; notes play on the selected track.">
-        Connect MIDI device
-      </Button>
+      <IconButton icon="cable" label="Connect MIDI device" size="sm" onClick={connect} data-help="Asks the browser for MIDI devices; notes play on the selected track." />
       {midiStatus ? (
         <StatusRegion className="truncate text-xs">{midiNote}</StatusRegion>
       ) : midiNote ? (

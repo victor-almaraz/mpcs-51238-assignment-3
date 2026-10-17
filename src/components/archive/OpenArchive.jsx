@@ -23,9 +23,10 @@ export const NOT_A_PROJECT = 'project.json is not a W-Rack project.';
  * failing archive imports nothing and lists its errors. `label` names the
  * button; `currentId` is the open project in the editor, where Restore audio
  * stays on the page. `inline` lays the button and its messages in a row;
- * `command` registers the Open command (Mod+O) — one instance per page does.
+ * `command` registers the Open command (Mod+O) — one instance per page does;
+ * with `trigger` false there is no button and the command opens the picker.
  */
-export default function OpenArchive({ label = 'Open .wrack file', size = 'md', currentId = null, disabled, inline = false, command = true }) {
+export default function OpenArchive({ label = 'Open .wrack file', size = 'md', currentId = null, disabled, inline = false, command = true, trigger = true }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const buttonRef = useRef(null);
@@ -113,11 +114,15 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
 
   return (
     <div className={inline ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-2'}>
-      <div>
-        <Button ref={buttonRef} size={size} disabled={disabled || busy} onClick={() => inputRef.current?.click()} data-help="Open .wrack file (Ctrl/Cmd+O): opens a saved archive as a project, or restores this project's audio.">
-          {busy ? 'Opening file…' : label}
-        </Button>
-      </div>
+      {trigger ? (
+        <div>
+          <Button ref={buttonRef} size={size} disabled={disabled || busy} onClick={() => inputRef.current?.click()} data-help="Open .wrack file (Ctrl/Cmd+O): opens a saved archive as a project, or restores this project's audio.">
+            {busy ? 'Opening file…' : label}
+          </Button>
+        </div>
+      ) : busy ? (
+        <span className="text-xs">Opening file…</span>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

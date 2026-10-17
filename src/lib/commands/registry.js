@@ -37,6 +37,16 @@ export function subscribeCommands(listener) {
   return () => listeners.delete(listener);
 }
 
+/** True when command `id` is registered and enabled. */
+export const commandEnabled = (id) => commands.get(id)?.enabled() ?? false;
+
+/** Runs command `id` when it is registered and enabled; returns whether it ran. */
+export function runCommand(id) {
+  if (!commandEnabled(id)) return false;
+  commands.get(id).run();
+  return true;
+}
+
 /** Asks the palette to open (the header button and the shortcut). */
 export function requestPalette() {
   paletteRequests++;

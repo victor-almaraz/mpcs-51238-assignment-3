@@ -18,9 +18,10 @@ export const archiveFileName = (name) => safeFileName(name, '.wrack');
 /**
  * "Save .wrack file" (assignment-3-scope.md, .wrack archive): the project and
  * every loaded source in one STORE-only ZIP, with the "Not saved to file"
- * indicator beside it. `project` is the open document.
+ * indicator beside it. `project` is the open document. With `trigger` false
+ * there is no button and the project.save-wrack command saves (a File menu).
  */
-export default function SaveArchive({ project, disabled }) {
+export default function SaveArchive({ project, disabled, trigger = true }) {
   useSyncExternalStore(subscribeProjects, getIndexSnapshot, () => null);
   useSyncExternalStore(subscribeSources, getSourcesVersion, () => 0);
   const [message, setMessage] = useState('');
@@ -63,10 +64,14 @@ export default function SaveArchive({ project, disabled }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" onClick={save} disabled={disabled || busy} aria-describedby="save-archive-help" data-help="Save .wrack file (Ctrl/Cmd+S). Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.">
-        {busy ? 'Saving file…' : 'Save .wrack file'}
-      </Button>
-      <span className="text-xs whitespace-nowrap">{state.saved ? 'Saved to file' : 'Not saved to file'}</span>
+      {trigger ? (
+        <Button size="sm" onClick={save} disabled={disabled || busy} aria-describedby="save-archive-help" data-help="Save .wrack file (Ctrl/Cmd+S). Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.">
+          {busy ? 'Saving file…' : 'Save .wrack file'}
+        </Button>
+      ) : null}
+      <span className="text-xs whitespace-nowrap" data-help="A .wrack file is a copy of the project and its audio, for backups and other devices; edits save in this browser automatically.">
+        {busy ? 'Saving file…' : state.saved ? 'Saved to file' : 'Not saved to file'}
+      </span>
       <p id="save-archive-help" className="sr-only">
         Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.
       </p>

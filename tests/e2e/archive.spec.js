@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { menuItem } from '../support/editor.js';
 
 /** A 16-bit mono PCM WAV of a 440 Hz sine, `seconds` long at 48 kHz. */
 function wav(seconds = 1) {
@@ -38,7 +39,7 @@ async function savedArchive(page, testInfo) {
   await expect(clipRows(page)).toHaveCount(1);
   await expect(projectBar(page)).toContainText('Not saved to file');
   const download = page.waitForEvent('download');
-  await projectBar(page).getByRole('button', { name: 'Save .wrack file' }).click();
+  await (await menuItem(page, 'File', 'Save .wrack file')).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('Carried.wrack');
   const path = testInfo.outputPath('Carried.wrack');

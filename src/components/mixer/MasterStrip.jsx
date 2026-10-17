@@ -2,18 +2,18 @@
 
 import { useEffect, useRef } from 'react';
 import Meter from '@/components/ui/Meter';
-import Slider from '@/components/ui/Slider';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+import Fader from '@/components/ui/Fader';
 import { MASTER_VOLUME } from '@/dsp/engine/engine';
 import { getEngine } from '@/lib/audio/engine-client';
-import PanSlider from './PanSlider';
+import PanKnob from './PanKnob';
 import { faderText } from './TrackStrip';
 
 /**
- * Master strip (MIX-01, MIX-02): master volume (−60 to 0 dB, default −12,
- * saved in settings), master pan (balance, saved with the project), the
- * post-limiter meter and the limiter's gain reduction ("Limiter −3.2 dB",
- * shown while above 0.5 dB and held for 1 s).
+ * Master strip (MIX-01, MIX-02), laid out like the track strips: master pan
+ * (balance, saved with the project), the limiter's gain reduction ("Limiter
+ * −3.2 dB", shown while above 0.5 dB and held for 1 s), the master volume
+ * fader (−60 to 0 dB, default −12, saved in settings) beside the
+ * post-limiter meter, the dB readout and the name.
  */
 export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }) {
   const engine = getEngine();
@@ -40,28 +40,28 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
   };
 
   return (
-    <section aria-labelledby="master-strip-heading" className="flex w-80 shrink-0 flex-col gap-2 rounded-ds border-2 border-fg bg-surface p-2">
-      <h3 id="master-strip-heading" className={sectionHeading}>
+    <section aria-labelledby="master-strip-heading" className="flex h-full w-28 shrink-0 flex-col items-center gap-1.5 rounded-ds border-2 border-fg bg-surface px-1.5 py-2">
+      <PanKnob id="master-pan" name="Master" value={pan} onChange={onPan} disabled={disabled} />
+      <p ref={reductionRef} aria-hidden="true" className="min-h-6 text-center text-[0.625rem] leading-6 text-muted tabular-nums" />
+      <Fader
+        id="master-volume"
+        label="Master volume"
+        min={MASTER_VOLUME.min}
+        max={MASTER_VOLUME.max}
+        step={0.1}
+        value={volumeDb}
+        valueText={faderText(volumeDb)}
+        onChange={onVolume}
+        onReset={() => onVolume(MASTER_VOLUME.default)}
+      >
+        <Meter read={readMeter} className="h-full w-3" />
+      </Fader>
+      <output aria-hidden="true" className="min-h-6 w-full rounded-ds bg-window text-center font-mono text-xs leading-6 text-lamp">
+        {faderText(volumeDb)}
+      </output>
+      <h3 id="master-strip-heading" className="w-full text-center text-xs font-bold uppercase">
         Master
       </h3>
-      <div className="flex items-end gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Slider
-            id="master-volume"
-            label="Master volume"
-            min={MASTER_VOLUME.min}
-            max={MASTER_VOLUME.max}
-            step={0.1}
-            value={volumeDb}
-            valueText={faderText(volumeDb)}
-            onChange={onVolume}
-            onReset={() => onVolume(MASTER_VOLUME.default)}
-          />
-          <PanSlider id="master-pan" name="Master" value={pan} onChange={onPan} disabled={disabled} />
-        </div>
-        <Meter read={readMeter} />
-      </div>
-      <p ref={reductionRef} aria-hidden="true" className="min-h-5 text-xs text-muted tabular-nums" />
     </section>
   );
 }

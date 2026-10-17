@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
+import IconButton from '@/components/ui/IconButton';
+import IconToggle from '@/components/ui/IconToggle';
 import ParamControl from '@/components/instruments/ParamControl';
 import PresetPicker from '@/components/presets/PresetPicker';
 import { applyPreset } from '@/lib/presets/store';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+import { cx, sectionHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { EFFECTS, effectFor } from '@/dsp/effects/registry';
 import { MAX_EFFECTS } from '@/dsp/protocol';
@@ -72,9 +72,7 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
         <div role="group" aria-label={groupLabel} className="flex flex-col gap-2 rounded-ds border border-border p-2">
         <p className="text-sm">Unknown effect “{String(device.type)}”. It passes the signal through unchanged.</p>
         <div>
-          <Button size="sm" data-focus={keep('remove')} disabled={disabled} aria-label={`Remove ${name}`} onClick={() => onCommand((doc, trackId) => removeEffect(doc, trackId, device.id), `Removed ${name}`, { removed: device.id })}>
-            Remove
-          </Button>
+          <IconButton icon="x" label={`Remove ${name}`} size="sm" data-focus={keep('remove')} disabled={disabled} onClick={() => onCommand((doc, trackId) => removeEffect(doc, trackId, device.id), `Removed ${name}`, { removed: device.id })} />
         </div>
         </div>
       </li>
@@ -83,23 +81,15 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
   return (
     <li>
       <div role="group" aria-label={groupLabel} className="flex w-full flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2 sm:w-[26rem]">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className={sectionHeading}>{name}</h3>
+      {/* Title bar: bypass (power), name, move and remove, as in a DAW device header. */}
+      <div className="flex items-center gap-1">
+        <IconToggle icon="power" label={`Bypass ${name}`} size="sm" data-focus={keep('bypass')} pressed={device.bypass === true} disabled={disabled} onClick={() => onCommand((doc) => setEffectBypass(doc, device.id, !device.bypass), `${name} ${device.bypass ? 'on' : 'bypassed'}`)} />
+        <h3 className={cx(sectionHeading, 'ml-1')}>{name}</h3>
         {device.bypass ? <span className="text-sm font-bold text-muted">Bypassed</span> : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-1">
-        <Toggle size="sm" data-focus={keep('bypass')} pressed={device.bypass === true} disabled={disabled} aria-label={`Bypass ${name}`} onClick={() => onCommand((doc) => setEffectBypass(doc, device.id, !device.bypass), `${name} ${device.bypass ? 'on' : 'bypassed'}`)}>
-          Bypass
-        </Toggle>
-        <Button size="sm" data-focus={keep('left')} disabled={disabled || position === 1} aria-label={`Move ${name} left`} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, -1), `${name} moved to position ${position - 1}`, { focus: `${device.id}:left` })}>
-          Left
-        </Button>
-        <Button size="sm" data-focus={keep('right')} disabled={disabled || position === count} aria-label={`Move ${name} right`} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, 1), `${name} moved to position ${position + 1}`, { focus: `${device.id}:right` })}>
-          Right
-        </Button>
-        <Button size="sm" data-focus={keep('remove')} disabled={disabled} aria-label={`Remove ${name}`} onClick={() => onCommand((doc, trackId) => removeEffect(doc, trackId, device.id), `Removed ${name}`, { removed: device.id })}>
-          Remove
-        </Button>
+        <span className="ml-auto" />
+        <IconButton icon="chevron-left" label={`Move ${name} left`} size="sm" variant="ghost" data-focus={keep('left')} disabled={disabled || position === 1} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, -1), `${name} moved to position ${position - 1}`, { focus: `${device.id}:left` })} />
+        <IconButton icon="chevron-right" label={`Move ${name} right`} size="sm" variant="ghost" data-focus={keep('right')} disabled={disabled || position === count} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, 1), `${name} moved to position ${position + 1}`, { focus: `${device.id}:right` })} />
+        <IconButton icon="x" label={`Remove ${name}`} size="sm" variant="ghost" data-focus={keep('remove')} disabled={disabled} onClick={() => onCommand((doc, trackId) => removeEffect(doc, trackId, device.id), `Removed ${name}`, { removed: device.id })} />
       </div>
       <PresetPicker
         kind="effect"
@@ -109,7 +99,7 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
         disabled={disabled}
         onApply={(preset) => onCommand((doc) => ({ ok: true, doc: applyPreset(doc, device.id, preset) }), `Applied ${preset?.name ?? 'Default settings'} to ${name}`)}
       />
-      <fieldset disabled={disabled} className="flex flex-col gap-2">
+      <fieldset disabled={disabled} className="flex flex-wrap items-start gap-x-2 gap-y-3">
         <legend className="sr-only">{name} settings</legend>
         {entry.params.map((def) =>
           def.id === 'sync' ? (
@@ -128,6 +118,7 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
               def={def}
               idPrefix={`effect-${device.id}`}
               label={`${name} ${LABELS[def.id].toLowerCase()}`}
+              caption={LABELS[def.id]}
               value={clampParam(def, device.params[def.id])}
               onChange={(id, value) => onParam(device.id, id, value)}
             />
@@ -221,9 +212,7 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
       {isMaster ? <SafetyLimiter /> : null}
       <div className="flex flex-wrap items-end gap-2">
         <Select id={`chain-${trackId}-type`} label="Effect" value={type} options={TYPE_OPTIONS} onChange={setType} disabled={disabled} />
-        <Button ref={addRef} disabled={disabled || blocker !== null} aria-describedby={`chain-${trackId}-limit`} onClick={() => run((doc, id) => addEffect(doc, id, type), `Added ${effectFor(type).label}`)}>
-          Add effect
-        </Button>
+        <IconButton ref={addRef} icon="plus" label="Add effect" disabled={disabled || blocker !== null} aria-describedby={`chain-${trackId}-limit`} onClick={() => run((doc, id) => addEffect(doc, id, type), `Added ${effectFor(type).label}`)} />
       </div>
       <p id={`chain-${trackId}-limit`} className="text-sm text-muted">
         {full ? `Chain full (${MAX_EFFECTS} of ${MAX_EFFECTS})` : (blocker ?? `${ids.length} of ${MAX_EFFECTS} slots used.`)}

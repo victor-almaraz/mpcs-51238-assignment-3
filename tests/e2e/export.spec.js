@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { menuItem } from '../support/editor.js';
 
 /*
  * WAV export (assignment-3-scope.md, Export; EXP-02): two exports of one
@@ -23,7 +24,7 @@ async function openExample(page) {
 
 /** Exports with `format` and returns the file bytes. */
 async function exportWav(page, testInfo, format, name) {
-  await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
+  await (await menuItem(page, 'File', 'Export WAV…')).click();
   const dialog = page.getByRole('dialog', { name: 'Export WAV' });
   await dialog.getByLabel('Format').selectOption({ label: format });
   await dialog.getByRole('button', { name: 'Export WAV' }).click();
@@ -60,12 +61,12 @@ test('two 16-bit exports are bit-identical; headers are 44, 68 and 58 bytes; the
   expect(peak).toBeGreaterThan(0.01);
   expect(peak).toBeLessThanOrEqual(10 ** (-1 / 20));
   // The export stops the live transport and leaves no AudioContext running but the live one.
-  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
 });
 
 test('the export dialog lists silent clips and limits the range', async ({ page }) => {
   await openExample(page);
-  await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
+  await (await menuItem(page, 'File', 'Export WAV…')).click();
   const dialog = page.getByRole('dialog', { name: 'Export WAV' });
   await expect(dialog.getByRole('slider', { name: 'Tail' })).toHaveAttribute('aria-valuetext', '2.0 s');
   await expect(dialog.getByRole('radio', { name: 'Whole project' })).toBeChecked();
@@ -78,7 +79,7 @@ test('Cancel stops waiting for a render and discards it; nothing downloads by it
   await openExample(page);
   let downloads = 0;
   page.on('download', () => downloads++);
-  await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
+  await (await menuItem(page, 'File', 'Export WAV…')).click();
   const dialog = page.getByRole('dialog', { name: 'Export WAV' });
   await dialog.getByRole('slider', { name: 'Tail' }).focus();
   await page.keyboard.press('End');

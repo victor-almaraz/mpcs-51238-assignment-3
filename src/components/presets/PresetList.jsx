@@ -10,6 +10,7 @@ import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import { deletePreset, getPresets, renamePreset, subscribePresets } from '@/lib/presets/store';
 import { MAX_PRESETS } from '@/lib/presets/validate';
 import { typeLabel } from './labels';
+import IconButton from '@/components/ui/IconButton';
 
 const EMPTY = [];
 
@@ -81,28 +82,22 @@ export default function PresetList() {
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 p-2">
                 <span>{p.name}</span>
                 <span className="flex gap-2">
-                  <Button
+                  <IconButton icon="pencil"
                     size="sm"
-                    aria-label={`Rename ${p.name}`}
+                    label={`Rename ${p.name}`}
                     onClick={(e) => {
                       trigger.current = e.currentTarget;
                       setName(p.name);
                       setNameError(null);
                       setRenaming(p);
-                    }}
-                  >
-                    Rename
-                  </Button>
-                  <Button
+                    }} />
+                  <IconButton icon="trash-2"
                     size="sm"
-                    aria-label={`Delete ${p.name}`}
+                    label={`Delete ${p.name}`}
                     onClick={(e) => {
                       trigger.current = e.currentTarget;
                       setDeleting(p);
-                    }}
-                  >
-                    Delete
-                  </Button>
+                    }} />
                 </span>
               </li>
             ))}
@@ -114,7 +109,7 @@ export default function PresetList() {
         <form noValidate onSubmit={submitRename} className="flex flex-col gap-3">
           <Field id="rename-preset-name" ref={nameRef} label="Name" value={name} error={nameError} autoComplete="off" onChange={(e) => setName(e.target.value)} />
           <div className="flex flex-wrap justify-end gap-2">
-            <Button onClick={() => setRenaming(null)}>Cancel</Button>
+            <IconButton icon="x" label="Cancel" onClick={() => setRenaming(null)} />
             <Button type="submit" variant="primary">
               Rename
             </Button>
@@ -129,9 +124,7 @@ export default function PresetList() {
         returnFocusRef={trigger}
         actions={
           <>
-            <Button ref={cancelRef} onClick={() => setDeleting(null)}>
-              Cancel
-            </Button>
+            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setDeleting(null)} />
             <Button variant="danger" onClick={confirmDelete}>
               Delete preset
             </Button>

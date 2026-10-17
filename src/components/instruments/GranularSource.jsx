@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import { cx, sectionHeading } from '@/design-systems/industrial/classes';
 import { GRANULAR_MAX_SOURCE_S } from '@/dsp/instruments/granular';
 import { getSource, importFiles } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
 import { setGranularSource } from '@/lib/project/clip-commands';
+import IconButton from '@/components/ui/IconButton';
 
 /**
  * Granular File source: "Load audio file…", "Remove file" and the file's
@@ -69,10 +69,8 @@ export default function GranularSource({ project, device, onEdit, loading }) {
       </h3>
       <p className={cx('text-sm', ref && !source ? 'font-bold' : '')}>{status}</p>
       <div className="flex flex-wrap items-end gap-2">
-        <Button onClick={() => fileRef.current?.click()} disabled={busy}>
-          {busy ? 'Loading file…' : 'Load audio file…'}
-        </Button>
-        {ref ? <Button onClick={() => choose(null) && setMessage('File removed')}>Remove file</Button> : null}
+        <IconButton icon="upload" label={busy ? 'Loading file…' : 'Load audio file…'} onClick={() => fileRef.current?.click()} disabled={busy} />
+        {ref ? <IconButton icon="x" label="Remove file" onClick={() => choose(null) && setMessage('File removed')} /> : null}
       </div>
       <input
         ref={fileRef}

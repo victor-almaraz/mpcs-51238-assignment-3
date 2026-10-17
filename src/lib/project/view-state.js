@@ -34,7 +34,7 @@ export function stepGrid(grid, steps) {
 /**
  * Default working state for `doc`: playhead at tick 0, the document's loop
  * range (off), 100 % zoom, no scroll, no selection, no open panel, the
- * Editor tab of the dock, snap on to the quarter note.
+ * Editor tab of the dock (expanded), snap on to the quarter note.
  */
 export function defaultView(doc) {
   return {
@@ -49,6 +49,7 @@ export function defaultView(doc) {
     openPanel: null,
     panelClipId: null,
     dock: 'editor',
+    dockCollapsed: false,
     snap: '1',
     snapOn: true,
   };
@@ -78,6 +79,7 @@ export function normalizeView(raw, doc) {
     view.panelClipId = typeof raw.panelClipId === 'string' && doc.clips[raw.panelClipId] ? raw.panelClipId : null;
   }
   if (DOCK_TABS.includes(raw.dock)) view.dock = raw.dock;
+  if (typeof raw.dockCollapsed === 'boolean') view.dockCollapsed = raw.dockCollapsed;
   if (SNAP_GRIDS.includes(raw.snap)) view.snap = raw.snap;
   if (typeof raw.snapOn === 'boolean') view.snapOn = raw.snapOn;
   return view;

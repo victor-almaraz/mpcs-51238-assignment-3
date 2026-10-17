@@ -1,10 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import { cx, errorText, fieldLabel, focusRing } from '@/design-systems/industrial/classes';
 import { validateProjectName } from '@/lib/project/validate';
+import IconButton from '@/components/ui/IconButton';
 
 /**
  * Editor header (NEW-03, SAVE-01): the project name as the page heading with
@@ -74,9 +74,7 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
           <h1 className="truncate font-display text-xl leading-tight font-bold uppercase">{name}</h1>
         )}
         {!editing && !readOnly ? (
-          <Button ref={renameRef} size="sm" variant="ghost" onClick={begin} aria-label="Rename project">
-            Rename
-          </Button>
+          <IconButton ref={renameRef} icon="pencil" label="Rename project" size="sm" variant="ghost" onClick={begin} />
         ) : null}
       </div>
       <p className="shrink-0 text-sm whitespace-nowrap text-muted">

@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
+import IconButton from '@/components/ui/IconButton';
 
 /**
  * Asked when an opened archive's project ID matches a saved project:
@@ -20,7 +21,7 @@ export default function RestoreDialog({ open, name, onRestore, onReplace, onCanc
       returnFocusRef={returnFocusRef}
       actions={
         <>
-          <Button onClick={onCancel}>Cancel</Button>
+          <IconButton icon="x" label="Cancel" onClick={onCancel} />
           <Button variant="danger" onClick={onReplace}>
             Replace project
           </Button>

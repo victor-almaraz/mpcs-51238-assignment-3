@@ -1,7 +1,7 @@
 'use client';
 
+import Knob from '@/components/ui/Knob';
 import RadioGroup from '@/components/ui/RadioGroup';
-import Slider from '@/components/ui/Slider';
 import { clampParam, fromNorm, toNorm } from '@/dsp/core/params';
 
 /** Slider resolution for log and pow3 parameters, in positions. */
@@ -101,33 +101,74 @@ export function formatParam(def, value) {
   }
 }
 
+/** Multipliers from a typed unit to the def's unit ("2 kHz" → 2000 Hz, "20 ms" → 0.02 s). */
+function unitScale(def, unit) {
+  const u = unit.toLowerCase();
+  if (u === 'khz') return 1000;
+  if (u === 'ms') return def.unit === 's' ? 0.001 : 1;
+  if (u === 's') return def.unit === 'ms' ? 1000 : 1;
+  if (u === '%') return def.unit === 'fraction' ? 0.01 : 1;
+  if (u === 'st' && def.unit === '× 48 st') return 1 / 48;
+  return 1;
+}
+
 /**
- * One parameter as a labelled control: a radio group for an enum, otherwise a
- * native slider (log and pow3 params move over 1000 positions) with unit value
- * text. `label` overrides the def's own label and the default label for `def.id`.
+ * Parses typed text into a value of `def`: a number with an optional unit
+ * ("2.5 kHz", "40 ms", "−6", "L20", "C"). A number without a unit takes the
+ * unit of `shown`, the current value text. Returns null for other text.
  */
-export default function ParamControl({ def, value, onChange, idPrefix, label: labelOverride }) {
+export function parseParam(def, text, shown = '') {
+  const t = text.trim().replace(/−/g, '-');
+  if (def.unit === 'pan') {
+    const m = /^([lr])?\s*(\d+(?:\.\d+)?)$/i.exec(t);
+    if (/^c$/i.test(t)) return 0;
+    if (!m) return null;
+    return (m[1]?.toLowerCase() === 'l' ? -1 : 1) * (Number(m[2]) / 100);
+  }
+  const m = /^([-+]?\d*\.?\d+)\s*(khz|hz|ms|s|%|db|st|cents|oct|×|x|:1|q|grains\/s)?$/i.exec(t);
+  if (!m) return null;
+  const typed = m[2] ?? /(khz|hz|ms|s|%|db|st|cents|oct)\s*$/i.exec(shown)?.[1] ?? '';
+  return Number(m[1]) * unitScale(def, typed);
+}
+
+/**
+ * One parameter as a labelled control (DEV-02): segmented radio buttons for
+ * an enum, otherwise a knob (log and pow3 params move over 1000 positions)
+ * with unit value text and a typed-value field. `label` overrides the def's
+ * own label and the default label for `def.id` as the accessible name; the
+ * knob's caption stays the short label.
+ */
+export default function ParamControl({ def, value, onChange, idPrefix, label: labelOverride, caption: captionOverride }) {
   const label = labelOverride ?? def.label ?? LABELS[def.id] ?? def.id;
   if (def.scale === 'enum') {
     return (
-      <RadioGroup
-        legend={label}
-        options={def.options.map((name, i) => ({ value: i, label: OPTION_LABELS[name] ?? name }))}
-        value={value}
-        onChange={(i) => onChange(def.id, i)}
-      />
+      <div className="basis-full">
+        <RadioGroup
+          legend={label}
+          options={def.options.map((name, i) => ({ value: i, label: OPTION_LABELS[name] ?? name }))}
+          value={value}
+          onChange={(i) => onChange(def.id, i)}
+        />
+      </div>
     );
   }
   const stepped = def.scale === 'lin';
+  const valueText = formatParam(def, value);
+  const toPosition = (v) => (stepped ? clampParam(def, v) : Math.round(toNorm(def, clampParam(def, v)) * NORM_STEPS));
   return (
-    <Slider
+    <Knob
       id={`${idPrefix}-${def.id}`}
       label={label}
+      caption={captionOverride ?? def.label ?? LABELS[def.id] ?? labelOverride ?? def.id}
       min={stepped ? def.min : 0}
       max={stepped ? def.max : NORM_STEPS}
       step={stepped ? (def.step ?? (def.max - def.min) / NORM_STEPS) : 1}
       value={stepped ? value : Math.round(toNorm(def, value) * NORM_STEPS)}
-      valueText={formatParam(def, value)}
+      valueText={valueText}
+      parse={(text) => {
+        const v = parseParam(def, text, valueText);
+        return v === null ? null : toPosition(v);
+      }}
       onChange={(position) => onChange(def.id, stepped ? clampParam(def, position) : fromNorm(def, position / NORM_STEPS))}
       onReset={() => onChange(def.id, def.default)}
     />

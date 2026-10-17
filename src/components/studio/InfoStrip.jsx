@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 /** Shown when the pointer and focus rest on nothing with help text. */
-const IDLE = 'Space plays and stops · Escape stops all sound · Ctrl+K (Cmd+K) lists every command · ? shows shortcuts';
+const IDLE = 'Space plays and pauses · Escape stops all sound · Ctrl+K (Cmd+K) lists every command · ? shows shortcuts';
 
 /**
  * Info strip (HELP-01): one line describing the hovered or focused control,

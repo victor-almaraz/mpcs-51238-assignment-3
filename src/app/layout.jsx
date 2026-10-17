@@ -3,6 +3,7 @@ import SkipLink from '@/components/nav/SkipLink';
 import VolumeNotice from '@/components/VolumeNotice';
 import CommandPalette from '@/components/commands/CommandPalette';
 import ShortcutOverlay from '@/components/commands/ShortcutOverlay';
+import TooltipLayer from '@/components/ui/TooltipLayer';
 import { fontClassName } from '@/design-systems/industrial/fonts';
 import './globals.css';
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
         <VolumeNotice />
         <CommandPalette />
         <ShortcutOverlay />
+        <TooltipLayer />
       </body>
     </html>
   );

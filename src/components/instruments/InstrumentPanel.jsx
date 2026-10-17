@@ -13,22 +13,13 @@ import { setSamplerSource } from '@/lib/project/clip-commands';
 import DrumMachinePanel from './DrumMachinePanel';
 import GranularSource from './GranularSource';
 import ParamControl from './ParamControl';
+import { sectionParams } from './sections';
 
-/** Consecutive defs sharing a `group` become one { group, defs } item; others are { def }. */
-function groupParams(defs) {
-  const items = [];
-  for (const def of defs) {
-    const last = items[items.length - 1];
-    if (def.group && last?.group === def.group) last.defs.push(def);
-    else if (def.group) items.push({ group: def.group, defs: [def] });
-    else items.push({ def });
-  }
-  return items;
-}
 
 /**
- * Parameter panel for a track's instrument, generated from its ParamDefs: a
- * radio group per enum, a slider with unit value text per number.
+ * Parameter panel for a track's instrument, generated from its ParamDefs:
+ * sections with a heading (Oscillator, Filter, Envelope, Tuning) holding a
+ * segmented radio group per enum and a knob with unit value text per number.
  * `onParamChange(deviceId, paramId, value)` receives plain, clamped values;
  * the sampler panel also edits the document through `onEdit`.
  */
@@ -65,17 +56,13 @@ export default function InstrumentPanel({ project, track, device, onParamChange,
       ) : device.type === 'sampler' ? (
         <SamplerPanel project={project} device={device} onEdit={onEdit} onParamChange={onParamChange} disabled={disabled} loading={loading} />
       ) : entry ? (
-        <fieldset disabled={disabled} className="flex flex-col gap-3">
-          {groupParams(entry.params).map((item) =>
-            item.group ? (
-              <fieldset key={item.group} className="flex flex-col gap-2 rounded-ds border border-border p-2">
-                <legend className={sectionHeading}>{item.group}</legend>
-                {item.defs.map((def) => control(def))}
-              </fieldset>
-            ) : (
-              control(item.def)
-            ),
-          )}
+        <fieldset disabled={disabled} className="flex flex-wrap items-start gap-3">
+          {sectionParams(entry.params).map((item, i) => (
+            <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
+              <legend className={sectionHeading}>{item.section}</legend>
+              {item.defs.map((def) => control(def))}
+            </fieldset>
+          ))}
           {device.type === 'granular' && entry.params[0].options[clampParam(entry.params[0], device.params.source)] === 'sample' ? (
             <GranularSource project={project} device={device} onEdit={onEdit} loading={loading} />
           ) : null}

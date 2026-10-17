@@ -91,10 +91,9 @@ test('an example with filter, reverb and delay plays through its chains after th
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
-  const play = page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' });
-  await play.click();
+  await page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play', exact: true }).click();
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
-  await expect(play).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => globalThis.__wrackEngine.getMasterLevel().peakL), { timeout: 5000 }).toBeGreaterThan(0.001);
   expect(errors).toEqual([]);
 });

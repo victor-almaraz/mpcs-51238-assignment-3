@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
+import IconButton from '@/components/ui/IconButton';
 import Toolbar from '@/components/ui/Toolbar';
 import useCommands from '@/components/commands/useCommands';
 import Meter from '@/components/ui/Meter';
@@ -19,7 +19,7 @@ import MetronomeToggle from './MetronomeToggle';
 import Position from './Position';
 import TempoField from './TempoField';
 
-const SERVER_STATE = { status: 'idle', noticeOpen: false, playing: false, metronome: false, ducked: false, error: null, masterVolumeDb: MASTER_VOLUME.default };
+const SERVER_STATE = { status: 'idle', noticeOpen: false, playing: false, paused: false, metronome: false, ducked: false, error: null, masterVolumeDb: MASTER_VOLUME.default };
 /** Space and Home keep their own meaning on these (TRN-02). */
 const CONTROL_TARGETS = 'input, textarea, select, button, [contenteditable], [contenteditable="true"]';
 /** Escape keeps its own meaning in text entry (SAFE-03: Panic outside text fields). */
@@ -33,8 +33,11 @@ export function loopRange(project, view) {
 }
 
 /**
- * Transport toolbar (TRN-01, TRN-02): Go to start, Play, Stop, Loop, Metronome,
- * Position, Tempo and Time signature. Space plays and stops at the playhead
+ * Transport toolbar (TRN-01, TRN-02): Go to start, Play/Pause, Stop, Loop,
+ * Metronome, Position, Tempo and Time signature. Play/Pause is one button,
+ * named for the action it performs: Pause holds the playhead and Play resumes
+ * from it. Stop returns to where playback started; a Stop while stopped goes
+ * to bar 1, or to the loop start with the loop on. Space plays and pauses
  * outside fields and buttons; Home locates to bar 1 and Shift+Home to the loop
  * start. Play passes through the volume notice. `showExampleHint` highlights
  * Play with "Press Play to hear this example" until the first playback.
@@ -46,6 +49,8 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
   const [announcement, setAnnouncement] = useState('');
   const [initialPlayhead] = useState(view.playhead);
   const loop = loopRange(project, view);
+  // Stop has nothing to do when stopped at bar 1.
+  const stopDisabled = !state.playing && !state.paused && view.playhead === 0;
 
   useEffect(() => {
     engine.setProject(project);
@@ -68,9 +73,18 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     });
   }
 
-  function stop() {
-    onViewChange({ playhead: engine.stop() });
+  function pause() {
+    onViewChange({ playhead: engine.pause() });
   }
+
+  /** Stop: back to the play start; when already stopped, to bar 1 or the loop start. */
+  function stop() {
+    const { playing, paused } = engine.getState();
+    if (playing || paused) onViewChange({ playhead: engine.stop() });
+    else locate(view.loopEnabled ? loop.start : 0);
+  }
+
+  const togglePlay = () => (engine.getState().playing ? pause() : play());
 
   /** Panic (SAFE-03): stops the transport and every sound; announces "All sound stopped". */
   function panic() {
@@ -99,8 +113,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
       if (e.target.closest?.(CONTROL_TARGETS)) return;
       if (e.key === ' ' && !e.repeat) {
         e.preventDefault();
-        if (engine.getState().playing) stop();
-        else play();
+        togglePlay();
       } else if (e.key === 'Home') {
         e.preventDefault();
         locate(e.shiftKey ? loop.start : 0);
@@ -114,14 +127,17 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
   }, []);
 
   useCommands([
-    { id: 'transport.play', group: 'Transport', label: state.playing ? 'Stop' : 'Play', keys: 'Space', run: () => (engine.getState().playing ? stop() : play()) },
+    { id: 'transport.play', group: 'Transport', label: state.playing ? 'Pause' : 'Play', keys: 'Space', run: togglePlay },
+    { id: 'transport.stop', group: 'Transport', label: 'Stop', run: stop, enabled: () => !stopDisabled },
     { id: 'transport.start', group: 'Transport', label: 'Go to start', keys: 'Home', run: () => locate(0) },
+    { id: 'transport.loop-start', group: 'Transport', label: 'Go to loop start', keys: 'Shift+Home', run: () => locate(loop.start) },
     { id: 'transport.loop', group: 'Transport', label: view.loopEnabled ? 'Turn loop off' : 'Turn loop on', keys: 'L', global: true, run: () => onViewChange({ loopEnabled: !view.loopEnabled, loop }) },
     { id: 'transport.metronome', group: 'Transport', label: state.metronome ? 'Turn metronome off' : 'Turn metronome on', keys: 'K', global: true, run: () => engine.setMetronome(!engine.getState().metronome) },
     { id: 'transport.panic', group: 'Transport', label: 'Panic: stop all sound', keys: 'Escape', run: () => panic() },
   ]);
 
   const hint = showExampleHint && !played;
+  const status = state.playing ? 'Playing' : state.paused ? 'Paused' : 'Stopped';
   const signature = `${project.meter[0].numerator}/${project.meter[0].denominator}`;
 
   const readMaster = () => {
@@ -134,20 +150,25 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
       <h2 id="studio-transport" className="sr-only">
         Transport
       </h2>
-      {/* TRN-01 order: locate, play/stop, loop, metronome, position, tempo, meter, master volume and meter, Panic. */}
+      {/* TRN-01 order: locate, play/pause, stop, loop, metronome, position, tempo, meter, master volume and meter, Panic. */}
       <Toolbar label="Transport" className="flex items-center gap-2 overflow-x-auto px-3 py-1.5 [&>*]:shrink-0">
-        <Button size="sm" onClick={() => locate(0)} data-help="Go to start (Home): moves the playhead to bar 1.">
-          Go to start
-        </Button>
-        <Toggle
-          pressed={state.playing}
-          highlighted={hint}
+        <IconButton icon="skip-back" label="Go to start" shortcut="Home" onClick={() => locate(0)} data-help="Go to start (Home): moves the playhead to bar 1; Shift+Home goes to the loop start." />
+        <IconButton
+          icon={state.playing ? 'pause' : 'play'}
+          label={state.playing ? 'Pause' : 'Play'}
+          shortcut="Space"
+          variant={hint ? 'primary' : 'secondary'}
           aria-describedby={hint ? 'transport-play-hint' : undefined}
-          onClick={state.playing ? stop : play}
-          data-help="Play (Space): plays from the playhead; press again to stop where it is."
-        >
-          Play
-        </Toggle>
+          onClick={togglePlay}
+          data-help={state.playing ? 'Pause (Space): holds the playhead where it is.' : 'Play (Space): plays from the playhead.'}
+        />
+        <IconButton
+          icon="square"
+          label="Stop"
+          disabled={stopDisabled}
+          onClick={stop}
+          data-help="Stop: returns to where playback started; press again to go to bar 1, or to the loop start with the loop on."
+        />
         <LoopToggle on={view.loopEnabled} onChange={(on) => onViewChange({ loopEnabled: on, loop })} />
         <MetronomeToggle on={state.metronome} onChange={(on) => engine.setMetronome(on)} />
         <Position />
@@ -179,7 +200,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         </Button>
         {/* The status line may shorten to its first word. */}
         <span className="min-w-[4.5rem] truncate text-sm whitespace-nowrap" style={{ flexShrink: 10 }}>
-          {state.playing ? 'Playing' : 'Stopped'}
+          {status}
           {hint ? (
             <>
               {' · '}

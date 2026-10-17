@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
+import IconButton from '@/components/ui/IconButton';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 
 const TABS = [
@@ -17,9 +18,12 @@ const DOCK_STEP = 40;
  * The editor's lower dock: a tablist (Editor, Devices, Mixer; WAI-ARIA APG
  * tabs with automatic activation) over the active panel, and a separator
  * above it that resizes the dock by pointer or by Up and Down keys. Only the
- * active panel is mounted.
+ * active panel is mounted. The dock collapses to its tab strip, giving the
+ * arrangement the space: by the collapse button (aria-expanded) or a click on
+ * the active tab; a click on any tab while collapsed expands it.
+ * `onCollapse(collapsed)` reports the change.
  */
-export default function Dock({ tab, onTab, height, maxHeight, onHeight, children }) {
+export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHeight, onHeight, children }) {
   const tabRefs = useRef([]);
   const drag = useRef(null);
   const clamp = (h) => Math.max(DOCK_MIN, Math.min(maxHeight, Math.round(h)));
@@ -46,8 +50,9 @@ export default function Dock({ tab, onTab, height, maxHeight, onHeight, children
   }
 
   return (
-    <div className="flex shrink-0 flex-col border-t-2 border-fg bg-bg" style={{ height }}>
+    <div className="flex shrink-0 flex-col border-t-2 border-fg bg-bg" style={collapsed ? undefined : { height }}>
       <div
+        hidden={collapsed}
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize the panels"
@@ -69,37 +74,61 @@ export default function Dock({ tab, onTab, height, maxHeight, onHeight, children
         }}
         className={cx('h-2 shrink-0 cursor-row-resize bg-border hover:bg-border-strong', focusRing)}
       />
-      <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 border-b border-border-strong bg-surface-2 px-3 pt-1">
-        {TABS.map((t, i) => {
-          const selected = t.id === tab;
-          return (
-            <button
-              key={t.id}
-              ref={(el) => {
-                tabRefs.current[i] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`dock-tab-${t.id}`}
-              aria-selected={selected}
-              aria-controls={`dock-panel-${t.id}`}
-              tabIndex={selected ? 0 : -1}
-              data-help={t.help}
-              onClick={() => onTab(t.id)}
-              onKeyDown={(e) => onTabKey(e, i)}
-              className={cx(
-                'min-h-8 rounded-t-ds border border-b-0 px-4 text-xs font-bold tracking-[0.06em] uppercase',
-                selected ? 'border-fg bg-bg text-fg' : 'border-transparent text-muted hover:bg-hover',
-                focusRing,
-              )}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+      <div className="flex shrink-0 items-end gap-1 border-b border-border-strong bg-surface-2 px-3 pt-1">
+        <div role="tablist" aria-label="Panels" className="flex gap-1">
+          {TABS.map((t, i) => {
+            const selected = t.id === tab;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
+                type="button"
+                role="tab"
+                id={`dock-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls={`dock-panel-${t.id}`}
+                tabIndex={selected ? 0 : -1}
+                data-help={t.help}
+                onClick={() => {
+                  if (collapsed) onCollapse(false);
+                  else if (selected) onCollapse(true);
+                  if (!selected) onTab(t.id);
+                }}
+                onKeyDown={(e) => onTabKey(e, i)}
+                className={cx(
+                  'min-h-8 rounded-t-ds border border-b-0 px-4 text-xs font-bold tracking-[0.06em] uppercase',
+                  selected ? 'border-fg bg-bg text-fg' : 'border-transparent text-muted hover:bg-hover',
+                  focusRing,
+                )}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        <IconButton
+          icon={collapsed ? 'panel-bottom-open' : 'panel-bottom-close'}
+          label="Panels"
+          data-tip={collapsed ? 'Expand the panels' : 'Collapse the panels'}
+          variant="ghost"
+          size="sm"
+          aria-expanded={!collapsed}
+          aria-controls={`dock-panel-${tab}`}
+          onClick={() => onCollapse(!collapsed)}
+          data-help="Collapse or expand the panels; a click on the open tab does the same."
+          className="mb-1 ml-auto"
+        />
       </div>
-      <div role="tabpanel" id={`dock-panel-${tab}`} aria-labelledby={`dock-tab-${tab}`} className="flex min-h-0 flex-1 flex-col overflow-auto p-3">
-        {children}
+      <div
+        hidden={collapsed}
+        role="tabpanel"
+        id={`dock-panel-${tab}`}
+        aria-labelledby={`dock-tab-${tab}`}
+        className="flex min-h-0 flex-1 flex-col overflow-auto p-3"
+      >
+        {collapsed ? null : children}
       </div>
     </div>
   );

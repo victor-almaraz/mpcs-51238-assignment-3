@@ -54,14 +54,14 @@ export default function DrumMachinePanel({ device, onParamChange, disabled }) {
     <fieldset disabled={disabled} className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
         <Select id={`drum-voice-${device.id}`} label="Voice" value={voice} onChange={setVoice} options={VOICE_OPTIONS} />
-        <fieldset className="flex flex-col gap-2 rounded-ds border border-border p-2">
+        <fieldset className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
           <legend className={sectionHeading}>{voiceName}</legend>
           {['level', 'tune', 'decay', 'tone', 'pan'].map((field) =>
             control(`${voice}.${field}`, field === 'tone' ? TONE_LABELS[voice] : FIELD_LABELS[field]),
           )}
         </fieldset>
       </div>
-      <fieldset className="flex flex-col gap-2 rounded-ds border border-border p-2">
+      <fieldset className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
         <legend className={sectionHeading}>Kit</legend>
         {['kit.level', 'kit.velSens', 'kit.choke'].map((id) => control(id, KIT_LABELS[id]))}
       </fieldset>

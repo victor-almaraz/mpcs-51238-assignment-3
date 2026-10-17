@@ -6,6 +6,7 @@ import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import ParamControl from '@/components/instruments/ParamControl';
+import { sectionParams } from '@/components/instruments/sections';
 import { cx, focusRing, sectionHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { LOOP_OFF, MAX_TRANSPOSE, SAMPLER_DEF, SAMPLER_PARAMS } from '@/dsp/instruments/sampler-zones';
@@ -15,6 +16,7 @@ import { noteName } from '@/lib/audio/keyboard-input';
 import { setSamplerSource } from '@/lib/project/clip-commands';
 import { loopMarkersFor, markerFrames, ZONE_REASONS } from './markers';
 import SampleEditor from './SampleEditor';
+import IconButton from '@/components/ui/IconButton';
 
 const MARKER_IDS = ['start', 'end', 'loopStart', 'loopEnd', 'loopCrossfade', 'rootNote'];
 const LABELS = {
@@ -177,9 +179,7 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
           </p>
         ) : null}
         <div className="flex flex-wrap items-end gap-2">
-          <Button onClick={() => fileRef.current?.click()} disabled={busy}>
-            {busy ? 'Loading sample…' : 'Load sample…'}
-          </Button>
+          <IconButton icon="upload" label={busy ? 'Loading sample…' : 'Load sample…'} onClick={() => fileRef.current?.click()} disabled={busy} data-help="Load sample: a WAV, MP3, M4A, FLAC or OGG file." />
           {sourceOptions.length > 0 ? (
             <Select
               id={`sampler-${device.id}-source`}
@@ -189,10 +189,8 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
               onChange={chooseProjectSource}
             />
           ) : null}
-          {zone ? <Button onClick={() => choose(null) && setMessage('Sample removed')}>Remove sample</Button> : null}
-          <Button disabled={!source} onClick={() => engine.preview(params.rootNote)}>
-            Preview root note
-          </Button>
+          {zone ? <IconButton icon="x" label="Remove sample" onClick={() => choose(null) && setMessage('Sample removed')} /> : null}
+          <IconButton icon="volume-2" label="Preview root note" disabled={!source} onClick={() => engine.preview(params.rootNote)} />
         </div>
         <input
           ref={fileRef}
@@ -224,7 +222,14 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
       ) : null}
       <RootNote id={`sampler-${device.id}-root`} value={params.rootNote} disabled={disabled} onChange={(v) => onParamChange(device.id, 'rootNote', v)} />
       <p className="text-sm text-muted">Notes play up to {MAX_TRANSPOSE} semitones from the root note.</p>
-      {SAMPLER_PARAMS.filter((d) => !MARKER_IDS.includes(d.id)).map((d) => control(d.id))}
+      <div className="flex flex-wrap items-start gap-3">
+        {sectionParams(SAMPLER_PARAMS.filter((d) => !MARKER_IDS.includes(d.id))).map((item, i) => (
+          <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
+            <legend className={sectionHeading}>{item.section}</legend>
+            {item.defs.map((d) => control(d.id))}
+          </fieldset>
+        ))}
+      </div>
     </fieldset>
   );
 }

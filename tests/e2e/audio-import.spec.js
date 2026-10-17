@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test as base, expect } from '@playwright/test';
-import { openTab, trackRow } from '../support/editor.js';
+import { addInstrumentTrack, openTab, trackRow } from '../support/editor.js';
 
 /** A 16-bit PCM WAV of `seconds` of a `freq` Hz sine at `rate`, `channels` channels. */
 function wav({ seconds = 1, freq = 440, rate = 48000, channels = 1 } = {}) {
@@ -216,19 +216,16 @@ test('imported audio plays through the engine after the volume notice', async ({
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text());
   });
-  const play = page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' });
-  await play.click();
+  await page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play', exact: true }).click();
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
-  await expect(play).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => globalThis.__wrackEngine.getMasterLevel().peakL), { timeout: 5000 }).toBeGreaterThan(0.001);
   expect(errors).toEqual([]);
 });
 
 /** Adds a sampler track and opens its panel. */
 async function addSampler(page) {
-  const tools = page.getByRole('toolbar', { name: 'Clip commands' });
-  await tools.getByLabel('Instrument').selectOption('sampler');
-  await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  await addInstrumentTrack(page, 'Sampler');
   // Adding a track selects it; its instrument panel is in the Devices tab.
   await expect(trackRow(page, 'Track 2: Track 2, Sampler')).toHaveAttribute('aria-selected', 'true');
   await openTab(page, 'Devices');
@@ -237,9 +234,7 @@ async function addSampler(page) {
 
 test('granular File source: choose File, load an audio file, and it saves with the project', async ({ page }) => {
   const id = await createProject(page, 'Grains');
-  const tools = page.getByRole('toolbar', { name: 'Clip commands' });
-  await tools.getByLabel('Instrument').selectOption('granular');
-  await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  await addInstrumentTrack(page, 'Granular synth');
   await expect(trackRow(page, 'Track 2: Track 2, Granular')).toHaveAttribute('aria-selected', 'true');
   await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Granular synth: Track 2' });

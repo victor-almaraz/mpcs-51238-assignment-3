@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { openTab, selectTrack } from '../support/editor.js';
+import { addInstrumentTrack, menuItem, openTab, selectTrack } from '../support/editor.js';
 
 /*
  * Accessibility pass (assignment-3-scope.md, Labeling and Accessibility):
@@ -94,9 +94,7 @@ test('the editor with every panel open: no axe violations and unique names per l
   const clip = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="2"]').filter({ hasText: 'loop' });
   await clip.click();
   await expect(page.getByRole('region', { name: 'Clip properties: loop' })).toBeVisible();
-  const tools = page.getByRole('toolbar', { name: 'Clip commands' });
-  await tools.getByLabel('Instrument').selectOption('sampler');
-  await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  await addInstrumentTrack(page, 'Sampler');
   await axe(page, 'editor, Editor tab');
   await uniqueNames(page, 'editor, Editor tab');
   await openTab(page, 'Devices');
@@ -127,7 +125,10 @@ test('dialog states: volume notice, export, save preset and delete confirmations
   await axe(page, 'volume notice');
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Cancel' }).click();
 
-  await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
+  await page.getByRole('button', { name: 'File', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'File' })).toBeVisible();
+  await axe(page, 'File menu');
+  await page.getByRole('menu', { name: 'File' }).getByRole('menuitem', { name: 'Export WAV…' }).click();
   await expect(page.getByRole('dialog', { name: 'Export WAV' })).toBeVisible();
   await axe(page, 'export dialog');
   await page.getByRole('dialog', { name: 'Export WAV' }).getByRole('button', { name: 'Close' }).click();
@@ -165,13 +166,23 @@ test('every primary control is reachable by role and name', async ({ page }) => 
   await expect(page.getByRole('button', { name: 'Open .wrack file' })).toBeVisible();
   await page.getByRole('button', { name: 'Open Beat' }).click();
   const transport = page.getByRole('toolbar', { name: 'Transport' });
-  for (const name of ['Go to start', 'Play', 'Loop', 'Metronome']) await expect(transport.getByRole('button', { name, exact: true })).toBeVisible();
+  for (const name of ['Go to start', 'Play', 'Stop', 'Loop', 'Metronome']) await expect(transport.getByRole('button', { name, exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Panic' })).toBeVisible();
   const project = page.getByRole('toolbar', { name: 'Project' });
-  for (const name of ['Save .wrack file', 'Export']) await expect(project.getByRole('button', { name })).toBeVisible();
+  await expect(project.getByRole('button', { name: 'File', exact: true })).toHaveAttribute('aria-haspopup', 'menu');
+  for (const [menu, items] of [
+    ['File', ['Save .wrack file', 'Open .wrack file…', 'Export WAV…']],
+    ['Add', ['Subtractive synth track', 'Sampler track', 'Audio track', 'Audio file…']],
+    ['Edit', ['Select all clips', 'Mute clip', 'Rename clip…']],
+  ]) {
+    for (const item of items) {
+      await expect(await menuItem(page, menu, item)).toBeVisible();
+      await page.keyboard.press('Escape');
+    }
+  }
   const clips = page.getByRole('toolbar', { name: 'Clip commands' });
-  for (const name of ['Add audio file', 'Add audio track', 'Add instrument track', 'Split at edit cursor', 'Join clips', 'Duplicate clip', 'Delete clip']) {
-    await expect(clips.getByRole('button', { name })).toBeVisible();
+  for (const name of ['Snap', 'Zoom out', 'Zoom in', 'Split at edit cursor', 'Join clips', 'Duplicate clip', 'Delete clip']) {
+    await expect(clips.getByRole('button', { name, exact: true })).toBeVisible();
   }
   await expect(page.getByRole('treegrid', { name: 'Tracks and clips' })).toBeVisible();
   await expect(page.getByRole('slider', { name: 'Master volume' })).toBeVisible();
@@ -215,10 +226,11 @@ test('keyboard only: create a project, play an example through the notice, Panic
   const notice = page.getByRole('alertdialog', { name: 'Volume notice' });
   await expect(notice.getByRole('button', { name: 'Continue' })).toBeFocused();
   await page.keyboard.press('Enter');
-  const play = page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' });
-  await expect(play).toHaveAttribute('aria-pressed', 'true');
+  const transport = page.getByRole('toolbar', { name: 'Transport' });
+  await expect(transport.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(play).toHaveAttribute('aria-pressed', 'false');
+  await expect(transport.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'All sound stopped' })).toHaveCount(1);
 
   // The dock's tabs: the selected one is in the tab order; Right Arrow selects Devices.

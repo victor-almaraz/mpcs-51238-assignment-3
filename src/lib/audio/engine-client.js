@@ -49,12 +49,14 @@ function createClient() {
   let compiled = null; // { model, tempo, meter } at the context rate
   let rev = 0;
   let loop = { on: false, startTick: 0, endTick: 0 };
-  let stoppedTick = 0; // playhead while stopped
+  let stoppedTick = 0; // playhead while stopped or paused
+  let playStart = 0; // where the current or last playback started
   let last = { playFrame: 0, ctxFrame: 0 }; // latest engine report while playing
   let state = {
     status: 'idle',
     noticeOpen: false,
     playing: false,
+    paused: false, // halted by Pause: Play resumes, Stop returns to the play start
     metronome: getSettings().metronome,
     masterVolumeDb: getSettings().masterVolumeDb,
     ducked: false,
@@ -363,7 +365,7 @@ function createClient() {
       stoppedTick = this.positionTick();
       send({ t: 'panic' });
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
-      setState({ playing: false });
+      setState({ playing: false, paused: false });
       return true;
     },
 
@@ -439,24 +441,44 @@ function createClient() {
     /** Meter map of the current project, or null. */
     meter: () => compiled?.meter ?? null,
 
-    /** Starts playback at the playhead with a 50 ms fade-in. Runs inside requestSound. */
+    /**
+     * Starts playback at the playhead with a 50 ms fade-in. Runs inside
+     * requestSound. From a stop, the playhead becomes the play start that
+     * Stop returns to; resuming from a pause keeps it.
+     */
     play() {
       if (!compiled || state.playing) return;
+      if (!state.paused) playStart = stoppedTick;
       const frame = compiled.tempo.frameAt(stoppedTick);
       send({ t: 'transport', op: 'play', frame });
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
       last = { playFrame: frame, ctxFrame: contextFrame() };
-      setState({ playing: true });
+      setState({ playing: true, paused: false });
     },
 
-    /** Stops in place and returns the tick where playback stopped. */
-    stop() {
+    /** Pauses in place and returns the tick where playback paused. */
+    pause() {
       if (!state.playing) return stoppedTick;
       stoppedTick = this.positionTick();
       send({ t: 'transport', op: 'stop' });
-      setState({ playing: false });
+      setState({ playing: false, paused: true });
       return stoppedTick;
     },
+
+    /**
+     * Stops: while playing or paused, halts and returns the playhead to the
+     * play start. Returns the playhead tick.
+     */
+    stop() {
+      if (!state.playing && !state.paused) return stoppedTick;
+      if (state.playing) send({ t: 'transport', op: 'stop' });
+      setState({ playing: false, paused: false });
+      this.locate(playStart);
+      return stoppedTick;
+    },
+
+    /** The tick where the current or last playback started. */
+    playStart: () => playStart,
 
     /** Moves the playhead to `tick`. */
     locate(tick) {

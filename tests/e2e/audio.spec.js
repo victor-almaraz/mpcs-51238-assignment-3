@@ -26,7 +26,11 @@ async function openExample(page, title = 'Beat') {
 
 /** The instrument panel, the part these tests change; a whole-editor axe scan is slow in Firefox. */
 const INSTRUMENT_PANEL = 'section[aria-labelledby="instrument-panel-heading"]';
-const playButton = (page) => page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Play' });
+const transportBar = (page) => page.getByRole('toolbar', { name: 'Transport' });
+/** The Play/Pause button, named for its action: "Play" while stopped or paused, "Pause" while playing. */
+const playPause = (page) => transportBar(page).getByRole('button', { name: /^(Play|Pause)$/ });
+const playButton = (page) => transportBar(page).getByRole('button', { name: 'Play', exact: true });
+const pauseButton = (page) => transportBar(page).getByRole('button', { name: 'Pause', exact: true });
 const notice = (page) => page.getByRole('alertdialog', { name: 'Volume notice' });
 
 test.beforeEach(async ({ page }) => {
@@ -45,8 +49,8 @@ test('pages load silently: no AudioContext before a sound-producing action', asy
 
 test('an example opens stopped with Play highlighted and the hint linked to it', async ({ page }) => {
   await openExample(page);
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
-  await expect(playButton(page)).toHaveAccessibleDescription('Press Play to hear this example');
+  await expect(playButton(page)).toBeVisible();
+  await expect(playButton(page)).toHaveAccessibleDescription('Press Play to hear this example Shortcut: Space');
   await expect(page.getByText('Stopped')).toBeVisible();
   await expect(page.getByTestId('position')).toHaveText('1.1.1');
   const results = await new AxeBuilder({ page }).analyze();
@@ -55,7 +59,7 @@ test('an example opens stopped with Play highlighted and the hint linked to it',
 
 test('Play opens the volume notice first; Cancel performs nothing', async ({ page }) => {
   await openExample(page);
-  await playButton(page).click();
+  await playPause(page).click();
   const dialog = notice(page);
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Turn your device volume down. W-Rack is about to play sound.');
@@ -67,56 +71,96 @@ test('Play opens the volume notice first; Cancel performs nothing', async ({ pag
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);
   expect(await contexts(page)).toBe(0);
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
 });
 
 test('Escape cancels the volume notice', async ({ page }) => {
   await openExample(page);
-  await playButton(page).click();
+  await playPause(page).click();
   await expect(notice(page)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(notice(page)).toHaveCount(0);
   expect(await contexts(page)).toBe(0);
 });
 
-test('Continue starts audio and plays; Stop holds the position; the notice shows once per session', async ({ page }) => {
+test('Continue starts audio and plays; Pause holds the position; the notice shows once per session', async ({ page }) => {
   await openExample(page);
-  await playButton(page).click();
+  await playPause(page).click();
   await notice(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   expect(await contexts(page)).toBe(1);
   await expect(page.getByText('Playing')).toBeVisible();
   await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
   await expect(page.getByText('Press Play to hear this example')).toHaveCount(0);
 
-  await playButton(page).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
-  // The readout settles on the stop position within a frame or two.
+  await playPause(page).click();
+  await expect(playButton(page)).toBeVisible();
+  await expect(page.getByText('Paused')).toBeVisible();
+  // The readout settles on the pause position within a frame or two.
   await page.waitForTimeout(100);
   const stoppedAt = await page.getByTestId('position').textContent();
   await page.waitForTimeout(400);
   await expect(page.getByTestId('position')).toHaveText(stoppedAt);
 
-  await playButton(page).click();
+  await playPause(page).click();
   await expect(notice(page)).toHaveCount(0);
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   expect(await contexts(page)).toBe(1);
 });
 
-test('Space plays and stops outside fields; Go to start returns to 1.1.1', async ({ page }) => {
+test('Play, Pause, Stop: Pause holds and Play resumes; Stop returns to the play start, then to bar 1', async ({ page }) => {
+  await openExample(page);
+  const stopButton = transportBar(page).getByRole('button', { name: 'Stop', exact: true });
+  const position = page.getByTestId('position');
+  await expect(stopButton).toBeDisabled();
+  // Start from bar 2: the edit cursor moves a bar with Shift+period on a track row.
+  await page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]').first().focus();
+  await page.keyboard.press('Shift+Period');
+  await expect(position).toHaveText('2.1.1');
+  await expect(stopButton).toBeEnabled();
+
+  await playPause(page).click();
+  await notice(page).getByRole('button', { name: 'Continue' }).click();
+  await expect(pauseButton(page)).toBeVisible();
+  await expect(position).not.toHaveText('2.1.1', { timeout: 10_000 });
+  await pauseButton(page).click();
+  await expect(page.getByText('Paused')).toBeVisible();
+  await page.waitForTimeout(100);
+  const pausedAt = await position.textContent();
+  await page.waitForTimeout(400);
+  await expect(position).toHaveText(pausedAt);
+
+  // Play resumes from the paused position.
+  await playButton(page).click();
+  await expect(pauseButton(page)).toBeVisible();
+  // bar.beat.sixteenth in order (beats and sixteenths stay below 20).
+  const order = (text) => text.split('.').map(Number).reduce((a, n) => a * 20 + n, 0);
+  await expect.poll(async () => order(await position.textContent()), { timeout: 10_000 }).toBeGreaterThan(order(pausedAt));
+
+  // Stop returns to where playback started; a second Stop goes to bar 1.
+  await stopButton.click();
+  await expect(playButton(page)).toBeVisible();
+  await expect(page.getByText('Stopped')).toBeVisible();
+  await expect(position).toHaveText('2.1.1');
+  await stopButton.click();
+  await expect(position).toHaveText('1.1.1');
+  await expect(stopButton).toBeDisabled();
+});
+
+test('Space plays and pauses outside fields; Go to start returns to 1.1.1', async ({ page }) => {
   await openExample(page);
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.press(' ');
   await notice(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.press(' ');
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Tempo (BPM)' }).focus();
   await page.keyboard.press(' ');
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
 
   await page.getByRole('button', { name: 'Go to start' }).click();
   await expect(page.getByTestId('position')).toHaveText('1.1.1');
@@ -124,17 +168,17 @@ test('Space plays and stops outside fields; Go to start returns to 1.1.1', async
 
 test('"Don\'t show this again" stores the dismissal; later visits skip the notice', async ({ page }) => {
   await openExample(page);
-  await playButton(page).click();
+  await playPause(page).click();
   await notice(page).getByRole('checkbox', { name: "Don't show this again on this device" }).check();
   await notice(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
   expect(settings.volumeNoticeDismissed).toBe(true);
 
   await openExample(page, 'Ambient');
   expect(await contexts(page)).toBe(0);
-  await playButton(page).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await playPause(page).click();
+  await expect(pauseButton(page)).toBeVisible();
   await expect(notice(page)).toHaveCount(0);
   expect(await contexts(page)).toBe(1);
 });
@@ -213,12 +257,12 @@ test('playing an example with Subtractive tracks runs without engine errors', as
   });
   page.on('pageerror', (err) => errors.push(err.message));
   await openExample(page, 'Pluck melody');
-  await playButton(page).click();
+  await playPause(page).click();
   await notice(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
   await page.waitForTimeout(1500);
-  await playButton(page).click();
+  await playPause(page).click();
   expect(errors).toEqual([]);
 });
 
@@ -335,20 +379,20 @@ test('the Beat example plays with every instrument without engine errors', async
   page.on('pageerror', (err) => errors.push(err.message));
   for (const title of ['Beat', 'Ambient']) {
     await openExample(page, title);
-    await playButton(page).click();
+    await playPause(page).click();
     if (await notice(page).isVisible()) await notice(page).getByRole('button', { name: 'Continue' }).click();
-    await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(pauseButton(page)).toBeVisible();
     await expect(page.getByTestId('position')).not.toHaveText('1.1.1', { timeout: 10_000 });
     await page.waitForTimeout(1500);
-    await playButton(page).click();
+    await playPause(page).click();
   }
   expect(errors).toEqual([]);
 });
 
 async function startPlaying(page) {
-  await playButton(page).click();
+  await playPause(page).click();
   if (await notice(page).isVisible()) await notice(page).getByRole('button', { name: 'Continue' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
 }
 
 /** Largest post-limiter master peak seen over `ms` milliseconds. */
@@ -415,7 +459,7 @@ test('Panic stops playback and all sound, and is announced', async ({ page }) =>
   await startPlaying(page);
   expect(await masterPeakOver(page, 1500)).toBeGreaterThan(0.005);
   await page.getByRole('button', { name: 'Panic' }).click();
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'All sound stopped' })).toHaveCount(1);
   await page.waitForTimeout(300);
   expect(await masterPeakOver(page, 500)).toBeLessThan(1e-4);
@@ -426,14 +470,14 @@ test('Escape is Panic outside text fields, including on a focused button', async
   await startPlaying(page);
   await page.getByRole('button', { name: 'Go to start' }).focus();
   await page.keyboard.press('Escape');
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
   await startPlaying(page);
   await page.getByRole('textbox', { name: 'Tempo (BPM)' }).focus();
   await page.keyboard.press('Escape');
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(pauseButton(page)).toBeVisible();
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.press('Escape');
-  await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(playButton(page)).toBeVisible();
 });
 
 test('computer keyboard notes pass through the volume notice and play the selected track', async ({ page }) => {

@@ -19,3 +19,14 @@ export async function selectTrack(page, label) {
 export async function openTab(page, name) {
   await page.getByRole('tablist', { name: 'Panels' }).getByRole('tab', { name }).click();
 }
+
+/** Opens menu button `menu` ("File", "Add", "Edit") and returns its menu item named `item`. */
+export async function menuItem(page, menu, item) {
+  await page.getByRole('button', { name: menu, exact: true }).click();
+  return page.getByRole('menu', { name: menu }).getByRole('menuitem', { name: item, exact: true });
+}
+
+/** Adds an instrument track of label `instrument` ("Sampler", "Pluck synth") through the Add menu. */
+export async function addInstrumentTrack(page, instrument) {
+  await (await menuItem(page, 'Add', `${instrument} track`)).click();
+}

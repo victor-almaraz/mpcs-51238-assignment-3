@@ -32,8 +32,8 @@ test('an empty timeline offers its next steps; Add instrument track opens a four
   const axe = await new AxeBuilder({ page }).analyze();
   expect(axe.violations).toEqual([]);
 
-  await clipTools(page).getByLabel('Instrument').selectOption({ label: 'Pluck synth' });
   await empty.getByRole('button', { name: 'Add instrument track' }).click();
+  await page.getByRole('menu', { name: 'Add instrument track' }).getByRole('menuitem', { name: 'Pluck synth track' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Pluck synth track added, clip open in piano roll' })).toHaveCount(1);
   await expect(page.getByRole('tab', { name: 'Editor' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('region', { name: /^Piano roll: / })).toBeVisible();
@@ -48,9 +48,12 @@ test('an empty timeline offers its next steps; Add instrument track opens a four
   await expect(confirm).toContainText('This cannot be undone.');
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirm).toBeHidden();
   await expect(row).toBeVisible();
   await row.focus();
+  await expect(row).toBeFocused();
   await page.keyboard.press('Delete');
+  await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: 'Delete track' }).click();
   await expect(empty).toBeVisible();
   await expect.poll(async () => (await saved(page, id)).trackOrder).toEqual([]);
@@ -124,5 +127,101 @@ test('? lists the shortcuts by group and returns focus on close', async ({ page 
   await expect(overlay).toBeHidden();
   await expect(loop).toBeFocused();
   // Escape closed the overlay only; the transport is untouched.
-  await expect(transport(page).getByRole('button', { name: 'Play' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+});
+
+test('the panels collapse to their tabs and stay collapsed after a reload', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Folded');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Folded');
+  const toggle = page.getByRole('button', { name: 'Panels', exact: true });
+  const panel = page.getByRole('tabpanel');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(panel).toBeVisible();
+  const before = (await page.getByRole('region', { name: 'Timeline' }).boundingBox()).height;
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('separator', { name: 'Resize the panels' })).toBeHidden();
+  expect((await page.getByRole('region', { name: 'Timeline' }).boundingBox()).height).toBeGreaterThan(before + 100);
+  const axe = await new AxeBuilder({ page }).analyze();
+  expect(axe.violations).toEqual([]);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Panels', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  // A click on a tab expands; a click on the open tab collapses again.
+  await page.getByRole('tab', { name: 'Mixer' }).click();
+  await expect(page.getByRole('tab', { name: 'Mixer' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel')).toBeVisible();
+  await page.getByRole('tab', { name: 'Mixer' }).click();
+  await expect(page.getByRole('tabpanel')).toBeHidden();
+  await page.getByRole('tab', { name: 'Editor' }).click();
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' })).toBeVisible();
+});
+
+test('icon controls name themselves and show a tooltip with their shortcut', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
+  const loop = transport(page).getByRole('button', { name: 'Loop' });
+  await expect(loop).toHaveAttribute('data-tip', 'Loop (L)');
+  // Keyboard focus (focus-visible) shows the tooltip at once.
+  await transport(page).getByRole('button', { name: 'Metronome' }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(loop).toBeFocused();
+  await expect(page.getByText('Loop (L)', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Loop (L)', { exact: true })).toHaveCount(0);
+});
+
+test('knobs take a typed value with units, follow a vertical drag and reset on double-click', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Knobs');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Knobs');
+  await page.getByRole('tab', { name: 'Devices' }).click();
+  const panel = page.getByRole('region', { name: 'Subtractive synth: Track 1' });
+  await expect(panel.getByRole('group', { name: 'Filter' })).toBeVisible();
+  const cutoff = panel.getByRole('slider', { name: 'Cutoff' });
+  await cutoff.focus();
+  await page.keyboard.press('Enter');
+  const field = panel.getByRole('textbox', { name: 'Cutoff value' });
+  await field.fill('1.5 kHz');
+  await page.keyboard.press('Enter');
+  await expect(cutoff).toHaveAttribute('aria-valuetext', '1.5 kHz');
+  await expect(cutoff).toBeFocused();
+
+  const before = Number(await cutoff.inputValue());
+  const knob = cutoff.locator('xpath=..');
+  const box = await knob.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 40, { steps: 5 });
+  await page.mouse.up();
+  expect(Number(await cutoff.inputValue())).toBeGreaterThan(before);
+  await knob.dblclick();
+  await expect(cutoff).toHaveAttribute('aria-valuetext', '2.0 kHz');
+});
+
+test('the mixer has vertical strips: pan knob, fader and M and S per track', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
+  await page.getByRole('tab', { name: 'Mixer' }).click();
+  const mixer = page.getByRole('region', { name: 'Mixer' });
+  const fader = mixer.getByRole('slider', { name: 'Bass volume' });
+  await expect(fader).toHaveAttribute('aria-orientation', 'vertical');
+  await expect(mixer.getByRole('button', { name: 'Mute Bass' })).toHaveText('M');
+  await expect(mixer.getByRole('button', { name: 'Solo Bass' })).toHaveText('S');
+  await fader.focus();
+  await page.keyboard.press('PageDown');
+  await expect(fader).toHaveAttribute('aria-valuetext', '−6.6 dB');
+  // The pan knob sits above the fader in each strip.
+  const pan = await mixer.getByRole('slider', { name: 'Bass pan' }).locator('xpath=..').boundingBox();
+  const cap = await fader.locator('xpath=..').boundingBox();
+  expect(pan.y).toBeLessThan(cap.y);
+  const axe = await new AxeBuilder({ page }).include('section[aria-labelledby="studio-mixer"]').analyze();
+  expect(axe.violations).toEqual([]);
 });

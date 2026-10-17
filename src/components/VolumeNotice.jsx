@@ -4,6 +4,7 @@ import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
 import { getEngine } from '@/lib/audio/engine-client';
+import IconButton from '@/components/ui/IconButton';
 
 const engine = getEngine();
 const serverState = { noticeOpen: false };
@@ -38,7 +39,7 @@ export default function VolumeNotice() {
       initialFocusRef={continueRef}
       actions={
         <>
-          <Button onClick={cancel}>Cancel</Button>
+          <IconButton icon="x" label="Cancel" onClick={cancel} />
           <Button ref={continueRef} variant="primary" onClick={confirm}>
             Continue
           </Button>

@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { menuItem } from '../support/editor.js';
 
 const NAME_EMPTY = 'Enter a project name.';
 const NAME_TOO_LONG = 'Use 60 characters or fewer.';
@@ -105,7 +106,8 @@ test('a valid submit saves the project and opens it with one empty instrument tr
   await expect(tracks).toHaveCount(1);
   await expect(tracks.first()).toHaveAccessibleName(/^Track 1: Track 1, Subtractive synth/);
   await expect(page.getByText('Press a key or click the grid to add a note')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add audio file' })).toBeVisible();
+  await expect(await menuItem(page, 'Add', 'Audio file…')).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Keyboard map' })).toBeVisible();
 
   await page.reload();

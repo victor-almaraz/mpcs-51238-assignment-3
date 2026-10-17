@@ -12,6 +12,7 @@ import { NAME_MAX, copyDocument, createId } from '@/lib/project/model';
 import { deleteProject, getIndexSnapshot, listProjects, loadProject, saveProject, subscribeProjects } from '@/lib/project/store';
 import { validateProjectName } from '@/lib/project/validate';
 import { pruneStoredSources } from '@/lib/audio/source-cleanup';
+import IconButton from '@/components/ui/IconButton';
 
 /**
  * Every saved project, most recently edited first (RET-01), with "Open",
@@ -112,25 +113,18 @@ export default function ProjectList() {
                   >
                     Open
                   </Link>
-                  <Button
-                    aria-label={`Rename ${p.name}`}
+                  <IconButton icon="pencil"
+                    label={`Rename ${p.name}`}
                     aria-describedby={details}
                     onClick={(e) => {
                       triggerRef.current = e.currentTarget;
                       setRenaming({ entry: p, draft: p.name, error: null });
-                    }}
-                  >
-                    Rename
-                  </Button>
-                  <Button aria-label={`Duplicate ${p.name}`} aria-describedby={details} onClick={() => duplicate(p)}>
-                    Duplicate
-                  </Button>
-                  <Button aria-label={`Delete ${p.name}`} aria-describedby={details} onClick={(e) => {
+                    }} />
+                  <IconButton icon="copy" label={`Duplicate ${p.name}`} aria-describedby={details} onClick={() => duplicate(p)} />
+                  <IconButton icon="trash-2" label={`Delete ${p.name}`} aria-describedby={details} onClick={(e) => {
                       triggerRef.current = e.currentTarget;
                       setPending(p);
-                    }}>
-                    Delete
-                  </Button>
+                    }} />
                 </div>
               </li>
             );
@@ -145,9 +139,7 @@ export default function ProjectList() {
         returnFocusRef={triggerRef}
         actions={
           <>
-            <Button ref={cancelRef} onClick={() => setPending(null)}>
-              Cancel
-            </Button>
+            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setPending(null)} />
             <Button variant="danger" onClick={confirmDelete}>
               Delete project
             </Button>
@@ -164,7 +156,7 @@ export default function ProjectList() {
         returnFocusRef={triggerRef}
         actions={
           <>
-            <Button onClick={() => setRenaming(null)}>Cancel</Button>
+            <IconButton icon="x" label="Cancel" onClick={() => setRenaming(null)} />
             <Button variant="primary" onClick={confirmRename}>
               Rename project
             </Button>

@@ -15,6 +15,7 @@ import { FORMATS, encodeWav } from '@/lib/export/wav-writer';
 import { safeFileName, saveFile } from '@/lib/files/save-file';
 import { flushSaves } from '@/lib/project/store';
 import { getSettings, updateSettings } from '@/lib/settings/store';
+import IconButton from '@/components/ui/IconButton';
 
 const FORMAT_OPTIONS = Object.entries(FORMATS).map(([value, f]) => ({ value, label: f.label }));
 const RANGE_OPTIONS = [
@@ -37,9 +38,10 @@ const clockText = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).pad
  * and Cancel. A finished render offers Download with the file size; nothing
  * downloads by itself. Cancel discards the render's output; a new export waits
  * until the cancelled render ends. The live transport stops first. `loop` is
- * the loop range in ticks.
+ * the loop range in ticks. With `trigger` false the dialog has no button of
+ * its own and opens through the project.export command (a File menu).
  */
-export default function ExportDialog({ project, loop, disabled }) {
+export default function ExportDialog({ project, loop, disabled, trigger = true }) {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState('project');
   const [format, setFormat] = useState(() => getSettings().exportFormat);
@@ -141,9 +143,11 @@ export default function ExportDialog({ project, loop, disabled }) {
   const percent = progress == null ? 0 : Math.round(progress * 100);
   return (
     <>
-      <Button ref={buttonRef} size="sm" onClick={() => setOpen(true)} disabled={disabled} data-help="Export (Ctrl/Cmd+Shift+E): renders the project or the loop to a WAV file.">
-        Export
-      </Button>
+      {trigger ? (
+        <Button ref={buttonRef} size="sm" onClick={() => setOpen(true)} disabled={disabled} data-help="Export (Ctrl/Cmd+Shift+E): renders the project or the loop to a WAV file.">
+          Export
+        </Button>
+      ) : null}
       <Dialog open={open} onClose={close} title="Export WAV" initialFocusRef={exportRef} returnFocusRef={buttonRef}>
         <div className="flex flex-col gap-3">
           <RadioGroup legend="Range" options={RANGE_OPTIONS} value={range} onChange={option(setRange)} disabled={rendering} />
@@ -215,11 +219,9 @@ export default function ExportDialog({ project, loop, disabled }) {
           <StatusRegion className="text-sm">{message}</StatusRegion>
           <div className="flex flex-wrap justify-end gap-2">
             {rendering ? (
-              <Button onClick={cancel}>Cancel</Button>
+              <IconButton icon="x" label="Cancel" onClick={cancel} />
             ) : (
-              <Button ref={closeRef} onClick={close}>
-                Close
-              </Button>
+              <IconButton icon="x" label="Close" ref={closeRef} onClick={close} />
             )}
             <Button ref={exportRef} variant={ready ? 'secondary' : 'primary'} onClick={run} disabled={rendering || cancelling || !frames.ok}>
               {rendering ? 'Exporting…' : cancelling ? 'Cancelling…' : 'Export WAV'}

@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
 import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import { cx, focusRing, sectionHeading } from '@/design-systems/industrial/classes';
@@ -17,6 +15,8 @@ import PianoRollCanvas from './PianoRollCanvas';
 import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, positionText, rowLabel, rowPitches } from './layout';
 import usePianoRollCommands from './usePianoRollCommands';
 import VelocityLane from './VelocityLane';
+import IconButton from '@/components/ui/IconButton';
+import IconToggle from '@/components/ui/IconToggle';
 
 /** Initial viewport height before the scroller is measured. */
 const VIEW_HEIGHT = 480;
@@ -366,20 +366,10 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           onChange={(v) => commands.setLoop(v === 'off' ? null : Number(v) * barTicks)}
           options={LOOP_OPTIONS}
         />
-        <Toggle pressed={stepInput} onClick={() => setStepInput(!stepInput)}>
-          Step input
-        </Toggle>
-        <Toggle pressed={previewOn} onClick={() => setPreviewOn(!previewOn)}>
-          Preview notes
-        </Toggle>
-        <Button onClick={() => commands.quantize()} disabled={!clip || readOnly}>
-          Quantize
-        </Button>
-        {isDrums ? (
-          <Toggle pressed={showAll} onClick={() => setShowAll(!showAll)}>
-            Show all notes
-          </Toggle>
-        ) : null}
+        <IconToggle icon="footprints" label="Step input" pressed={stepInput} onClick={() => setStepInput(!stepInput)} data-help="Step input: each played note is added at the cursor, which then moves one grid step." />
+        <IconToggle icon="volume-2" label="Preview notes" pressed={previewOn} onClick={() => setPreviewOn(!previewOn)} data-help="Preview notes: placing or moving a note plays it." />
+        <IconButton icon="grid-3x3" label="Quantize" shortcut="Q" onClick={() => commands.quantize()} disabled={!clip || readOnly} data-help="Quantize (Q): moves every note to the grid." />
+        {isDrums ? <IconToggle icon="list" label="Show all notes" pressed={showAll} onClick={() => setShowAll(!showAll)} data-help="Show all notes: every General MIDI drum row, not only the kit's." /> : null}
       </Toolbar>
       {(clip?.notes.length ?? 0) === 0 ? (
         <div className="flex flex-wrap items-baseline gap-x-4 text-sm">

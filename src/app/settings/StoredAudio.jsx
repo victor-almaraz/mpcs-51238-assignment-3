@@ -9,6 +9,7 @@ import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import { removeStoredSource, storedSources } from '@/lib/audio/source-cleanup';
 import { deleteDatabase, usage } from '@/lib/storage/audio-store';
 import { listWrackKeys, removeKey } from '@/lib/storage/storage';
+import IconButton from '@/components/ui/IconButton';
 
 const noSubscription = () => () => {};
 const mb = (bytes) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -123,9 +124,7 @@ export default function StoredAudio() {
         returnFocusRef={clearRef}
         actions={
           <>
-            <Button ref={cancelRef} onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
+            <IconButton icon="x" label="Cancel" ref={cancelRef} onClick={() => setConfirming(false)} />
             <Button variant="danger" onClick={clearAll}>
               Clear all data
             </Button>

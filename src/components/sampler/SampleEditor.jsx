@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Slider from '@/components/ui/Slider';
-import Toggle from '@/components/ui/Toggle';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { LOOP_FORWARD, LOOP_OFF, MAX_CROSSFADE_MS } from '@/dsp/instruments/sampler-zones';
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { MARKERS, loopMarkersFor, markerFrames, markerRange, markerText, nearestZeroCrossing } from './markers';
+import IconToggle from '@/components/ui/IconToggle';
 
 const WAVE_H = 96;
 
@@ -232,9 +232,7 @@ export default function SampleEditor({ deviceId, source, params, loopMode, onMar
         </tbody>
       </table>
       <div>
-        <Toggle pressed={snapZero} disabled={disabled} onClick={() => setSnapZero(!snapZero)}>
-          Snap to zero crossings
-        </Toggle>
+        <IconToggle icon="magnet" label="Snap to zero crossings" pressed={snapZero} disabled={disabled} onClick={() => setSnapZero(!snapZero)} />
       </div>
     </div>
   );
