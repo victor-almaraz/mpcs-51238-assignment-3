@@ -1,7 +1,7 @@
 'use client';
 
 import Card from '@/components/ui/Card';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+import { groupHeading, sectionHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { instrumentFor } from '@/dsp/instruments/registry';
 import { INSTRUMENT_LABELS } from '@/lib/project/model';
@@ -72,7 +72,7 @@ export default function InstrumentPanel({ project, track, device, onParamChange,
             }
             return (
               <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
-                <legend className={sectionHeading}>{item.section}</legend>
+                <legend className={groupHeading}>{item.section}</legend>
                 {item.defs.map((def) => control(def))}
                 {extra}
               </fieldset>

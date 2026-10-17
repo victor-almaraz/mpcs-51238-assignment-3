@@ -1,6 +1,6 @@
 'use client';
 
-import { cx, fieldLabel, focusRing, readout } from '@/design-systems/industrial/classes';
+import { cx, fieldLabel, focusRing, readout, valueReadout } from '@/design-systems/industrial/classes';
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
@@ -12,7 +12,8 @@ function clamp(v, min, max) {
  * the readout text; a missing valueText throws outside production builds.
  * `display` replaces the readout text when it should be shorter ("L20" for "Left 20").
  * PageUp/PageDown jump by `pageStep` (default 10 % of the range). With `onReset`,
- * Delete and double-click reset the value. `className` goes on the row, other
+ * Delete and double-click reset the value. `windowed` draws the readout as an
+ * amber window (transport only). `className` goes on the row, other
  * props on the <input>.
  */
 export default function Slider({
@@ -29,6 +30,7 @@ export default function Slider({
   pageStep,
   disabled = false,
   labelHidden = false,
+  windowed = false,
   className,
   onKeyDown,
   onDoubleClick,
@@ -88,7 +90,7 @@ export default function Slider({
         )}
         {...rest}
       />
-      <output htmlFor={id} aria-hidden="true" className={cx('min-h-6 w-20 shrink-0 px-1 text-right text-sm leading-6', readout)}>
+      <output htmlFor={id} aria-hidden="true" className={cx('min-h-6 w-20 shrink-0 px-1 text-right text-sm leading-6', windowed ? readout : valueReadout)}>
         {display ?? valueText}
       </output>
       {onReset ? (

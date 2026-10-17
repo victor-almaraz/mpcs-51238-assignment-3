@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { groupHeading, sectionHeading, useEffect, useRef, useState } from 'react';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { cx, sectionHeading } from '@/design-systems/industrial/classes';
+import { cx } from '@/design-systems/industrial/classes';
 import { GRANULAR_MAX_SOURCE_S } from '@/dsp/instruments/granular';
 import { getSource, importFiles } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -64,7 +64,7 @@ export default function GranularSource({ project, device, onEdit, loading }) {
 
   return (
     <section aria-labelledby={`granular-${device.id}-file`} className="flex flex-col gap-2">
-      <h3 id={`granular-${device.id}-file`} className={sectionHeading}>
+      <h3 id={`granular-${device.id}-file`} className={groupHeading}>
         File source
       </h3>
       <p className={cx('text-sm', ref && !source ? 'font-bold' : '')}>{status}</p>

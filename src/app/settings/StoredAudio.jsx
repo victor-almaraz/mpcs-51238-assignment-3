@@ -100,7 +100,7 @@ export default function StoredAudio() {
           {sources.map((s, i) => (
             <li key={s.sourceId} className="flex flex-wrap items-center justify-between gap-2 p-2">
               <div className="flex flex-col">
-                <span className="font-bold">{s.name}</span>
+                <span>{s.name}</span>
                 <span className="text-sm text-muted">
                   {mb(s.size)} · {s.projects.length === 0 ? 'Used by no saved project' : `Used by ${s.projects.join(', ')}`}
                 </span>

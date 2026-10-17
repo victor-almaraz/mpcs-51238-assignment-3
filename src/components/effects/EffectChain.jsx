@@ -85,8 +85,8 @@ function EffectSlot({ device, name, position, count, onCommand, onParam, disable
       {/* Title bar: bypass (power), name, move and remove, as in a DAW device header. */}
       <div className="flex items-center gap-1">
         <IconToggle icon="power" label={`Bypass ${name}`} size="sm" data-focus={keep('bypass')} pressed={device.bypass === true} disabled={disabled} onClick={() => onCommand((doc) => setEffectBypass(doc, device.id, !device.bypass), `${name} ${device.bypass ? 'on' : 'bypassed'}`)} />
-        <h3 className={cx(sectionHeading, 'ml-1')}>{name}</h3>
-        {device.bypass ? <span className="text-sm font-bold text-muted">Bypassed</span> : null}
+        <h3 className="ml-1 text-sm">{name}</h3>
+        {device.bypass ? <span className="text-sm text-muted">Bypassed</span> : null}
         <span className="ml-auto" />
         <IconButton icon="chevron-left" label={`Move ${name} left`} size="sm" variant="ghost" data-focus={keep('left')} disabled={disabled || position === 1} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, -1), `${name} moved to position ${position - 1}`, { focus: `${device.id}:left` })} />
         <IconButton icon="chevron-right" label={`Move ${name} right`} size="sm" variant="ghost" data-focus={keep('right')} disabled={disabled || position === count} onClick={() => onCommand((doc, trackId) => moveEffect(doc, trackId, device.id, 1), `${name} moved to position ${position + 1}`, { focus: `${device.id}:right` })} />

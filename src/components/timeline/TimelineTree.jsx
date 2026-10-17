@@ -222,7 +222,7 @@ export default function TimelineTree({
             >
               <span aria-hidden="true" className="w-1.5 shrink-0" style={{ background: t.color }} />
               <span role="gridcell" className="flex min-w-0 flex-1 flex-col justify-center px-2">
-                <span className="truncate text-sm font-bold">
+                <span className="truncate text-sm">
                   {row.position} {t.name}
                 </span>
                 <span className="truncate text-xs text-muted">
@@ -242,7 +242,7 @@ export default function TimelineTree({
                     e.stopPropagation();
                     onTrackChange(row.trackId, { mute: !t.mute });
                   }}
-                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs font-bold', t.mute ? 'bg-selected text-selected-fg' : 'bg-surface')}
+                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs', t.mute ? 'bg-selected text-selected-fg' : 'bg-surface')}
                 >
                   M
                 </button>
@@ -256,7 +256,7 @@ export default function TimelineTree({
                     e.stopPropagation();
                     onTrackChange(row.trackId, { solo: !t.solo });
                   }}
-                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs font-bold', t.solo ? 'bg-selected text-selected-fg' : 'bg-surface')}
+                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs', t.solo ? 'bg-selected text-selected-fg' : 'bg-surface')}
                 >
                   S
                 </button>

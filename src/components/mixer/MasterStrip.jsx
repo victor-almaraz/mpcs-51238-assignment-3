@@ -66,7 +66,7 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
       <output aria-hidden="true" className="min-h-6 w-full rounded-ds bg-window text-center font-mono text-xs leading-6 text-lamp">
         {faderText(volumeDb)}
       </output>
-      <h3 id="master-strip-heading" className="w-full text-center text-xs font-bold uppercase">
+      <h3 id="master-strip-heading" className="w-full text-center text-xs">
         Master
       </h3>
     </section>

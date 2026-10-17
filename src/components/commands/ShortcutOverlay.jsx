@@ -69,7 +69,7 @@ function groupsOf(commands) {
 function KeyList({ title, keys, note }) {
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="text-sm font-bold">{title}</h3>
+      <h3 className="text-xs uppercase tracking-[0.06em] text-muted">{title}</h3>
       {/* One key-column width for every section, so the descriptions line up. */}
       <dl className="grid grid-cols-[12rem_1fr] gap-x-3 gap-y-0.5 text-sm">
         {keys.map(([key, text]) => (

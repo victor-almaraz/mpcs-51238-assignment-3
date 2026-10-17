@@ -105,7 +105,7 @@ export default function CommandPalette() {
   return (
     <Dialog open={open} onClose={() => setOpen(false)} title="Commands" initialFocusRef={inputRef} closeOnBackdrop className="w-[min(36rem,95vw)]">
       <div className="flex flex-col gap-2">
-        <label htmlFor={`${listId}-input`} className="text-sm font-bold">
+        <label htmlFor={`${listId}-input`} className="text-sm text-muted">
           Search commands
         </label>
         <input

@@ -805,7 +805,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           ) : null}
           <div
             aria-hidden="true"
-            className="absolute top-0 left-0 z-20 flex items-center border-r border-b border-border-strong bg-surface-2 px-2 text-xs font-bold text-muted uppercase"
+            className="absolute top-0 left-0 z-20 flex items-center border-r border-b border-border-strong bg-surface-2 px-2 text-xs text-muted"
             style={{ width: HEADER_W, height: RULER_H, transform: 'translate(var(--sx, 0px), var(--sy, 0px))' }}
           >
             Tracks

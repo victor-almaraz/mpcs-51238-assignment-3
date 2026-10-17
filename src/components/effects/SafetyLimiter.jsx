@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { groupHeading, useEffect, useState } from 'react';
 import { sectionHeading } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 
@@ -34,7 +34,7 @@ export default function SafetyLimiter() {
       aria-label={`Safety limiter, always on, gain reduction ${reduction}`}
       className="flex w-72 shrink-0 flex-col gap-1 rounded-ds border-2 border-fg bg-surface-2 p-2"
     >
-      <h3 className={sectionHeading} aria-hidden="true">
+      <h3 className={groupHeading} aria-hidden="true">
         Safety limiter (always on)
       </h3>
       <p className="text-sm" aria-hidden="true">

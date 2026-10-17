@@ -212,7 +212,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
               {groups.length === 0 ? <p className="px-2 py-1 text-muted">No matching presets.</p> : null}
               {groups.map(([group, list]) => (
                 <ul key={group} role="group" aria-labelledby={`${listId}-${group.replace(' ', '-')}`}>
-                  <li role="presentation" id={`${listId}-${group.replace(' ', '-')}`} className="px-2 pt-1 text-[0.6875rem] font-bold text-muted uppercase">
+                  <li role="presentation" id={`${listId}-${group.replace(' ', '-')}`} className="px-2 pt-1 text-[0.6875rem] text-muted uppercase">
                     {group}
                   </li>
                   {list.map((entry) => {

@@ -201,7 +201,7 @@ export default function SampleEditor({ deviceId, source, params, loopMode, onMar
         onChange={(v) => onCrossfade(Math.min(v, maxCrossfadeMs))}
       />
       <table className="text-sm">
-        <caption className="text-left font-bold">Markers in seconds</caption>
+        <caption className="text-left text-muted">Markers in seconds</caption>
         <thead>
           <tr>
             <th scope="col" className="pr-3 text-left">

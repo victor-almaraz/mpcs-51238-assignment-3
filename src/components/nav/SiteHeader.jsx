@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import IconButton from '@/components/ui/IconButton';
-import { controlBase, controlSizes, cx, lamp, lampOff, selectedLook } from '@/design-systems/industrial/classes';
+import { controlBase, controlSizes, cx, selectedLook } from '@/design-systems/industrial/classes';
 import { requestPalette, runCommand } from '@/lib/commands/registry';
 
 const LINKS = [
@@ -20,7 +20,8 @@ function normalize(path) {
 
 /**
  * Shared header on every route. The link for the current route carries
- * aria-current="page" and the lit-lamp look; other routes (the editor) match none.
+ * aria-current="page" and the pressed (ink) look; the others are quiet links.
+ * Other routes (the editor) match none.
  */
 export default function SiteHeader() {
   const pathname = normalize(usePathname() ?? '');
@@ -43,9 +44,7 @@ export default function SiteHeader() {
                     className={cx(
                       controlBase,
                       controlSizes.md,
-                      lamp,
-                      'pt-1',
-                      current ? selectedLook : cx('border-border-strong bg-surface text-fg hover:border-fg hover:bg-hover', lampOff),
+                      current ? selectedLook : 'border-transparent bg-transparent text-fg hover:bg-hover',
                     )}
                   >
                     {label}

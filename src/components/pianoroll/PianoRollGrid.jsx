@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { focusRing, groupHeading, sectionHeading, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
-import { cx, focusRing, sectionHeading } from '@/design-systems/industrial/classes';
+import { cx } from '@/design-systems/industrial/classes';
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getEngine } from '@/lib/audio/engine-client';
@@ -509,7 +509,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           <div className="pointer-events-none absolute top-1 right-2 z-30 flex flex-col gap-0.5 rounded-ds border border-border bg-surface/95 px-2 py-1 text-sm" style={{ left: LABEL_W + 8 }}>
             <p>Press a key or click the grid to add a note. Drag to draw a longer one.</p>
             <section aria-labelledby="keyboard-map-heading" className="flex flex-wrap items-baseline gap-x-2">
-              <h3 id="keyboard-map-heading" className={sectionHeading}>
+              <h3 id="keyboard-map-heading" className={groupHeading}>
                 Keyboard map
               </h3>
               <p className="text-xs">Keys A to K play the notes C to C. Z and X move the keyboard down or up an octave.</p>

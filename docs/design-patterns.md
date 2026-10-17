@@ -525,6 +525,19 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Accessibility:** `combobox` with a `listbox`; result counts are announced; focus returns to the previous element on close.
 - **Anti-patterns:** Shortcuts documented only outside the app.
 
+## Visual hierarchy
+The industrial design system draws attention by mechanical importance. Flair marks only the controls that act on sound in real time or keep it safe.
+
+| Tier | Elements | Treatment |
+|---|---|---|
+| 1. Transport and safety | Play/Pause, Stop, Loop, Metronome, Position, master volume and meter, Panic | Indicator lamps on toggles, amber readout windows, emergency-stop Panic, signal orange on Play while it is the next step |
+| 2. Working toggles | Mute, Solo, Snap, Bypass, step input, dock tabs | Ink-filled pressed state; tabs underline the open panel |
+| 3. Everything else | Menus, selects, zoom, navigation, parameter values, cards | Quiet: regular sentence-case legends, plain value readouts, thin card borders |
+
+- Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists and missing-audio warnings.
+- Small regular capitals mark structure: group headings and legends inside a panel. Controls use sentence case.
+- Signal orange marks the primary action, piano-roll notes and the selected velocity only; knob arcs and other values use ink.
+
 ## Conflicts and decisions
 | Topic | Product behavior | W-Rack decision | Pattern |
 |---|---|---|---|

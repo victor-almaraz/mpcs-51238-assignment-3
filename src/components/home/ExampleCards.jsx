@@ -30,7 +30,7 @@ export default function ExampleCards() {
           <li key={example.slug} className="flex">
             <Card className="flex-1 justify-between">
               <div className="flex flex-col gap-2">
-                <h3 className={sectionHeading}>{example.title}</h3>
+                <h3 className="text-base">{example.title}</h3>
                 <p className="text-sm text-muted">{example.description}</p>
               </div>
               <div>

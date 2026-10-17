@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, groupHeading, useState } from 'react';
 import IconButton from '@/components/ui/IconButton';
 import Field from '@/components/ui/Field';
 import Select from '@/components/ui/Select';
@@ -91,7 +91,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
 
   return (
     <section aria-labelledby={`${id}-heading`} className="flex w-fit max-w-full flex-col gap-3 rounded-ds border border-border-strong bg-surface p-3">
-      <h3 id={`${id}-heading`} className={sectionHeading}>
+      <h3 id={`${id}-heading`} className={groupHeading}>
         Clip properties: {clip.name}
       </h3>
       {audio ? <p className="text-sm">{status}</p> : null}
@@ -167,7 +167,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
             })}
           </div>
           <section aria-labelledby={`${id}-env`} className="flex flex-col gap-2">
-            <h4 id={`${id}-env`} className={sectionHeading}>
+            <h4 id={`${id}-env`} className={groupHeading}>
               Gain envelope
             </h4>
             {points.length === 0 ? <p className="text-sm">No envelope points. The clip plays at its clip gain.</p> : null}

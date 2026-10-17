@@ -42,11 +42,11 @@ export default function ClipIndicator({ name, read, focusId }) {
   return (
     <>
       {clipped ? (
-        <Button size="sm" variant="danger" onClick={clear} aria-label={`Clear clip indicator, ${name} clipped`} data-help="Clip: the level passed 0 dB. Press to clear.">
+        <Button size="sm" variant="danger" className="px-1 text-[0.625rem]" onClick={clear} aria-label={`Clear clip indicator, ${name} clipped`} data-help="Clip: the level passed 0 dB. Press to clear.">
           Clip
         </Button>
       ) : (
-        <span aria-hidden="true" className="inline-flex min-h-6 items-center rounded-ds border border-border px-2 text-xs text-muted uppercase">
+        <span aria-hidden="true" className="inline-flex min-h-6 items-center rounded-ds border border-border px-1 text-[0.625rem] text-muted uppercase">
           Clip
         </span>
       )}

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { focusRing, groupHeading, sectionHeading, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import ParamControl from '@/components/instruments/ParamControl';
 import { sectionParams } from '@/components/instruments/sections';
-import { cx, focusRing, sectionHeading } from '@/design-systems/industrial/classes';
+import { cx } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { LOOP_OFF, MAX_TRANSPOSE, SAMPLER_DEF, SAMPLER_PARAMS } from '@/dsp/instruments/sampler-zones';
 import { getSource, importFiles } from '@/lib/audio/decode';
@@ -52,7 +52,7 @@ function RootNote({ id, value, onChange, disabled }) {
   }
   return (
     <div className="flex items-center gap-2">
-      <span id={`${id}-label`} className="text-sm font-bold">
+      <span id={`${id}-label`} className="text-sm">
         Root note
       </span>
       <Button size="sm" aria-label="Root note down" disabled={disabled || value <= def.min} onClick={() => set(value - 1)}>
@@ -169,7 +169,7 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
   return (
     <fieldset disabled={disabled} className="flex flex-col gap-3">
       <section aria-labelledby={`sampler-${device.id}-sample`} className="flex flex-col gap-2">
-        <h3 id={`sampler-${device.id}-sample`} className={sectionHeading}>
+        <h3 id={`sampler-${device.id}-sample`} className={groupHeading}>
           Sample
         </h3>
         <p className={cx('text-sm', !source && zone ? 'font-bold' : '')}>{status}</p>
@@ -226,7 +226,7 @@ export default function SamplerPanel({ project, device, onEdit, onParamChange, d
       <div className="flex flex-wrap items-start gap-3">
         {sectionParams(SAMPLER_PARAMS.filter((d) => !MARKER_IDS.includes(d.id))).map((item, i) => (
           <fieldset key={`${item.section}-${i}`} className="flex flex-wrap items-start gap-x-2 gap-y-3 rounded-ds border border-border p-2">
-            <legend className={sectionHeading}>{item.section}</legend>
+            <legend className={groupHeading}>{item.section}</legend>
             {item.defs.map((d) => control(d.id))}
           </fieldset>
         ))}

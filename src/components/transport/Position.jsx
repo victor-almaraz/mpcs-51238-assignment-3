@@ -38,7 +38,7 @@ export default function Position() {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[0.6875rem] font-bold tracking-[0.04em] text-muted uppercase">Position</span>
+      <span className="text-xs text-muted">Position</span>
       <span
         ref={textRef}
         data-testid="position"

@@ -9,8 +9,8 @@
  *   Ground: control-room putty (light), panels a shade lighter, ink-black legends.
  *   Instrument windows: meters and harmonic bars sit in near-black windows, lit by
  *     segmented LED ladders, green → amber → red.
- *   Lamps: a pressed chip, toggle or segment lights a small amber lamp along its top
- *     edge, like a tab switch's indicator.
+ *   Lamps: a pressed transport toggle (Loop, Metronome) lights a small amber lamp along
+ *     its top edge; other pressed controls show an ink cap (design-patterns.md, Visual hierarchy).
  *   Accent: signal orange (the Unis typewriter, the Jupiter-4 trim), the primary action only.
  *   Panic: emergency-stop red with a yellow collar.
  *   Focus: control-room blue, which no other state uses.

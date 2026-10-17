@@ -90,7 +90,7 @@ export default function VelocityLane({ clip, isDrums, meter, grid, cols, scrollX
         className="absolute top-0 left-0 z-10 flex h-full flex-col justify-center border-r border-border bg-surface-2 px-2 text-xs"
         style={{ width: LABEL_W }}
       >
-        <span className="font-bold uppercase">Velocity</span>
+        <span className="uppercase tracking-[0.06em]">Velocity</span>
         <span aria-hidden="true" className="truncate tabular-nums text-muted">
           {shown ? `${shown.note.velocity} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeat(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
         </span>

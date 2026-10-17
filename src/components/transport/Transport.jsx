@@ -189,6 +189,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
             id="transport-master-volume"
             label="Master volume"
             labelHidden
+            windowed
             className="w-full"
             min={MASTER_VOLUME.min}
             max={MASTER_VOLUME.max}

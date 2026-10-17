@@ -1,12 +1,12 @@
 'use client';
 
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { groupHeading, sectionHeading, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Dialog from '@/components/ui/Dialog';
 import Field from '@/components/ui/Field';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
+import { errorText } from '@/design-systems/industrial/classes';
 import { deletePreset, getPresets, renamePreset, subscribePresets } from '@/lib/presets/store';
 import { MAX_PRESETS } from '@/lib/presets/validate';
 import { typeLabel } from './labels';
@@ -86,7 +86,7 @@ export default function PresetList() {
       {presets.length === 0 ? <p className="text-sm">No presets. Use Save preset on an instrument or effect.</p> : null}
       {[...groups.values()].map((group) => (
         <section key={group.label} aria-label={`${group.label} presets`} className="flex flex-col gap-1">
-          <h3 className={sectionHeading}>{group.label}</h3>
+          <h3 className={groupHeading}>{group.label}</h3>
           <ul className="flex flex-col divide-y divide-border rounded-ds border border-border-strong bg-surface">
             {group.items.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 p-2">

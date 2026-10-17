@@ -34,7 +34,7 @@ export default function RecentList({ projects }) {
         ))}
       </ul>
       {projects.length > RECENT_LIMIT ? (
-        <Link href="/projects" className="text-sm font-bold underline underline-offset-2">
+        <Link href="/projects" className="text-sm underline underline-offset-2">
           View all projects
         </Link>
       ) : null}

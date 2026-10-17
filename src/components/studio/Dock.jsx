@@ -102,7 +102,7 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
                 onKeyDown={(e) => onTabKey(e, i)}
                 className={cx(
                   // Underline tabs: the open panel's tab has full-contrast text and a 2 px rule along its bottom edge.
-                  'relative flex items-center gap-1.5 px-3 text-xs font-bold tracking-[0.06em] uppercase transition-colors',
+                  'relative flex items-center gap-1.5 px-3 text-sm transition-colors',
                   "after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:content-['']",
                   selected && !collapsed ? 'text-fg after:bg-fg' : 'text-muted hover:text-fg after:bg-transparent hover:after:bg-border-strong',
                   focusRing,

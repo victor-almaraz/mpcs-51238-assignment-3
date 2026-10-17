@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { cx, focusRing, readout } from '@/design-systems/industrial/classes';
+import { cx, focusRing, valueReadout } from '@/design-systems/industrial/classes';
 
 /** Arc sweep, degrees either side of straight up. */
 const SWEEP = 135;
@@ -97,7 +97,7 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
 
   return (
     <div className={cx('relative flex w-20 flex-col items-center gap-0.5', disabled && 'opacity-40', className)}>
-      <div className={cx('flex w-full items-end justify-center text-[0.6875rem] leading-tight font-bold tracking-[0.04em] text-muted uppercase', captionLines > 1 ? 'h-[2lh]' : 'h-[1lh]')}>
+      <div className={cx('flex w-full items-end justify-center text-xs leading-tight text-muted', captionLines > 1 ? 'h-[2lh]' : 'h-[1lh]')}>
         <label htmlFor={id} className={cx('min-w-0 max-w-full text-center break-words', captionLines > 1 ? 'line-clamp-2' : 'truncate')}>
           {caption ?? label}
         </label>
@@ -143,7 +143,7 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
           <circle cx="24" cy="24" r="14" className="fill-surface-2 stroke-border-strong" strokeWidth="1.5" />
           <path d={arc(-SWEEP, SWEEP)} className="fill-none stroke-border" strokeWidth="4" strokeLinecap="round" />
           {angle !== origin ? (
-            <path d={arc(Math.min(origin, angle), Math.max(origin, angle))} className="fill-none stroke-accent" strokeWidth="4" strokeLinecap="round" />
+            <path d={arc(Math.min(origin, angle), Math.max(origin, angle))} className="fill-none stroke-fg" strokeWidth="3" strokeLinecap="round" />
           ) : null}
           <line x1="24" y1="24" x2={px} y2={py} className="stroke-fg" strokeWidth="2.5" strokeLinecap="round" />
         </svg>
@@ -170,7 +170,7 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
       ) : (
         <span
           aria-hidden="true"
-          className={cx('min-h-6 w-full truncate px-1 text-center text-xs leading-6', readout, typeable && !disabled ? 'cursor-text' : '')}
+          className={cx('min-h-6 w-full truncate px-1 text-center text-xs leading-6', valueReadout, typeable && !disabled ? 'cursor-text' : '')}
           onClick={() => typeable && !disabled && openField()}
         >
           {display ?? valueText}

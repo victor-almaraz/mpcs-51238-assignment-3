@@ -5,8 +5,6 @@ import {
   controlType,
   cx,
   fieldLabel,
-  lamp,
-  lampOff,
   peerFocusRing,
   selectedLook,
 } from '@/design-systems/industrial/classes';
@@ -46,12 +44,11 @@ export default function RadioGroup({ legend, name, options, value, onChange, dis
               <label
                 htmlFor={id}
                 className={cx(
-                  'relative flex min-h-8 min-w-0 flex-1 items-center justify-center rounded-ds border px-1.5 pt-1 select-none motion-safe:transition-colors',
+                  'relative flex min-h-8 min-w-0 flex-1 items-center justify-center rounded-ds border px-1.5 select-none motion-safe:transition-colors',
                   controlType,
-                  lamp,
                   'peer-focus-visible:z-10',
                   peerFocusRing,
-                  checked ? cx(selectedLook, 'z-[1]') : cx('border-border-strong bg-surface text-fg', lampOff),
+                  checked ? cx(selectedLook, 'z-[1]') : 'border-border-strong bg-surface text-fg',
                   disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
                   !disabled && !checked && 'hover:z-[2] hover:border-fg hover:bg-hover active:bg-active',
                 )}
