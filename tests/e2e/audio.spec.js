@@ -538,3 +538,29 @@ test('Web MIDI states the browser\'s support before and after Connect MIDI devic
     await expect(region.getByRole('status').filter({ hasText: /No MIDI devices found|MIDI input:|MIDI access was not allowed/ })).toBeVisible();
   }
 });
+
+test('a track changes instrument in place; clips and effects stay, and Undo restores it', async ({ page }) => {
+  await openExample(page);
+  await selectTrack(page, 'Track 2: Bass, Subtractive synth');
+  await openTab(page, 'Devices');
+  const panel = page.getByRole('region', { name: 'Subtractive synth: Bass' });
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const bassOf = async () => {
+    const doc = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+    const track = Object.values(doc?.tracks ?? {}).find((t) => t.name === 'Bass');
+    return track && { type: doc.devices[track.deviceIds[0]].type, effects: track.deviceIds.length - 1, clips: track.clipIds.length };
+  };
+  await panel.getByLabel('Instrument', { exact: true }).selectOption({ label: 'FM synth' });
+  const fm = page.getByRole('region', { name: 'FM synth: Bass' });
+  await expect(fm).toBeVisible();
+  await expect(fm.getByRole('slider', { name: 'Ratio' })).toHaveAttribute('aria-valuetext', '2.0×');
+  await expect(page.getByRole('status').filter({ hasText: 'Bass is now an FM synth' })).toHaveCount(1);
+  await expect(page.getByRole('treegrid', { name: 'Tracks and clips' }).getByRole('row', { name: /^Track 2: Bass, FM synth/ })).toBeVisible();
+  await expect.poll(async () => (await bassOf())?.type).toBe('fm');
+  const swapped = await bassOf();
+  expect(swapped.clips).toBeGreaterThan(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.getByRole('region', { name: 'Subtractive synth: Bass' })).toBeVisible();
+  await expect.poll(async () => (await bassOf()).type).toBe('subtractive');
+  expect((await bassOf()).clips).toBe(swapped.clips);
+});

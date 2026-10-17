@@ -6,7 +6,7 @@
  * Results are { ok: true, doc, ... } or { ok: false, error: { code, message } }.
  */
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
-import { createId, createDevice, createTrack } from './model.js';
+import { INSTRUMENT_LABELS, createId, createDevice, createTrack } from './model.js';
 
 export const MAX_TRACKS = 16;
 /** Shortest audio clip after a trim, in frames (project limit). */
@@ -93,6 +93,25 @@ export function addInstrumentTrack(doc, type, name, makeId = createId) {
   const next = withTrack(doc, track, true);
   next.devices = { ...doc.devices, [device.id]: device };
   return { ok: true, doc: next, trackId: id };
+}
+
+/**
+ * Changes instrument track `trackId` to a new instrument of `type` at its default
+ * settings. The clips and notes, effects, mixer settings, name and colour stay; the
+ * old instrument's settings go, and audio only it used is released. The new device
+ * gets a new ID, so the engine builds it afresh. Returns { ok, doc, deviceId }.
+ */
+export function setInstrumentType(doc, trackId, type, makeId = createId) {
+  const track = doc.tracks[trackId];
+  if (!track || track.kind !== 'instrument') return fail('missing', 'Choose an instrument track.');
+  if (!INSTRUMENT_LABELS[type]) return fail('invalid', `There is no instrument "${type}".`);
+  const oldId = track.deviceIds[0];
+  if (doc.devices[oldId]?.type === type) return { ok: true, doc, deviceId: oldId };
+  const device = createDevice({ id: makeId('dev'), type });
+  const devices = { ...doc.devices, [device.id]: device };
+  delete devices[oldId];
+  const next = { ...doc, devices, tracks: { ...doc.tracks, [trackId]: { ...track, deviceIds: [device.id, ...track.deviceIds.slice(1)] } } };
+  return { ok: true, doc: pruneSources(next), deviceId: device.id };
 }
 
 function extensionFor(name, mimeType) {

@@ -307,7 +307,7 @@ The full results, the feedback and what was not changed are in [`docs/first-run-
 | Area | What W-Rack provides |
 |---|---|
 | Editor | One screen without page scrolling: project header with a File menu, an icon transport, arrangement with track headers and Add and Edit menus, a resizable dock with Editor, Devices and Mixer tabs that collapses to its tabs, tooltips on icon controls, and a help strip that describes the control under the pointer or in focus |
-| Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor; parameters are knobs grouped in sections |
+| Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor; parameters are knobs grouped in sections; a track's Instrument select changes its instrument type in place, keeping its clips, effects and mixer settings |
 | MIDI | Piano roll with keyboard note entry, step input, a velocity lane, quantize and clip looping; Add instrument track opens a four-bar clip in the piano roll; computer-keyboard and Web MIDI live input |
 | Audio | Multi-file import, waveform timeline with a bar ruler and a keyboard treegrid, marquee selection, a clip menu (right-click, Shift+F10), split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes, editable by on-clip handles or numeric fields |
 | Effects | EQ, filter, compressor, saturation, distortion (soft clip, hard clip, foldback), delay and reverb in chains of up to eight on every track and the master |

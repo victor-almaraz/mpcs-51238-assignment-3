@@ -341,3 +341,32 @@ test('at another context rate, split parts stay contiguous and read the same sou
     assert.equal(c.fadeIn[r], 0);
   }
 });
+
+test('setInstrumentType swaps the instrument in place and keeps clips, effects and mixer settings', async () => {
+  const { setInstrumentType, addInstrumentTrack } = await import('../../src/lib/project/clip-commands.js');
+  const { addEffect } = await import('../../src/lib/project/effect-commands.js');
+  const { createClip } = await import('../../src/lib/project/midi-commands.js');
+  let doc = createProject({ id: 'prj_swap', name: 'Swap', tempo: 120, timeSignature: '4/4', now: '2026-01-01T00:00:00.000Z' });
+  const added = addInstrumentTrack(doc, 'subtractive');
+  doc = added.doc;
+  const trackId = added.trackId;
+  doc = createClip(doc, trackId).doc;
+  doc = addEffect(doc, trackId, 'delay').doc;
+  doc = setTrack(doc, trackId, { gainDb: -6, mute: true });
+  const before = doc.tracks[trackId];
+  const oldDevice = before.deviceIds[0];
+
+  const result = setInstrumentType(doc, trackId, 'fm');
+  assert.equal(result.ok, true);
+  const after = result.doc.tracks[trackId];
+  assert.notEqual(after.deviceIds[0], oldDevice);
+  assert.equal(result.doc.devices[after.deviceIds[0]].type, 'fm');
+  assert.equal(result.doc.devices[oldDevice], undefined);
+  assert.deepEqual(after.deviceIds.slice(1), before.deviceIds.slice(1), 'effects stay');
+  assert.deepEqual(after.clipIds, before.clipIds, 'clips stay');
+  assert.deepEqual([after.gainDb, after.mute, after.name, after.color], [before.gainDb, before.mute, before.name, before.color]);
+  // The same type changes nothing; a non-instrument track or unknown type is refused.
+  assert.equal(setInstrumentType(result.doc, trackId, 'fm').doc, result.doc);
+  assert.equal(setInstrumentType(result.doc, result.doc.masterTrackId, 'fm').ok, false);
+  assert.equal(setInstrumentType(result.doc, trackId, 'theremin').ok, false);
+});
