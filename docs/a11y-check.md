@@ -16,13 +16,14 @@ Values come from the industrial tokens (`src/design-systems/industrial/tokens.cs
 
 | Pair | Ratio | Requirement |
 |---|---|---|
-| Text on background | 12.4:1 | 4.5:1 |
-| Muted text on background, hover and active surfaces | 5.6:1, 5.2:1, 4.6:1 | 4.5:1 |
-| Control boundaries (`border-strong`) on background and surface | 3.7:1, 4.2:1 | 3:1 |
-| Focus ring on background and surface | 5.1:1, 5.9:1 | 3:1 |
-| Primary button text on signal orange | 5.0:1 | 4.5:1 |
-| Panic text on red | 5.9:1 | 4.5:1 |
-| Meter segments in the instrument window | 9.1:1, 9.7:1, 4.4:1 | 3:1 |
+| Text on background, surface | 13.6:1, 16.5:1 | 4.5:1 |
+| Muted text on background, hover and active surfaces | 5.7:1, 5.4:1, 4.8:1 | 4.5:1 |
+| Control boundaries (`border-strong`) on background and surface | 3.6:1, 4.4:1 | 3:1 |
+| Focus ring on background and surface | 4.8:1, 5.9:1 | 3:1 |
+| Primary button text on signal orange | 5.6:1 | 4.5:1 |
+| Panic text on red | 5.8:1 | 4.5:1 |
+| Lit lamp on a pressed control, in a readout window | 9.7:1, 10.3:1 | 3:1 |
+| Track colours (teal, violet, olive, rose, copper, slate) on the lanes | 3.5:1 or more | 3:1 |
 
 Status never depends on color alone: pressed toggles expose `aria-pressed` and a lamp, bypassed effects show "Bypassed", and clip storage states are words.
 

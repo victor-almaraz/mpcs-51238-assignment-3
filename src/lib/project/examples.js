@@ -98,7 +98,7 @@ const beat = buildExample({
     {
       key: 'drums',
       name: 'Drums',
-      color: '#c51e21',
+      color: '#b54076',
       instrument: 'drums',
       effects: ['compressor'],
       bars: 2,
@@ -114,7 +114,7 @@ const beat = buildExample({
     {
       key: 'bass',
       name: 'Bass',
-      color: '#1659b5',
+      color: '#20857b',
       instrument: 'subtractive',
       effects: ['saturation'],
       bars: 2,
@@ -126,7 +126,7 @@ const beat = buildExample({
     {
       key: 'stab',
       name: 'Lead stab',
-      color: '#895709',
+      color: '#a25e2b',
       instrument: 'fm',
       effects: ['distortion'],
       bars: 2,
@@ -148,7 +148,7 @@ const ambient = buildExample({
     {
       key: 'texture',
       name: 'Texture',
-      color: '#1d6835',
+      color: '#667f30',
       instrument: 'granular',
       effects: ['filter', 'reverb'],
       bars: 4,
@@ -157,7 +157,7 @@ const ambient = buildExample({
     {
       key: 'pad',
       name: 'Pad',
-      color: '#1659b5',
+      color: '#20857b',
       instrument: 'additive',
       effects: ['delay'],
       bars: 4,
@@ -178,7 +178,7 @@ const pluckMelody = buildExample({
     {
       key: 'lead',
       name: 'Pluck lead',
-      color: '#e36927',
+      color: '#6a4fa9',
       instrument: 'pluck',
       effects: ['delay'],
       bars: 2,
@@ -191,7 +191,7 @@ const pluckMelody = buildExample({
     {
       key: 'bass',
       name: 'Bass',
-      color: '#1659b5',
+      color: '#20857b',
       instrument: 'subtractive',
       bars: 2,
       notes: [[0, 36, 8, 100], [8, 36, 8, 92], [16, 31, 8, 100], [24, 31, 8, 92]],

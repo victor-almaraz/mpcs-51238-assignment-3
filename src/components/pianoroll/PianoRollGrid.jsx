@@ -425,6 +425,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
               isDrums={isDrums}
               selectedId={selectedId}
               ghost={ghost}
+              noteColor={track.color}
             />
             <div
               ref={gridRef}

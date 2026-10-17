@@ -536,7 +536,9 @@ The industrial design system draws attention by mechanical importance. Flair mar
 
 - Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists and missing-audio warnings.
 - Small regular capitals mark structure: group headings and legends inside a panel. Controls use sentence case.
-- Signal orange marks the primary action, piano-roll notes and the selected velocity only; knob arcs and other values use ink.
+- Signal orange marks the primary action and the selected velocity only; knob arcs and other values use ink.
+- Hues are reserved: blue is focus, red is danger and Panic, orange is the primary action, amber is the transport lamps and readouts. Track and clip colours (teal, violet, olive, rose, copper, slate) use none of them, and piano-roll notes take their track's colour.
+- Neutrals are a warm grey in three elevations: the ground, the bars (toolbars, track headers, dock bar) one step lighter, and the lanes and cards lightest.
 
 ## Conflicts and decisions
 | Topic | Product behavior | W-Rack decision | Pattern |

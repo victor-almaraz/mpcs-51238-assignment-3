@@ -105,7 +105,7 @@ export function createDocument({ id, name, tempo, timeSignature, now, masterTrac
         id: masterTrackId,
         kind: 'bus',
         name: 'Master',
-        color: '#1e201a',
+        color: '#1c1a16',
         deviceIds: masterDevices.map((d) => d.id),
         output: null,
         gainDb: MASTER_GAIN_DB,
@@ -136,7 +136,7 @@ export function createProject({ name, tempo, timeSignature, now, makeId = create
     id: makeId('trk'),
     kind: 'instrument',
     name: 'Track 1',
-    color: '#e36927',
+    color: '#20857b',
     deviceIds: [device.id],
     output: masterTrackId,
   });

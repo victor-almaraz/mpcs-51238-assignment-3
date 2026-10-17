@@ -33,7 +33,7 @@ function Waveform({ source, markers, loopOn, crossfade }) {
     canvas.height = Math.round(WAVE_H * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = cssVar('--ds-window', '#191c16');
+    ctx.fillStyle = cssVar('--ds-window', '#151411');
     ctx.fillRect(0, 0, w, WAVE_H);
     const x = (frame) => (frame / source.frames) * w;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
@@ -61,7 +61,7 @@ function Waveform({ source, markers, loopOn, crossfade }) {
         ctx.fillRect(px, WAVE_H / 2 - (hi * WAVE_H) / 2, 1, Math.max(1, ((hi - lo) * WAVE_H) / 2));
       }
     }
-    ctx.fillStyle = cssVar('--ds-lamp', '#f9ad26');
+    ctx.fillStyle = cssVar('--ds-lamp', '#ffb330');
     ctx.font = '10px ui-monospace, monospace';
     for (const { id, label } of MARKERS) {
       if (!loopOn && (id === 'loopStart' || id === 'loopEnd')) continue;

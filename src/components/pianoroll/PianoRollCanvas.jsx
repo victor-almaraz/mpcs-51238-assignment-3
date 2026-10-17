@@ -16,24 +16,24 @@ function cssVar(name, fallback) {
  * all input. `ghost` is the provisional note of a drag, drawn dashed. `view` is { scrollX, scrollY, width, height }; the playhead is
  * read from the engine in a requestAnimationFrame loop, never React state.
  */
-export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost }) {
+export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
   const canvasRef = useRef(null);
   const props = useRef(null);
   useEffect(() => {
-    props.current = { view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost };
+    props.current = { view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
   });
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const colors = {
-      bg: cssVar('--ds-surface', '#eff1eb'),
-      black: cssVar('--ds-surface-2', '#e4e8e0'),
-      line: cssVar('--ds-border', '#bbbfb6'),
-      bar: cssVar('--ds-border-strong', '#70736a'),
-      note: cssVar('--ds-accent', '#e36927'),
-      noteEdge: cssVar('--ds-fg', '#1e201a'),
-      playhead: cssVar('--ds-focus', '#1659b5'),
+      bg: cssVar('--ds-surface', '#faf9f6'),
+      black: cssVar('--ds-surface-2', '#efece8'),
+      line: cssVar('--ds-border', '#cccac5'),
+      bar: cssVar('--ds-border-strong', '#77746e'),
+      note: cssVar('--ds-accent', '#ea6f2f'),
+      noteEdge: cssVar('--ds-fg', '#1c1a16'),
+      playhead: cssVar('--ds-focus', '#145ec1'),
     };
     const engine = getEngine();
     let frame = 0;
@@ -84,7 +84,8 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
           const width = p.isDrums ? CELL_W - 2 : Math.max(3, n.length * tickW - 1);
           if (x + width < 0 || x > w) continue;
           ctx.globalAlpha = p.isDrums ? 0.35 + (0.65 * n.velocity) / 127 : 1;
-          ctx.fillStyle = colors.note;
+          // Notes take the track's colour, so the piano roll reads as the track it edits.
+          ctx.fillStyle = p.noteColor ?? colors.note;
           ctx.fillRect(x + 1, r * ROW_H - sy + 3, width, ROW_H - 6);
           ctx.globalAlpha = 1;
           ctx.strokeStyle = colors.noteEdge;

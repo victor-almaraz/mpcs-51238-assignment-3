@@ -25,14 +25,17 @@ const requireInt = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`${name} must be an integer, got ${v}`);
 };
 
-/** Track and clip colours, from the industrial palette. */
+/**
+ * Track and clip colours (tokens.css): hues no semantic colour uses (focus blue,
+ * danger red, primary orange, lamp amber), each at least 3.5:1 on the lanes.
+ */
 export const COLORS = [
-  { value: '#e36927', label: 'Signal orange' },
-  { value: '#1659b5', label: 'Control blue' },
-  { value: '#1d6835', label: 'Green' },
-  { value: '#895709', label: 'Amber' },
-  { value: '#c51e21', label: 'Red' },
-  { value: '#53574e', label: 'Grey' },
+  { value: '#20857b', label: 'Teal' },
+  { value: '#6a4fa9', label: 'Violet' },
+  { value: '#667f30', label: 'Olive' },
+  { value: '#b54076', label: 'Rose' },
+  { value: '#a25e2b', label: 'Copper' },
+  { value: '#576574', label: 'Slate' },
 ];
 const TRACK_COLORS = COLORS.map((c) => c.value);
 
@@ -597,6 +600,6 @@ export function renameClip(doc, clipId, name) {
 export function setClipColor(doc, clipId, color) {
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No such clip.');
-  if (!/^#[0-9a-f]{6}$/i.test(color)) return fail('invalid', 'Use a colour like #e36927.');
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return fail('invalid', 'Use a colour like #20857b.');
   return { ok: true, doc: setClip(doc, { ...clip, color }) };
 }

@@ -180,7 +180,7 @@ test('rename and colour validate their input', () => {
   const { doc, clipId } = docWithClip();
   assert.equal(renameClip(doc, clipId, '  Verse  ').doc.clips[clipId].name, 'Verse');
   assert.equal(renameClip(doc, clipId, ' ').ok, false);
-  assert.equal(setClipColor(doc, clipId, '#1659b5').doc.clips[clipId].color, '#1659b5');
+  assert.equal(setClipColor(doc, clipId, '#6a4fa9').doc.clips[clipId].color, '#6a4fa9');
   assert.equal(setClipColor(doc, clipId, 'blue').ok, false);
 });
 

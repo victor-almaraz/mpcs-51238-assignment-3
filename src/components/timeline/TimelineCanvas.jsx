@@ -132,16 +132,16 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const colors = {
-      bg: cssVar('--ds-surface', '#eff1eb'),
-      alt: cssVar('--ds-surface-2', '#e4e8e0'),
-      line: cssVar('--ds-border', '#bbbfb6'),
-      bar: cssVar('--ds-border-strong', '#70736a'),
-      fg: cssVar('--ds-fg', '#1e201a'),
-      muted: cssVar('--ds-muted', '#53574e'),
-      focus: cssVar('--ds-focus', '#1659b5'),
-      clip: cssVar('--ds-bg', '#dee1d9'),
-      lamp: cssVar('--ds-lamp', '#f9ad26'),
-      lampOff: cssVar('--ds-lamp-off', '#a3a69e'),
+      bg: cssVar('--ds-surface', '#faf9f6'),
+      alt: cssVar('--ds-surface-2', '#efece8'),
+      line: cssVar('--ds-border', '#cccac5'),
+      bar: cssVar('--ds-border-strong', '#77746e'),
+      fg: cssVar('--ds-fg', '#1c1a16'),
+      muted: cssVar('--ds-muted', '#595650'),
+      focus: cssVar('--ds-focus', '#145ec1'),
+      clip: cssVar('--ds-bg', '#e5e3de'),
+      lamp: cssVar('--ds-lamp', '#ffb330'),
+      lampOff: cssVar('--ds-lamp-off', '#a7a49f'),
     };
     const engine = getEngine();
     let frame = 0;
@@ -218,7 +218,11 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
           const ch = TRACK_H - 6;
           ctx.fillStyle = colors.clip;
           ctx.fillRect(x, top, cw, ch);
+          // A light wash of the track colour ties the clip to its track; the 4 px top band carries it in full.
           ctx.fillStyle = clip.color ?? track.color;
+          ctx.globalAlpha = 0.14;
+          ctx.fillRect(x, top, cw, ch);
+          ctx.globalAlpha = 1;
           ctx.fillRect(x, top, cw, 4);
           ctx.save();
           ctx.beginPath();
