@@ -50,16 +50,12 @@ async function canvasPoint(page, x, row, dy) {
   return { x: box.x + x, y: box.y + 20 + row * 56 + 3 + dy };
 }
 
-test('the command palette opens from the header and the shortcut, filters, and runs commands', async ({ page, browserName }) => {
+test('the command palette opens from the header and Mod+K, filters, and runs commands', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open Beat' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
-  // Firefox keeps Ctrl+Shift+P for a private window; the header button opens the palette there.
-  if (browserName === 'firefox') await page.getByRole('banner').getByRole('button', { name: 'Commands' }).click();
-  else {
-    await page.getByRole('heading', { level: 1 }).click();
-    await page.keyboard.press('ControlOrMeta+Shift+P');
-  }
+  await page.getByRole('heading', { level: 1 }).click();
+  await page.keyboard.press('ControlOrMeta+K');
   const dialog = page.getByRole('dialog', { name: 'Commands' });
   const search = dialog.getByRole('combobox', { name: 'Search commands' });
   await expect(search).toBeFocused();

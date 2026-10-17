@@ -17,7 +17,7 @@ const toFraction = (db) => (db <= FLOOR_DB ? 0 : Math.min(1, (db - FLOOR_DB) / -
  * latest linear peaks [left, right] or null. Hidden from the accessibility
  * tree (MIX-02); a level is never announced.
  */
-export default function Meter({ read, className }) {
+export default function Meter({ read, className = 'h-24 w-5' }) {
   const bars = [useRef(null), useRef(null)];
   const holds = [useRef(null), useRef(null)];
 
@@ -50,7 +50,7 @@ export default function Meter({ read, className }) {
   }, []);
 
   return (
-    <div aria-hidden="true" className={cx('flex h-24 w-5 gap-0.5 rounded-ds bg-window p-0.5', className)}>
+    <div aria-hidden="true" className={cx('flex gap-0.5 rounded-ds bg-window p-0.5', className)}>
       {[0, 1].map((ch) => (
         <div key={ch} className="relative flex-1 overflow-hidden">
           <div

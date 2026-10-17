@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
 import RadioGroup from '@/components/ui/RadioGroup';
@@ -23,11 +23,21 @@ const RANGE_OPTIONS = [
 ];
 const WAV_TYPE = { description: 'WAV audio', accept: { 'audio/wav': ['.wav'] } };
 
+/** File size as shown: "840 KB", "12.4 MB". */
+export function sizeText(bytes) {
+  return bytes < 1e6 ? `${Math.max(1, Math.round(bytes / 1e3))} KB` : `${(bytes / 1e6).toFixed(1)} MB`;
+}
+
+/** Elapsed time as m:ss. */
+const clockText = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
 /**
- * Export (assignment-3-scope.md, Export): range, format and tail, the clips
- * that will be silent, and a progress bar (determinate while the engine
- * reports progress). One export runs at a time; the live transport stops
- * first. `loop` is the loop range in ticks.
+ * Export (assignment-3-scope.md, Export; EXP-02): range, format and tail, the
+ * clips that will be silent, and a progress bar with percentage, elapsed time
+ * and Cancel. A finished render offers Download with the file size; nothing
+ * downloads by itself. Cancel discards the render's output; a new export waits
+ * until the cancelled render ends. The live transport stops first. `loop` is
+ * the loop range in ticks.
  */
 export default function ExportDialog({ project, loop, disabled }) {
   const [open, setOpen] = useState(false);
@@ -37,23 +47,61 @@ export default function ExportDialog({ project, loop, disabled }) {
   const [progress, setProgress] = useState(undefined); // undefined idle, null indeterminate, 0–1 determinate
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
+  const [ready, setReady] = useState(null); // { blob, name } of the finished render
+  const [cancelling, setCancelling] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const buttonRef = useRef(null);
   const exportRef = useRef(null);
+  const downloadRef = useRef(null);
+  const closeRef = useRef(null);
+  const runRef = useRef(0); // the current render; a cancelled render's token no longer matches
   const rendering = progress !== undefined;
-  useCommands([{ id: 'project.export', group: 'Project', label: 'Export WAV…', run: () => setOpen(true), enabled: () => !disabled }]);
+
+  useEffect(() => {
+    if (!rendering) return undefined;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed((Date.now() - started) / 1000), 250);
+    return () => clearInterval(timer);
+  }, [rendering]);
+
+  // A finished render moves focus to Download (EXP-02); Cancel leaves it on Close.
+  useEffect(() => {
+    if (ready) downloadRef.current?.focus();
+  }, [ready]);
+  useEffect(() => {
+    if (cancelling) closeRef.current?.focus();
+  }, [cancelling]);
+  useCommands([{ id: 'project.export', group: 'Project', label: 'Export WAV…', keys: 'Mod+Shift+E', global: true, run: () => setOpen(true), enabled: () => !disabled }]);
   const fs = getEngine().decodeRate();
   // Compiled only while the dialog is open.
   const frames = open ? exportFrames(project, fs, { range, loop, tailS }) : { ok: false, error: null };
   const silent = open ? silentClips(project) : [];
 
+  /** Applies an option change; a finished render no longer matches the options. */
+  const option = (set) => (value) => {
+    set(value);
+    setReady(null);
+  };
+
   async function run() {
+    const token = ++runRef.current;
+    const current = () => runRef.current === token;
     setError(null);
     setMessage('');
+    setReady(null);
+    setElapsed(0);
     flushSaves();
     getEngine().stop();
     setProgress(null);
     try {
-      const result = await renderOffline(project, fs, { range, loop, tailS, masterVolumeDb: getSettings().masterVolumeDb, onProgress: setProgress });
+      const result = await renderOffline(project, fs, {
+        range,
+        loop,
+        tailS,
+        masterVolumeDb: getSettings().masterVolumeDb,
+        onProgress: (p) => current() && setProgress(p),
+      });
+      if (!current()) return;
       if (!result.ok) {
         setError(result.error);
         return;
@@ -61,24 +109,44 @@ export default function ExportDialog({ project, loop, disabled }) {
       const { left, right } = result.value;
       const blob = new Blob([encodeWav(left, right, fs, format)], { type: 'audio/wav' });
       const name = safeFileName(project.name, '.wav');
-      const outcome = await saveFile(blob, name, WAV_TYPE);
-      if (outcome === 'saved') setMessage(`Exported ${name}`);
+      setReady({ blob, name });
+      setMessage(`${name} is ready, ${sizeText(blob.size)}`);
     } catch (err) {
       console.error(err);
-      setError('The export failed. Reload the page and try again.');
+      if (current()) setError('The export failed. Reload the page and try again.');
     } finally {
-      setProgress(undefined);
+      if (current()) setProgress(undefined);
+      else setCancelling(false);
     }
   }
 
+  function cancel() {
+    runRef.current++;
+    setProgress(undefined);
+    setCancelling(true);
+    setMessage('Export cancelled');
+  }
+
+  async function download() {
+    const outcome = await saveFile(ready.blob, ready.name, WAV_TYPE);
+    if (outcome === 'saved') setMessage(`Exported ${ready.name}`);
+  }
+
+  function close() {
+    if (rendering) cancel();
+    setReady(null);
+    setOpen(false);
+  }
+
+  const percent = progress == null ? 0 : Math.round(progress * 100);
   return (
     <>
-      <Button ref={buttonRef} onClick={() => setOpen(true)} disabled={disabled}>
+      <Button ref={buttonRef} size="sm" onClick={() => setOpen(true)} disabled={disabled} data-help="Export (Ctrl/Cmd+Shift+E): renders the project or the loop to a WAV file.">
         Export
       </Button>
-      <Dialog open={open} onClose={() => !rendering && setOpen(false)} title="Export WAV" initialFocusRef={exportRef} returnFocusRef={buttonRef}>
+      <Dialog open={open} onClose={close} title="Export WAV" initialFocusRef={exportRef} returnFocusRef={buttonRef}>
         <div className="flex flex-col gap-3">
-          <RadioGroup legend="Range" options={RANGE_OPTIONS} value={range} onChange={setRange} disabled={rendering} />
+          <RadioGroup legend="Range" options={RANGE_OPTIONS} value={range} onChange={option(setRange)} disabled={rendering} />
           <Select
             id="export-format"
             label="Format"
@@ -86,7 +154,7 @@ export default function ExportDialog({ project, loop, disabled }) {
             options={FORMAT_OPTIONS}
             disabled={rendering}
             onChange={(v) => {
-              setFormat(v);
+              option(setFormat)(v);
               updateSettings({ exportFormat: v });
             }}
           />
@@ -99,8 +167,8 @@ export default function ExportDialog({ project, loop, disabled }) {
             value={tailS}
             valueText={`${tailS.toFixed(1)} s`}
             disabled={rendering}
-            onChange={setTailS}
-            onReset={() => setTailS(DEFAULT_TAIL_S)}
+            onChange={option(setTailS)}
+            onReset={() => option(setTailS)(DEFAULT_TAIL_S)}
           />
           {frames.ok ? (
             <p className="text-sm">Length: {(frames.value.total / fs).toFixed(1)} s including the tail, at {fs} Hz.</p>
@@ -120,18 +188,25 @@ export default function ExportDialog({ project, loop, disabled }) {
             </div>
           ) : null}
           {rendering ? (
-            <div
-              role="progressbar"
-              aria-label="Export progress"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress === null ? undefined : Math.round(progress * 100)}
-              aria-valuetext={progress === null ? 'Rendering…' : `${Math.round(progress * 100)} %`}
-              className="h-3 overflow-hidden rounded-ds border border-border-strong bg-surface"
-            >
-              <div className={progress === null ? 'h-full w-1/3 bg-accent motion-safe:animate-pulse' : 'h-full bg-accent'} style={progress === null ? undefined : { width: `${progress * 100}%` }} />
+            <div className="flex items-center gap-3">
+              <div
+                role="progressbar"
+                aria-label="Export progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress === null ? undefined : percent}
+                aria-valuetext={progress === null ? 'Rendering…' : `${percent} %`}
+                className="h-3 min-w-0 flex-1 overflow-hidden rounded-ds border border-border-strong bg-surface"
+              >
+                <div className={progress === null ? 'h-full w-1/3 bg-accent motion-safe:animate-pulse' : 'h-full bg-accent'} style={progress === null ? undefined : { width: `${percent}%` }} />
+              </div>
+              <span aria-hidden="true" className="w-28 shrink-0 text-right text-sm tabular-nums">
+                {progress === null ? 'Starting' : `${percent} %`} · {clockText(elapsed)}
+              </span>
             </div>
           ) : null}
+          {/* Progress is announced at 25 % steps only. */}
+          <StatusRegion visuallyHidden>{rendering && progress !== null ? `Exporting, ${Math.floor(percent / 25) * 25} %` : ''}</StatusRegion>
           {error ? (
             <p role="alert" className={errorText}>
               {error}
@@ -139,12 +214,21 @@ export default function ExportDialog({ project, loop, disabled }) {
           ) : null}
           <StatusRegion className="text-sm">{message}</StatusRegion>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button onClick={() => setOpen(false)} disabled={rendering}>
-              Close
+            {rendering ? (
+              <Button onClick={cancel}>Cancel</Button>
+            ) : (
+              <Button ref={closeRef} onClick={close}>
+                Close
+              </Button>
+            )}
+            <Button ref={exportRef} variant={ready ? 'secondary' : 'primary'} onClick={run} disabled={rendering || cancelling || !frames.ok}>
+              {rendering ? 'Exporting…' : cancelling ? 'Cancelling…' : 'Export WAV'}
             </Button>
-            <Button ref={exportRef} variant="primary" onClick={run} disabled={rendering || !frames.ok}>
-              {rendering ? 'Exporting…' : 'Export WAV'}
-            </Button>
+            {ready ? (
+              <Button ref={downloadRef} variant="primary" onClick={download}>
+                Download ({sizeText(ready.blob.size)})
+              </Button>
+            ) : null}
           </div>
         </div>
       </Dialog>

@@ -143,6 +143,28 @@ export function samplerMipBytes(doc) {
  * Sets sampler device `deviceId`'s zone source to `source` (a decode.js
  * entry), or clears it with null. Enforces the 60 s source and 64 MB mip limits.
  */
+/**
+ * The source an instrument device plays, { sourceId, sourceName }, or null:
+ * a sampler's zone or granular's File source.
+ */
+export function deviceSource(device) {
+  const ref = device.type === 'sampler' ? device.sampler : device.type === 'granular' ? device.granular : null;
+  return ref?.sourceId ? ref : null;
+}
+
+/**
+ * Sets granular device `deviceId`'s File source to `source` ({ sourceId,
+ * name, frames, rate, … }), or clears it with null. Files longer than 20 s
+ * play their first 20 s. Returns { ok, doc }.
+ */
+export function setGranularSource(doc, deviceId, source) {
+  const device = doc.devices[deviceId];
+  if (!device || device.type !== 'granular') return fail('missing', 'No granular instrument.');
+  if (source === null) return { ok: true, doc: pruneSources({ ...doc, devices: { ...doc.devices, [deviceId]: { ...device, granular: null } } }) };
+  const next = withSourceRef(doc, source);
+  return { ok: true, doc: pruneSources({ ...next, devices: { ...next.devices, [deviceId]: { ...device, granular: { sourceId: source.sourceId, sourceName: source.name } } } }) };
+}
+
 export function setSamplerSource(doc, deviceId, source) {
   const device = doc.devices[deviceId];
   if (!device || device.type !== 'sampler') return fail('missing', 'No sampler.');
@@ -218,7 +240,10 @@ function setClip(doc, clip) {
 /** Drops SourceRefs no audio clip or sampler zone uses any more. */
 export function pruneSources(doc) {
   const used = new Set(Object.values(doc.clips).filter((c) => c.kind === 'audio').map((c) => c.sourceId));
-  for (const device of Object.values(doc.devices)) if (device.sampler?.sourceId) used.add(device.sampler.sourceId);
+  for (const device of Object.values(doc.devices)) {
+    const ref = deviceSource(device);
+    if (ref) used.add(ref.sourceId);
+  }
   const keep = Object.fromEntries(Object.entries(doc.sources).filter(([id]) => used.has(id)));
   return Object.keys(keep).length === Object.keys(doc.sources).length ? doc : { ...doc, sources: keep };
 }
@@ -298,6 +323,27 @@ export function duplicateClip(doc, clipId, makeId = createId) {
   const next = setClip(doc, copy);
   next.tracks = { ...doc.tracks, [track.id]: { ...track, clipIds: [...track.clipIds, id] } };
   return { ok: true, doc: next, clipId: id };
+}
+
+const without = (map, ids) => Object.fromEntries(Object.entries(map).filter(([id]) => !ids.includes(id)));
+
+/**
+ * Removes a track with its clips, devices, sends and lanes; sources nothing
+ * else uses leave `doc.sources`. The master bus cannot be removed.
+ */
+export function removeTrack(doc, trackId) {
+  const track = doc.tracks[trackId];
+  if (!track || trackId === doc.masterTrackId) return fail('missing', 'No such track.');
+  const next = {
+    ...doc,
+    trackOrder: doc.trackOrder.filter((id) => id !== trackId),
+    tracks: without(doc.tracks, [trackId]),
+    clips: without(doc.clips, track.clipIds),
+    devices: without(doc.devices, track.deviceIds),
+    sends: without(doc.sends, track.sendIds),
+    lanes: without(doc.lanes, track.laneIds),
+  };
+  return { ok: true, doc: pruneSources(next) };
 }
 
 /** Removes a clip; a source no other clip uses leaves `doc.sources`. */

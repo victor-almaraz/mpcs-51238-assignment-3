@@ -1,11 +1,15 @@
 /*
  * Command registry (accessibility.md, Command system): every operation the
- * palette lists is a named command { id, label, group, keys, run, enabled }.
- * Components register the commands they own while mounted; the palette reads
- * the current set. `keys` is the shortcut as shown ("Mod+E", "Space").
+ * palette lists is a named command { id, label, group, keys, global, run,
+ * enabled }. Components register the commands they own while mounted; the
+ * palette reads the current set. `keys` is the shortcut as shown ("Mod+E",
+ * "Space"). A `global` command's shortcut works anywhere on the page
+ * (design-patterns.md, Keyboard shortcuts); other shortcuts belong to the
+ * focused editor, which handles them itself.
  */
 const commands = new Map(); // id → command
 const listeners = new Set();
+const claims = new Set(); // predicates for keys another handler takes first
 let snapshot = [];
 let paletteRequests = 0;
 
@@ -50,4 +54,60 @@ export function matchesQuery(command, query) {
     .split(/\s+/)
     .filter(Boolean)
     .every((word) => text.includes(word));
+}
+
+/**
+ * The shortcut text of keyboard event `e`, as written in `keys`: "Mod+Shift+E",
+ * "Mod+,", "G", "?", "+". Ctrl and Cmd are both Mod. Shift is written only with
+ * letters and named keys, since it already shapes symbols ("?" is Shift+/);
+ * "=" reads as "+" and "_" as "-", so the plus and minus keys need no Shift.
+ */
+export function shortcutOf(e) {
+  let key = e.key === ' ' ? 'Space' : e.key;
+  if (key === '=') key = '+';
+  else if (key === '_') key = '-';
+  const letter = /^[a-z]$/i.test(key);
+  if (letter) key = key.toUpperCase();
+  const parts = [];
+  if (e.ctrlKey || e.metaKey) parts.push('Mod');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey && (letter || key.length > 1)) parts.push('Shift');
+  parts.push(key);
+  return parts.join('+');
+}
+
+/**
+ * Lets another handler take unmodified keys first while `predicate(e)` is true
+ * (computer-keyboard notes take their letters). Returns a function that ends the claim.
+ */
+export function claimKeys(predicate) {
+  claims.add(predicate);
+  return () => claims.delete(predicate);
+}
+
+const TEXT_ENTRY = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]), textarea, select, [contenteditable="true"], [role="combobox"], [role="menu"], [role="listbox"]';
+
+/**
+ * Runs the enabled global command whose shortcut is `e` and returns true.
+ * Nothing runs for a key already handled, while a dialog is open, for a held
+ * repeat, or for an unmodified key typed into a field, menu or list, or
+ * claimed by another handler.
+ */
+export function dispatchShortcut(e) {
+  if (e.defaultPrevented || e.repeat || e.isComposing) return false;
+  if (typeof document !== 'undefined' && document.querySelector('dialog[open]')) return false;
+  const modified = e.ctrlKey || e.metaKey || e.altKey;
+  if (!modified && (e.target?.closest?.(TEXT_ENTRY) || [...claims].some((claimed) => claimed(e)))) return false;
+  const key = shortcutOf(e);
+  const command = snapshot.find((c) => c.global && c.keys === key);
+  if (!command) return false;
+  e.preventDefault();
+  if (command.enabled()) command.run();
+  return true;
+}
+
+/** `keys` as shown to the user: Mod reads "Cmd" on Apple platforms and "Ctrl" elsewhere. */
+export function displayKeys(keys) {
+  const apple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  return keys.replace(/\bMod\b/g, apple ? 'Cmd' : 'Ctrl');
 }

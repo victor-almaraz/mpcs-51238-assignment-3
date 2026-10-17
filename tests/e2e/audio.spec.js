@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { openTab, selectTrack } from '../support/editor.js';
 
 /** Counts AudioContext constructions in window.__audioContexts. */
 async function spyOnAudioContext(page) {
@@ -90,6 +91,8 @@ test('Continue starts audio and plays; Stop holds the position; the notice shows
 
   await playButton(page).click();
   await expect(playButton(page)).toHaveAttribute('aria-pressed', 'false');
+  // The readout settles on the stop position within a frame or two.
+  await page.waitForTimeout(100);
   const stoppedAt = await page.getByTestId('position').textContent();
   await page.waitForTimeout(400);
   await expect(page.getByTestId('position')).toHaveText(stoppedAt);
@@ -154,7 +157,7 @@ test('a tempo edit is the first edit: the example copy saves as a project', asyn
   const tempo = page.getByRole('textbox', { name: 'Tempo (BPM)' });
   await tempo.fill('90');
   await tempo.press('Enter');
-  await expect(page.getByText('Saved on this device')).toBeVisible();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   await expect(page.getByText('90 BPM · 4/4')).toBeVisible();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
   expect(saved.name).toBe('Beat (copy)');
@@ -176,7 +179,8 @@ test('an invalid tempo shows the form error and changes nothing', async ({ page 
 
 test('the Subtractive panel shows labelled controls with units, and an edit saves', async ({ page }) => {
   await openExample(page);
-  await page.getByRole('button', { name: 'Track 2: Bass, Subtractive synth' }).click();
+  await selectTrack(page, 'Track 2: Bass, Subtractive synth');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Subtractive synth: Bass' });
   await expect(panel).toBeVisible();
   await expect(panel.getByRole('group', { name: 'Waveform' }).getByRole('radio', { name: 'Saw' })).toBeChecked();
@@ -184,6 +188,8 @@ test('the Subtractive panel shows labelled controls with units, and an edit save
   await expect(cutoff).toHaveAttribute('aria-valuetext', '2.0 kHz');
   await expect(panel.getByRole('slider', { name: 'Attack' })).toHaveAttribute('aria-valuetext', '10 ms');
   await expect(panel.getByRole('slider', { name: 'Resonance' })).toHaveAttribute('aria-valuetext', '1.0 dB');
+  await expect(panel.getByRole('slider', { name: 'Filter env' })).toHaveAttribute('aria-valuetext', '0.0 oct');
+  await expect(panel.getByRole('slider', { name: 'Decay', exact: true })).toHaveAttribute('aria-valuetext', '300 ms');
   const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 
@@ -192,7 +198,7 @@ test('the Subtractive panel shows labelled controls with units, and an edit save
   await expect(cutoff).not.toHaveAttribute('aria-valuetext', '2.0 kHz');
   await panel.getByRole('group', { name: 'Waveform' }).getByText('Square').click();
   await expect(panel.getByRole('radio', { name: 'Square' })).toBeChecked();
-  await expect(page.getByText('Saved on this device')).toBeVisible();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   const id = new URL(page.url()).pathname.split('/').pop();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
   const bass = Object.values(saved.devices).find((d) => d.type === 'subtractive');
@@ -216,13 +222,19 @@ test('playing an example with Subtractive tracks runs without engine errors', as
   expect(errors).toEqual([]);
 });
 
-test('the FM panel shows ratio, index and index decay with units', async ({ page }) => {
+test('the FM panel shows ratio, fine, index, index decay, ADSR and tuning with units', async ({ page }) => {
   await openExample(page);
-  await page.getByRole('button', { name: 'Track 3: Lead stab, FM synth' }).click();
+  await selectTrack(page, 'Track 3: Lead stab, FM synth');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'FM synth: Lead stab' });
   await expect(panel.getByRole('slider', { name: 'Ratio' })).toHaveAttribute('aria-valuetext', '2.0×');
   await expect(panel.getByRole('slider', { name: 'Index', exact: true })).toHaveAttribute('aria-valuetext', '3');
   await expect(panel.getByRole('slider', { name: 'Index decay' })).toHaveAttribute('aria-valuetext', '500 ms');
+  await expect(panel.getByRole('slider', { name: 'Fine' })).toHaveAttribute('aria-valuetext', '0.00');
+  await expect(panel.getByRole('slider', { name: 'Sustain' })).toHaveAttribute('aria-valuetext', '100 %');
+  const tuning = panel.getByRole('group', { name: 'Tuning' });
+  await expect(tuning.getByRole('slider', { name: 'Octave' })).toHaveAttribute('aria-valuetext', '0 oct');
+  await expect(tuning.getByRole('slider', { name: 'Cents' })).toHaveAttribute('aria-valuetext', '0 cents');
   const ratio = panel.getByRole('slider', { name: 'Ratio' });
   await ratio.focus();
   await page.keyboard.press('ArrowRight');
@@ -231,45 +243,62 @@ test('the FM panel shows ratio, index and index decay with units', async ({ page
   expect(results.violations).toEqual([]);
 });
 
-test('the Additive panel groups eight harmonic sliders with percent values', async ({ page }) => {
+test('the Additive panel groups eight harmonic sliders and shows the envelope and vibrato', async ({ page }) => {
   await openExample(page, 'Ambient');
-  await page.getByRole('button', { name: 'Track 2: Pad, Additive synth' }).click();
+  await selectTrack(page, 'Track 2: Pad, Additive synth');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Additive synth: Pad' });
   const harmonics = panel.getByRole('group', { name: 'Harmonics' });
   await expect(harmonics.getByRole('slider')).toHaveCount(8);
   await expect(harmonics.getByRole('slider', { name: 'Harmonic 1' })).toHaveAttribute('aria-valuetext', '100 %');
   await expect(harmonics.getByRole('slider', { name: 'Harmonic 2' })).toHaveAttribute('aria-valuetext', '50 %');
   await expect(panel.getByRole('slider', { name: 'Release' })).toHaveAttribute('aria-valuetext', '500 ms');
+  await expect(panel.getByRole('slider', { name: 'Decay', exact: true })).toHaveAttribute('aria-valuetext', '500 ms');
+  await expect(panel.getByRole('slider', { name: 'Vibrato rate' })).toHaveAttribute('aria-valuetext', '5 Hz');
+  const vibrato = panel.getByRole('slider', { name: 'Vibrato', exact: true });
+  await expect(vibrato).toHaveAttribute('aria-valuetext', '0 cents');
+  await vibrato.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(vibrato).toHaveAttribute('aria-valuetext', '1 cents');
   const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
-test('the Pluck panel shows damping, brightness and decay', async ({ page }) => {
+test('the Pluck panel shows damping, brightness, pick position, decay and release', async ({ page }) => {
   await openExample(page, 'Pluck melody');
-  await page.getByRole('button', { name: 'Track 1: Pluck lead, Pluck synth' }).click();
+  await selectTrack(page, 'Track 1: Pluck lead, Pluck synth');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Pluck synth: Pluck lead' });
   await expect(panel.getByRole('slider', { name: 'Damping' })).toHaveAttribute('aria-valuetext', '50 %');
   await expect(panel.getByRole('slider', { name: 'Brightness' })).toHaveAttribute('aria-valuetext', '70 %');
   await expect(panel.getByRole('slider', { name: 'Decay (T60)' })).toHaveAttribute('aria-valuetext', '2.00 s');
+  await expect(panel.getByRole('slider', { name: 'Pick position' })).toHaveAttribute('aria-valuetext', '0 %');
+  await expect(panel.getByRole('slider', { name: 'Release' })).toHaveAttribute('aria-valuetext', '100 ms');
   const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
-test('the Granular panel shows source, grain size, density and spray', async ({ page }) => {
+test('the Granular panel shows source, position, grain size, density, spray, pitch spread and envelope', async ({ page }) => {
   await openExample(page, 'Ambient');
-  await page.getByRole('button', { name: 'Track 1: Texture, Granular synth' }).click();
+  await selectTrack(page, 'Track 1: Texture, Granular synth');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Granular synth: Texture' });
   await expect(panel.getByRole('group', { name: 'Source' }).getByRole('radio', { name: 'Saw' })).toBeChecked();
   await expect(panel.getByRole('slider', { name: 'Grain size' })).toHaveAttribute('aria-valuetext', '60 ms');
   await expect(panel.getByRole('slider', { name: 'Density' })).toHaveAttribute('aria-valuetext', '20.0 grains/s');
   await expect(panel.getByRole('slider', { name: 'Spray' })).toHaveAttribute('aria-valuetext', '20 %');
+  await expect(panel.getByRole('group', { name: 'Source' }).getByRole('radio')).toHaveCount(4);
+  await expect(panel.getByRole('slider', { name: 'Position' })).toHaveAttribute('aria-valuetext', '50 %');
+  await expect(panel.getByRole('slider', { name: 'Pitch spread' })).toHaveAttribute('aria-valuetext', '0 cents');
+  await expect(panel.getByRole('slider', { name: 'Attack' })).toHaveAttribute('aria-valuetext', '50 ms');
   const results = await new AxeBuilder({ page }).include(INSTRUMENT_PANEL).analyze();
   expect(results.violations).toEqual([]);
 });
 
 test('the drum machine panel: a voice selector with five voice controls and three kit controls', async ({ page }) => {
   await openExample(page);
-  await page.getByRole('button', { name: 'Track 1: Drums, Drum machine' }).click();
+  await selectTrack(page, 'Track 1: Drums, Drum machine');
+  await openTab(page, 'Devices');
   const panel = page.getByRole('region', { name: 'Drum machine: Drums' });
   const voice = panel.getByRole('combobox', { name: 'Voice' });
   await expect(voice).toHaveValue('kick');
@@ -295,7 +324,7 @@ test('the drum machine panel: a voice selector with five voice controls and thre
   await pan.focus();
   for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowLeft');
   await expect(pan).toHaveAttribute('aria-valuetext', 'L20');
-  await expect(page.getByText('Saved on this device')).toBeVisible();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
 });
 
 test('the Beat example plays with every instrument without engine errors', async ({ page }) => {
@@ -339,6 +368,7 @@ async function masterPeakOver(page, ms) {
 
 test('the mixer: named strips with volume, pan, mute and solo, and a master strip', async ({ page }) => {
   await openExample(page);
+  await openTab(page, 'Mixer');
   const mixer = page.getByRole('region', { name: 'Mixer' });
   await expect(mixer.getByRole('slider', { name: 'Drums volume' })).toHaveAttribute('aria-valuetext', '0.0 dB');
   await expect(mixer.getByRole('slider', { name: 'Bass pan' })).toHaveAttribute('aria-valuetext', 'Centre');
@@ -357,7 +387,7 @@ test('the mixer: named strips with volume, pan, mute and solo, and a master stri
   await expect(pan).toHaveAttribute('aria-valuetext', 'Left 20');
   await page.keyboard.press('Delete');
   await expect(pan).toHaveAttribute('aria-valuetext', 'Centre');
-  await expect(page.getByText('Saved on this device')).toBeVisible();
+  await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   const id = new URL(page.url()).pathname.split('/').pop();
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
   expect(Object.values(saved.tracks).find((t) => t.name === 'Bass').mute).toBe(true);
@@ -408,7 +438,7 @@ test('Escape is Panic outside text fields, including on a focused button', async
 
 test('computer keyboard notes pass through the volume notice and play the selected track', async ({ page }) => {
   await openExample(page, 'Pluck melody');
-  await page.getByRole('button', { name: 'Track 2: Bass, Subtractive synth' }).click();
+  await selectTrack(page, 'Track 2: Bass, Subtractive synth');
   await page.getByRole('heading', { level: 1 }).click();
   await page.keyboard.down('KeyA');
   await expect(notice(page)).toBeVisible();

@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { openTab, selectTrack } from '../support/editor.js';
 
 /*
  * Accessibility pass (assignment-3-scope.md, Labeling and Accessibility):
@@ -96,13 +97,24 @@ test('the editor with every panel open: no axe violations and unique names per l
   const tools = page.getByRole('toolbar', { name: 'Clip commands' });
   await tools.getByLabel('Instrument').selectOption('sampler');
   await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  await axe(page, 'editor, Editor tab');
+  await uniqueNames(page, 'editor, Editor tab');
+  await openTab(page, 'Devices');
   await expect(page.getByRole('region', { name: /^Sampler: / })).toBeVisible();
-  await axe(page, 'editor');
-  await uniqueNames(page, 'editor');
-  await page.getByRole('button', { name: /^Track 2: Bass/ }).click();
+  await axe(page, 'editor, Devices tab');
+  await uniqueNames(page, 'editor, Devices tab');
+  await openTab(page, 'Mixer');
+  await axe(page, 'editor, Mixer tab');
+  await uniqueNames(page, 'editor, Mixer tab');
+  await selectTrack(page, 'Track 2: Bass');
+  await openTab(page, 'Devices');
   await expect(page.getByRole('region', { name: 'Subtractive synth: Bass' })).toBeVisible();
   await axe(page, 'editor, Bass selected');
   await uniqueNames(page, 'editor, Bass selected');
+  await openTab(page, 'Editor');
+  await expect(page.getByRole('region', { name: 'Piano roll: Bass' })).toBeVisible();
+  await axe(page, 'editor, Bass piano roll');
+  await uniqueNames(page, 'editor, Bass piano roll');
 });
 
 test('dialog states: volume notice, export, save preset and delete confirmations', async ({ page }) => {
@@ -120,6 +132,7 @@ test('dialog states: volume notice, export, save preset and delete confirmations
   await axe(page, 'export dialog');
   await page.getByRole('dialog', { name: 'Export WAV' }).getByRole('button', { name: 'Close' }).click();
 
+  await openTab(page, 'Devices');
   await page.getByRole('region', { name: 'Drum machine: Drums' }).getByRole('button', { name: 'Save preset' }).click();
   const save = page.getByRole('dialog', { name: 'Save Drum machine preset' });
   await save.getByRole('button', { name: 'Save preset' }).click();
@@ -162,6 +175,9 @@ test('every primary control is reachable by role and name', async ({ page }) => 
   }
   await expect(page.getByRole('treegrid', { name: 'Tracks and clips' })).toBeVisible();
   await expect(page.getByRole('slider', { name: 'Master volume' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Panels' })).toBeVisible();
+  await openTab(page, 'Devices');
+  await page.getByRole('group', { name: 'Chain' }).getByText('Master').click();
   await expect(page.getByRole('region', { name: 'Master effects' }).getByRole('button', { name: 'Add effect' })).toBeVisible();
 });
 
@@ -205,6 +221,10 @@ test('keyboard only: create a project, play an example through the notice, Panic
   await expect(play).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByRole('status').filter({ hasText: 'All sound stopped' })).toHaveCount(1);
 
+  // The dock's tabs: the selected one is in the tab order; Right Arrow selects Devices.
+  await tabTo(page, page.getByRole('tab', { name: 'Editor' }), 400);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Devices' })).toHaveAttribute('aria-selected', 'true');
   const save = page.getByRole('region', { name: 'Drum machine: Drums' }).getByRole('button', { name: 'Save preset' });
   await tabTo(page, save, 400);
   await page.keyboard.press('Enter');

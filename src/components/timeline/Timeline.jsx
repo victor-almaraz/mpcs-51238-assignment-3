@@ -1,13 +1,15 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
+import Dialog from '@/components/ui/Dialog';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
+import Toggle from '@/components/ui/Toggle';
 import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import useCommands from '@/components/commands/useCommands';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+import { cx } from '@/design-systems/industrial/classes';
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getSource, importFiles } from '@/lib/audio/decode';
@@ -23,18 +25,21 @@ import {
   addInstrumentTrack,
   clipEndTick,
   removeEnvelopePoint,
+  removeTrack,
   setClipGain,
   setEnvelopePoint,
   setFade,
 } from '@/lib/project/clip-commands';
-import { INSTRUMENT_LABELS, ticksPerBar } from '@/lib/project/model';
+import { INSTRUMENT_LABELS, setTrack, ticksPerBar } from '@/lib/project/model';
+import { createClip } from '@/lib/project/midi-commands';
+import { ZOOM_MAX, ZOOM_MIN, stepGrid, stepZoom } from '@/lib/project/view-state';
 import ClipMenu from './ClipMenu';
-import ClipProperties from './ClipProperties';
 import TimelineCanvas from './TimelineCanvas';
 import TimelineTree from './TimelineTree';
 import useTimelineCommands from './useTimelineCommands';
 import {
   EDGE_PX,
+  HEADER_W,
   GAIN_DB_PER_PX,
   RULER_H,
   TAIL_BARS,
@@ -58,7 +63,7 @@ import {
 const gainDb = (g) => (g <= 0 ? -Infinity : gainToDb(g));
 
 const ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.oga';
-/** Snap steps in quarter notes (ARR-04); 'bar' snaps to the bar. */
+/** Snap grids (ARR-04), the order of SNAP_GRIDS; 'bar' snaps to the bar. */
 const SNAP_OPTIONS = [
   { value: 'bar', label: 'Bar' },
   { value: '1', label: '1/4' },
@@ -74,7 +79,7 @@ const INSTRUMENT_OPTIONS = Object.entries(INSTRUMENT_LABELS).map(([value, label]
  * technology. Pointer and keys call the same commands. The edit cursor is the
  * playhead while stopped; selection is saved with the working state.
  */
-export default function Timeline({ project, view, onViewChange, onEdit, readOnly, loading }) {
+export default function Timeline({ project, view, onViewChange, onEdit, readOnly, loading, onOpenProperties }) {
   const engine = getEngine();
   const meter = useMemo(() => new MeterMap(project.meter), [project.meter]);
   const { numerator, denominator } = project.meter[0];
@@ -93,15 +98,24 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     setGhostState(g);
   };
   const [newInstrument, setNewInstrument] = useState('subtractive');
-  const [snap, setSnap] = useState('1');
   const [menu, setMenu] = useState(null); // { clipId, x, y, returnFocus }
-  const stepTicks = snap === 'bar' ? barTicks : Number(snap) * PPQ;
+  const [doomedTrackId, setDoomedTrackId] = useState(null); // a track with clips awaiting confirmation
+  const cancelDeleteRef = useRef(null);
+  // Keyboard nudges always step by the grid; pointer drags follow it while snap is on.
+  const stepTicks = view.snap === 'bar' ? barTicks : Number(view.snap) * PPQ;
+  const snapTick = (t, free) => (free || !view.snapOn ? t : Math.round(t / stepTicks) * stepTicks);
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
-  const nameRef = useRef(null);
+  const contentRef = useRef(null);
+  const canvasRef = useRef(null);
+  const scrollSave = useRef(0);
   const drag = useRef(null);
 
-  const setSelection = (ids) => onViewChange({ selectedClipIds: ids });
+  // Selecting clips also selects the last one's track, so the dock shows that clip.
+  const setSelection = (ids) => {
+    const last = project.clips[ids[ids.length - 1]];
+    onViewChange(last ? { selectedClipIds: ids, selectedTrackId: last.trackId } : { selectedClipIds: ids });
+  };
   const commands = useTimelineCommands({
     project,
     rowIds,
@@ -115,7 +129,6 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     readOnly,
   });
   const statusFor = (clip) => sourceStatus(clip.sourceId, getSource, loading);
-  const primary = project.clips[selection[selection.length - 1]] ?? null;
   const joinState = commands.joinPair(project);
   const hasClips = Object.keys(project.clips).length > 0;
   const showJoin = selection.length > 0;
@@ -125,13 +138,30 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     { id: 'timeline.add-audio', group: 'Timeline', label: 'Add audio file…', run: () => fileRef.current?.click(), enabled: () => editable() && !importing },
     { id: 'timeline.add-audio-track', group: 'Timeline', label: 'Add audio track', run: () => addTrack(null), enabled: editable },
     { id: 'timeline.add-instrument-track', group: 'Timeline', label: `Add instrument track (${INSTRUMENT_LABELS[newInstrument]})`, run: () => addTrack(newInstrument), enabled: editable },
-    { id: 'timeline.split', group: 'Clip', label: 'Split at edit cursor', keys: 'Mod+E', run: () => commands.split(view.selectedTrackId), enabled: () => editable() && hasClips },
-    { id: 'timeline.join', group: 'Clip', label: 'Join clips', keys: 'Mod+J', run: () => commands.join(), enabled: () => editable() && hasClips },
-    { id: 'timeline.duplicate', group: 'Clip', label: 'Duplicate clip', keys: 'Mod+D', run: () => commands.duplicate(), enabled: () => editable() && selection.length > 0 },
+    { id: 'timeline.split', group: 'Clip', label: 'Split at edit cursor', keys: 'Mod+E', global: true, run: () => commands.split(view.selectedTrackId), enabled: () => editable() && hasClips },
+    { id: 'timeline.join', group: 'Clip', label: 'Join clips', keys: 'Mod+J', global: true, run: () => commands.join(), enabled: () => editable() && hasClips },
+    { id: 'timeline.duplicate', group: 'Clip', label: 'Duplicate clip', keys: 'Mod+D', global: true, run: () => commands.duplicate(), enabled: () => editable() && selection.length > 0 },
     { id: 'timeline.delete', group: 'Clip', label: 'Delete clip', keys: 'Delete', run: () => commands.remove(), enabled: () => editable() && selection.length > 0 },
     { id: 'timeline.select-all', group: 'Clip', label: 'Select all clips', keys: 'Mod+A', run: () => setSelection(Object.keys(project.clips)), enabled: () => hasClips },
     { id: 'timeline.focus', group: 'Go to', label: 'Tracks and clips', run: focusTree },
+    {
+      id: 'timeline.delete-track',
+      group: 'Timeline',
+      label: project.tracks[view.selectedTrackId] ? `Delete track ${project.tracks[view.selectedTrackId].name}` : 'Delete track',
+      run: () => deleteTrack(view.selectedTrackId),
+      enabled: () => editable() && Boolean(project.tracks[view.selectedTrackId]),
+    },
+    { id: 'timeline.snap', group: 'Timeline', label: view.snapOn ? 'Turn snap off' : 'Turn snap on', keys: 'G', global: true, run: () => setSnap({ snapOn: !view.snapOn }) },
+    { id: 'timeline.grid-finer', group: 'Timeline', label: 'Finer grid', keys: '+', global: true, run: () => setSnap({ snap: stepGrid(view.snap, 1) }), enabled: () => view.snap !== stepGrid(view.snap, 1) },
+    { id: 'timeline.grid-coarser', group: 'Timeline', label: 'Coarser grid', keys: '-', global: true, run: () => setSnap({ snap: stepGrid(view.snap, -1) }), enabled: () => view.snap !== stepGrid(view.snap, -1) },
   ]);
+
+  /** Changes the snap grid or toggle (ARR-04) and announces the result: "Snap: 1/16", "Snap off". */
+  function setSnap(changes) {
+    const next = { snap: view.snap, snapOn: view.snapOn, ...changes };
+    onViewChange(changes);
+    announce(next.snapOn ? `Snap: ${SNAP_OPTIONS.find((o) => o.value === next.snap).label}` : 'Snap off');
+  }
 
   function setCursor(tick, say = true) {
     const t = Math.max(0, tick);
@@ -178,14 +208,49 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     }
   }
 
+  /**
+   * Adds an audio track, or an instrument track of `type` with a four-bar MIDI
+   * clip open in the piano roll and focus on its first cell (ONB-02).
+   */
   function addTrack(type) {
-    const added = type ? addInstrumentTrack(commands.docRef.current, type) : addAudioTrack(commands.docRef.current);
-    if (!added.ok) {
-      announce(added.error.message);
+    if (!type) {
+      const added = addAudioTrack(commands.docRef.current);
+      if (!added.ok) return announce(added.error.message);
+      commands.commit(added.doc, `Added ${added.doc.tracks[added.trackId].name}`);
+      onViewChange({ selectedTrackId: added.trackId });
       return;
     }
-    commands.commit(added.doc, `Added ${added.doc.tracks[added.trackId].name}`);
-    onViewChange({ selectedTrackId: added.trackId });
+    const added = addInstrumentTrack(commands.docRef.current, type);
+    if (!added.ok) return announce(added.error.message);
+    const clip = createClip(added.doc, added.trackId);
+    const doc = clip.ok ? clip.doc : added.doc;
+    commands.commit(doc, clip.ok ? `${INSTRUMENT_LABELS[type]} track added, clip open in piano roll` : `Added ${doc.tracks[added.trackId].name}`);
+    onViewChange({
+      selectedTrackId: added.trackId,
+      selectedClipIds: clip.ok ? [clip.clipId] : [],
+      panelClipId: clip.ok ? clip.clipId : null,
+      openPanel: 'pianoroll',
+      dock: 'editor',
+    });
+    setTimeout(() => document.querySelector('[role="grid"][aria-label="Notes"] [tabindex="0"]')?.focus(), 50);
+  }
+
+  /** Deletes track `trackId`; one with clips asks first, since deletion cannot be undone. */
+  function deleteTrack(trackId, confirmed = false) {
+    const track = commands.docRef.current.tracks[trackId];
+    if (!track) return;
+    if (track.clipIds.length > 0 && !confirmed) {
+      setDoomedTrackId(trackId);
+      return;
+    }
+    setDoomedTrackId(null);
+    const removed = removeTrack(commands.docRef.current, trackId);
+    if (!removed.ok) return announce(removed.error.message);
+    const i = rowIds.indexOf(trackId);
+    const nextId = rowIds[i + 1] ?? rowIds[i - 1] ?? null;
+    commands.commit(removed.doc, `Deleted ${track.name}`);
+    onViewChange({ selectedTrackId: nextId, selectedClipIds: selection.filter((id) => removed.doc.clips[id]) });
+    setTimeout(() => (nextId ? focusTree() : document.querySelector('section[aria-label="No tracks"] button')?.focus()), 50);
   }
 
   /** Opens the clip menu for `clip` at viewport point x, y; focus returns to `returnFocus`. */
@@ -208,7 +273,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           commands.commit({ ...commands.docRef.current, clips: { ...commands.docRef.current.clips, [clip.id]: { ...latest, muted: !latest.muted } } }, `${latest.name} ${latest.muted ? 'unmuted' : 'muted'}`);
         },
       },
-      { label: 'Rename clip…', run: () => setTimeout(() => document.getElementById(`clip-${clip.id}-name`)?.focus(), 0) },
+      { label: 'Rename clip…', run: () => onOpenProperties('name') },
       { label: 'Delete clip', run: () => commands.remove([clip.id]) },
     ];
   }
@@ -216,6 +281,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const clipRow = (id) => document.querySelector(`[role="treegrid"] [data-clip-id="${id}"]`);
 
   function onContextMenu(e) {
+    if (!onTimeline(e)) return;
     const { x, row } = pointerPosition(e);
     const trackId = rowIds[row];
     const hit = trackId ? clipAt(project, project.tracks[trackId], xToTick(x, view.zoom)) : null;
@@ -224,11 +290,39 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     openMenu(hit, e.clientX, e.clientY, clipRow(hit.id));
   }
 
+  /** Content coordinates of a pointer event: x along the timeline (scroll included), y from the ruler's top. */
   function pointerPosition(e) {
+    const c = canvasRef.current.getBoundingClientRect();
+    const y = e.clientY - c.top;
+    return { x: e.clientX - c.left + scrollRef.current.scrollLeft, y, row: Math.floor((y - RULER_H) / TRACK_H), inside: e.clientX >= c.left };
+  }
+
+  /** Events from the track headers, or left of the canvas, are not timeline edits. */
+  const onTimeline = (e) => !e.target.closest?.('[data-track-header]') && pointerPosition(e).inside;
+
+  // Track headers and the canvas stay put while the arrangement scrolls; the position is saved with the view.
+  function onScroll(e) {
+    const el = e.currentTarget;
+    contentRef.current?.style.setProperty('--sx', `${el.scrollLeft}px`);
+    clearTimeout(scrollSave.current);
+    scrollSave.current = setTimeout(() => onViewChange({ scrollX: el.scrollLeft, scrollY: el.scrollTop }), 250);
+  }
+  useEffect(() => {
     const el = scrollRef.current;
-    const rect = el.getBoundingClientRect();
-    const y = e.clientY - rect.top + el.scrollTop;
-    return { x: e.clientX - rect.left + el.scrollLeft, y, row: Math.floor((y - RULER_H) / TRACK_H) };
+    if (!el) return undefined;
+    el.scrollLeft = view.scrollX;
+    el.scrollTop = view.scrollY;
+    contentRef.current?.style.setProperty('--sx', `${el.scrollLeft}px`);
+    return () => clearTimeout(scrollSave.current);
+    // Restored once, when the project opens (RET-02).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onTrackChange(trackId, changes) {
+    const doc = commands.docRef.current;
+    const t = doc.tracks[trackId];
+    const said = 'mute' in changes ? `${t.name} ${changes.mute ? 'muted' : 'unmuted'}` : `${t.name} ${changes.solo ? 'soloed' : 'unsoloed'}`;
+    commands.commit(setTrack(doc, trackId, changes), said);
   }
 
   /** The clip under a pointer position, with its row and box, or null. */
@@ -239,7 +333,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   }
 
   function onPointerDown(e) {
-    if (e.button !== 0 || readOnly) return;
+    if (e.button !== 0 || readOnly || !onTimeline(e)) return;
     const pos = pointerPosition(e);
     const { x, y, row } = pos;
     const mod = e.ctrlKey || e.metaKey;
@@ -301,7 +395,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     } else {
       const raw = Math.round((x - d.x0) / pxPerTick(view.zoom));
       // Alt while dragging bypasses snap (ARR-04).
-      const dTick = e.altKey ? raw : Math.round(raw / stepTicks) * stepTicks;
+      const dTick = snapTick(raw, e.altKey);
       setGhost({ clipIds: d.clipIds, mode: d.mode, dTick, dRow: d.mode === 'move' ? row - d.row0 : 0 });
     }
   }
@@ -331,7 +425,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       if (!g) {
         const t = xToTick(pointerPosition(e).x, view.zoom);
         setSelection([]);
-        setCursor(d.altKey ? t : Math.round(t / stepTicks) * stepTicks);
+        setCursor(snapTick(t, d.altKey));
         return;
       }
       const found = clipsInMarquee(g);
@@ -362,7 +456,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
 
   /** Double-click on a selected audio clip adds an envelope point there; on a point, removes it (ARR-05). */
   function onDoubleClick(e) {
-    if (readOnly) return;
+    if (readOnly || !onTimeline(e)) return;
     const pos = pointerPosition(e);
     const hit = hitAt(pos);
     if (!hit || hit.clip.kind !== 'audio' || !selection.includes(hit.clip.id)) return;
@@ -380,45 +474,77 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
 
   const width = tickToX(Math.max(contentEnd(project), editCursor) + TAIL_BARS * barTicks, view.zoom);
 
+  const contentHeight = RULER_H + Math.max(1, rowIds.length) * TRACK_H;
+  const small = 'min-h-7 px-2 text-xs';
+
   return (
-    <section aria-labelledby="studio-timeline" className="flex flex-col gap-2">
-      <h2 id="studio-timeline" className={sectionHeading}>
+    <section aria-labelledby="studio-timeline" className="flex min-h-0 flex-1 flex-col">
+      <h2 id="studio-timeline" className="sr-only">
         Timeline
       </h2>
-      <Toolbar label="Clip commands" className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => fileRef.current?.click()} disabled={readOnly || importing}>
-          {importing ? 'Adding audio…' : 'Add audio file'}
-        </Button>
-        <Button onClick={() => addTrack(null)} disabled={readOnly}>
-          Add audio track
-        </Button>
+      <Toolbar label="Clip commands" className="flex items-center gap-2 overflow-x-auto border-b border-border bg-surface px-3 py-1 [&>*]:shrink-0">
         <Select
           id="timeline-new-instrument"
           label="Instrument"
+          labelClassName="w-auto"
+          className="w-auto shrink-0"
           value={newInstrument}
           options={INSTRUMENT_OPTIONS}
           disabled={readOnly}
           onChange={setNewInstrument}
         />
-        <Button onClick={() => addTrack(newInstrument)} disabled={readOnly}>
+        <Button size="sm" onClick={() => addTrack(newInstrument)} disabled={readOnly} data-help="Adds a track playing the chosen instrument.">
           Add instrument track
         </Button>
-        <Select id="timeline-snap" label="Snap" value={snap} options={SNAP_OPTIONS} onChange={(v) => {
-          setSnap(v);
-          announce(`Snap: ${SNAP_OPTIONS.find((o) => o.value === v).label}`);
-        }} />
-        <Button onClick={() => commands.split(view.selectedTrackId)} disabled={readOnly || !hasClips}>
+        <Button size="sm" onClick={() => addTrack(null)} disabled={readOnly} data-help="Adds an empty audio track for audio clips.">
+          Add audio track
+        </Button>
+        <Button size="sm" onClick={() => fileRef.current?.click()} disabled={readOnly || importing} data-help="Adds WAV, MP3, M4A, FLAC or OGG files as clips at the edit cursor.">
+          {importing ? 'Adding audio…' : 'Add audio file'}
+        </Button>
+        <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+        <Toggle size="sm" pressed={view.snapOn} onClick={() => setSnap({ snapOn: !view.snapOn })} data-help="Snap (G): drags land on the grid; hold Alt while dragging to place freely.">
+          Snap
+        </Toggle>
+        <Select
+          id="timeline-snap"
+          label="Grid"
+          labelClassName="w-auto"
+          className="w-auto shrink-0"
+          value={view.snap}
+          options={SNAP_OPTIONS}
+          onChange={(v) => setSnap({ snap: v })}
+          data-help="Grid (+ and −): the snap step for drags and keyboard nudges."
+        />
+        <Button size="sm" onClick={() => onViewChange({ zoom: stepZoom(view.zoom, -1) })} disabled={view.zoom <= ZOOM_MIN} data-help="Zoom out (Alt+−).">
+          Zoom out
+        </Button>
+        <output aria-live="polite" className="w-20 shrink-0 text-center text-xs tabular-nums">
+          Zoom {Math.round(view.zoom * 100)}%
+        </output>
+        <Button size="sm" onClick={() => onViewChange({ zoom: stepZoom(view.zoom, 1) })} disabled={view.zoom >= ZOOM_MAX} data-help="Zoom in (Alt+=).">
+          Zoom in
+        </Button>
+        <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+        <Button size="sm" onClick={() => commands.split(view.selectedTrackId)} disabled={readOnly || !hasClips} data-help="Split (Ctrl/Cmd+E): cuts the selected clips at the edit cursor.">
           Split at edit cursor
         </Button>
-        <Button onClick={commands.join} disabled={readOnly || !hasClips} aria-describedby={showJoin && joinState.reason ? 'timeline-join-reason' : undefined}>
+        <Button
+          size="sm"
+          onClick={commands.join}
+          disabled={readOnly || !hasClips}
+          aria-describedby={showJoin && joinState.reason ? 'timeline-join-reason' : undefined}
+          data-help="Join (Ctrl/Cmd+J): joins touching clips of one recording."
+        >
           Join clips
         </Button>
-        <Button onClick={commands.duplicate} disabled={readOnly || selection.length === 0}>
+        <Button size="sm" onClick={commands.duplicate} disabled={readOnly || selection.length === 0} data-help="Duplicate (Ctrl/Cmd+D): copies the selected clips after themselves.">
           Duplicate clip
         </Button>
-        <Button onClick={commands.remove} disabled={readOnly || selection.length === 0}>
+        <Button size="sm" onClick={commands.remove} disabled={readOnly || selection.length === 0} data-help="Delete: removes the selected clips.">
           Delete clip
         </Button>
+        <p className={cx(small, 'shrink-0 whitespace-nowrap')}>Edit cursor: {barText(editCursor, meter)}</p>
       </Toolbar>
       <input
         ref={fileRef}
@@ -434,15 +560,18 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           importAudio(files);
         }}
       />
-      {showJoin ? (
-        <p id="timeline-join-reason" className="text-sm text-muted">
-          {joinState.reason ? `Join: ${joinState.reason}` : 'Join: the selected clips can be joined.'}
-        </p>
+      {showJoin || results.length > 0 ? (
+        <div className="flex flex-wrap items-start gap-x-4 border-b border-border bg-surface-2 px-3 py-1 text-xs">
+          {showJoin ? (
+            <p id="timeline-join-reason" className="text-muted">
+              {joinState.reason ? `Join: ${joinState.reason}` : 'Join: the selected clips can be joined.'}
+            </p>
+          ) : null}
+        </div>
       ) : null}
-      <p className="text-sm">Edit cursor: {barText(editCursor, meter)}</p>
-      <StatusRegion aria-label="Import results" className="text-sm">
+      <StatusRegion aria-label="Import results" className="px-3 text-xs">
         {results.length > 0 ? (
-          <ul>
+          <ul className="flex flex-col py-1">
             {results.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
@@ -452,8 +581,9 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       <StatusRegion visuallyHidden>{announcement}</StatusRegion>
       <div
         ref={scrollRef}
-        className="relative overflow-x-auto overflow-y-hidden rounded-ds border border-border-strong"
-        style={{ height: RULER_H + Math.max(1, rowIds.length) * TRACK_H + 16, touchAction: 'pan-y' }}
+        className="relative min-h-0 flex-1 overflow-auto bg-surface"
+        style={{ touchAction: 'pan-y' }}
+        onScroll={onScroll}
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
@@ -464,34 +594,64 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           setGhost(null);
         }}
       >
-        <TimelineCanvas
-          project={project}
-          rowIds={rowIds}
-          zoom={view.zoom}
-          meter={meter}
-          selected={new Set(selection)}
-          ghost={ghost}
-          editCursor={editCursor}
-          scrollRef={scrollRef}
-        />
-        <div aria-hidden="true" style={{ width, height: 1 }} />
+        <div ref={contentRef} className="relative" style={{ width: HEADER_W + width, height: contentHeight }}>
+          {rowIds.length === 0 ? (
+            <section
+              aria-label="No tracks"
+              className="absolute inset-x-0 z-10 flex items-center gap-3 px-4 py-6"
+              style={{ top: RULER_H, transform: 'translateX(var(--sx, 0px))' }}
+            >
+              <p className="text-sm">No tracks.</p>
+              <Button size="sm" variant="primary" onClick={() => addTrack(newInstrument)} disabled={readOnly}>
+                Add instrument track
+              </Button>
+              <Button size="sm" onClick={() => fileRef.current?.click()} disabled={readOnly || importing}>
+                Add audio file
+              </Button>
+            </section>
+          ) : null}
+          <div
+            aria-hidden="true"
+            className="absolute top-0 left-0 z-20 flex items-center border-r border-b border-border-strong bg-surface-2 px-2 text-xs font-bold text-muted uppercase"
+            style={{ width: HEADER_W, height: RULER_H, transform: 'translateX(var(--sx, 0px))' }}
+          >
+            Tracks
+          </div>
+          <TimelineCanvas
+            canvasRef={canvasRef}
+            project={project}
+            rowIds={rowIds}
+            zoom={view.zoom}
+            meter={meter}
+            selected={new Set(selection)}
+            ghost={ghost}
+            editCursor={editCursor}
+            scrollRef={scrollRef}
+          />
+          <TimelineTree
+            project={project}
+            rowIds={rowIds}
+            meter={meter}
+            zoom={view.zoom}
+            selection={selection}
+            setSelection={setSelection}
+            selectedTrackId={view.selectedTrackId}
+            onSelectTrack={(id) => onViewChange({ selectedTrackId: id })}
+            onDeleteTrack={(id) => deleteTrack(id)}
+            onTrackChange={onTrackChange}
+            statusFor={statusFor}
+            commands={commands}
+            editCursor={editCursor}
+            onCursorStep={stepCursor}
+            onOpenProperties={() => onOpenProperties('name')}
+            readOnly={readOnly}
+            onClipMenu={(clip, el) => {
+              const r = el.getBoundingClientRect();
+              openMenu(clip, r.left + 24, r.bottom, el);
+            }}
+          />
+        </div>
       </div>
-      <TimelineTree
-        project={project}
-        rowIds={rowIds}
-        meter={meter}
-        selection={selection}
-        setSelection={setSelection}
-        statusFor={statusFor}
-        commands={commands}
-        editCursor={editCursor}
-        onCursorStep={stepCursor}
-        onOpenProperties={() => nameRef.current?.focus()}
-        onClipMenu={(clip, el) => {
-          const r = el.getBoundingClientRect();
-          openMenu(clip, r.left + 24, r.bottom, el);
-        }}
-      />
       {menu && project.clips[menu.clipId] ? (
         <ClipMenu
           label={`Clip actions: ${project.clips[menu.clipId].name}`}
@@ -502,18 +662,26 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
           onClose={() => setMenu(null)}
         />
       ) : null}
-      {primary ? (
-        <ClipProperties
-          key={primary.id}
-          project={project}
-          clip={primary}
-          status={statusFor(primary)}
-          editCursor={editCursor}
-          onEdit={(next) => commands.commit(next)}
-          readOnly={readOnly}
-          nameRef={nameRef}
-        />
-      ) : null}
+      <Dialog
+        open={Boolean(project.tracks[doomedTrackId])}
+        onClose={() => setDoomedTrackId(null)}
+        title={project.tracks[doomedTrackId] ? `Delete ${project.tracks[doomedTrackId].name}?` : 'Delete track?'}
+        initialFocusRef={cancelDeleteRef}
+        actions={
+          <>
+            <Button ref={cancelDeleteRef} onClick={() => setDoomedTrackId(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => deleteTrack(doomedTrackId, true)}>
+              Delete track
+            </Button>
+          </>
+        }
+      >
+        <p>
+          The track, its {project.tracks[doomedTrackId]?.clipIds.length === 1 ? 'clip' : `${project.tracks[doomedTrackId]?.clipIds.length ?? 0} clips`} and its devices are removed. This cannot be undone.
+        </p>
+      </Dialog>
     </section>
   );
 }

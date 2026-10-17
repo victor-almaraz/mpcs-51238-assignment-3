@@ -29,12 +29,11 @@ test('an example opens as an unsaved copy, stopped, and saves nothing', async ({
   await expect(page.getByText('Copy of example — saved on first edit')).toBeVisible();
   await expect(page.getByText('Stopped')).toBeVisible();
   await expect(page.getByText('Press Play to hear this example')).toBeVisible();
-  const tracks = page.getByRole('region', { name: 'Tracks' }).getByRole('listitem');
-  await expect(tracks).toHaveText([
-    'Track 1: Drums, Drum machine',
-    'Track 2: Bass, Subtractive synth',
-    'Track 3: Lead stab, FM synth',
-  ]);
+  const tracks = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]');
+  await expect(tracks).toHaveCount(3);
+  await expect(tracks.nth(0)).toHaveAccessibleName(/^Track 1: Drums, Drum machine/);
+  await expect(tracks.nth(1)).toHaveAccessibleName(/^Track 2: Bass, Subtractive synth/);
+  await expect(tracks.nth(2)).toHaveAccessibleName(/^Track 3: Lead stab, FM synth/);
   expect(await wrackKeys(page)).toEqual([]);
 
   await page.goto('/');
@@ -50,7 +49,7 @@ test('every example opens', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: `Open ${title}` }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${title} (copy)`);
-    await expect(page.getByRole('region', { name: 'Tracks' }).getByRole('listitem').first()).toHaveText(firstTrack);
+    await expect(page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]').first()).toHaveAccessibleName(new RegExp(`^${firstTrack}`));
   }
 });
 

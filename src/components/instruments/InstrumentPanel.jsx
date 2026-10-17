@@ -11,6 +11,7 @@ import { getSource } from '@/lib/audio/decode';
 import { applyPreset } from '@/lib/presets/store';
 import { setSamplerSource } from '@/lib/project/clip-commands';
 import DrumMachinePanel from './DrumMachinePanel';
+import GranularSource from './GranularSource';
 import ParamControl from './ParamControl';
 
 /** Consecutive defs sharing a `group` become one { group, defs } item; others are { def }. */
@@ -75,6 +76,9 @@ export default function InstrumentPanel({ project, track, device, onParamChange,
               control(item.def)
             ),
           )}
+          {device.type === 'granular' && entry.params[0].options[clampParam(entry.params[0], device.params.source)] === 'sample' ? (
+            <GranularSource project={project} device={device} onEdit={onEdit} loading={loading} />
+          ) : null}
         </fieldset>
       ) : (
         <p className="text-sm text-muted">This instrument has no controls yet.</p>

@@ -11,18 +11,28 @@ const LABELS = {
   waveform: 'Waveform',
   cutoff: 'Cutoff',
   resonance: 'Resonance',
+  envAmount: 'Filter env',
   attack: 'Attack',
+  decay: 'Decay',
+  sustain: 'Sustain',
   release: 'Release',
   ratio: 'Ratio',
+  fine: 'Fine',
   index: 'Index',
   indexDecay: 'Index decay',
+  vibratoRate: 'Vibrato rate',
+  vibratoDepth: 'Vibrato',
   damping: 'Damping',
   brightness: 'Brightness',
-  decay: 'Decay (T60)',
+  pickPosition: 'Pick position',
   source: 'Source',
+  position: 'Position',
   grainSize: 'Grain size',
   density: 'Density',
   spray: 'Spray',
+  pitchSpread: 'Pitch spread',
+  octave: 'Octave',
+  cents: 'Cents',
   ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`h${i + 1}`, `Harmonic ${i + 1}`])),
 };
 
@@ -33,6 +43,7 @@ const OPTION_LABELS = {
   triangle: 'Triangle',
   noise: 'Noise',
   chord: 'Chord',
+  sample: 'File',
   off: 'Off',
   on: 'On',
   softclip: 'Soft clip',
@@ -78,7 +89,11 @@ export function formatParam(def, value) {
     case ':1':
       return `${value.toFixed(1)}:1`;
     case 'cents':
-      return minus(`${value > 0 ? '+' : ''}${value.toFixed(1)} cents`);
+    case 'oct':
+      // Signed for shifts (a range below zero); whole numbers for whole steps.
+      return minus(`${value > 0 && def.min < 0 ? '+' : ''}${value.toFixed(def.step >= 1 ? 0 : 1)} ${def.unit}`);
+    case 'offset':
+      return minus(`${value > 0 ? '+' : ''}${value.toFixed(2)}`);
     case '× 48 st':
       return minus(`${value > 0 ? '+' : ''}${Math.round(value * 48)} st`);
     default:
@@ -89,10 +104,10 @@ export function formatParam(def, value) {
 /**
  * One parameter as a labelled control: a radio group for an enum, otherwise a
  * native slider (log and pow3 params move over 1000 positions) with unit value
- * text. `label` overrides the default label for `def.id`.
+ * text. `label` overrides the def's own label and the default label for `def.id`.
  */
 export default function ParamControl({ def, value, onChange, idPrefix, label: labelOverride }) {
-  const label = labelOverride ?? LABELS[def.id] ?? def.id;
+  const label = labelOverride ?? def.label ?? LABELS[def.id] ?? def.id;
   if (def.scale === 'enum') {
     return (
       <RadioGroup

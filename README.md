@@ -296,7 +296,6 @@ The main flow was run in Chromium, Firefox and WebKit with empty profiles agains
 - An empty clip opens with Step input on, so pressing a key adds a note, as the empty-editor hint says.
 - The editor shows the transport, tracks, timeline and piano roll first; live input and view settings come last.
 - The timeline has a bar-number ruler and track names.
-- A Stop button follows Play.
 - Save .wrack file and Load explain what a `.wrack` file is and that edits save in the browser automatically.
 - Each instrument and effect shows its current preset.
 - Split and Join are disabled until the project has clips; effect cards no longer overflow.
@@ -307,14 +306,15 @@ The full results, the feedback and what was not changed are in [`docs/first-run-
 
 | Area | What W-Rack provides |
 |---|---|
+| Editor | One screen without page scrolling: project header, transport, arrangement with track headers, a resizable dock with Editor, Devices and Mixer tabs, and a help strip that describes the control under the pointer or in focus |
 | Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor |
-| MIDI | Piano roll with keyboard note entry, step input, quantize and clip looping; computer-keyboard and Web MIDI live input |
+| MIDI | Piano roll with keyboard note entry, step input, a velocity lane, quantize and clip looping; Add instrument track opens a four-bar clip in the piano roll; computer-keyboard and Web MIDI live input |
 | Audio | Multi-file import, waveform timeline with a bar ruler and a keyboard treegrid, marquee selection, a clip menu (right-click, Shift+F10), split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes, editable by on-clip handles or numeric fields |
 | Effects | EQ, filter, compressor, saturation, distortion (soft clip, hard clip, foldback), delay and reverb in chains of up to eight on every track and the master |
-| Mixer | Track gain, pan, mute and solo; master volume and pan; meters; Panic (`Escape`) |
+| Mixer | Track gain, pan, mute and solo; master volume and pan; meters with peak hold and latched clip indicators; limiter gain reduction; Panic (`Escape`) |
 | Safety | A fixed safety stage after the master: guard, DC blocker, sustained-level duck, −1 dBFS limiter and a 50 ms start fade |
-| Projects | Automatic local saving, restored working state, a personal preset library, `.wrack` archives, WAV export |
-| Commands | A command palette (Ctrl+Shift+P, Cmd+Shift+P on macOS, or the header's Commands button) that searches and runs every command with its shortcut |
+| Projects | Automatic local saving, restored working state, project lists with tempo, time signature, track count and origin, rename and duplicate, a personal preset library with auditions, `.wrack` archives, WAV export with progress, Cancel and Download |
+| Commands | A command palette (Ctrl+K or Ctrl+Shift+P, Cmd on macOS, or the header's Commands button) that searches and runs every command with its shortcut; `?` lists every shortcut; single-key shortcuts for loop (L), metronome (K), snap (G) and grid (+, −) |
 
 All audio runs in one AudioWorklet engine followed by the safety stage; no native Web Audio DSP nodes are used. Implementation details are in [`docs/a3-audio-implementation.md`](docs/a3-audio-implementation.md).
 

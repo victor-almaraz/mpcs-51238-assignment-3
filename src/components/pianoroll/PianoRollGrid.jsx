@@ -16,8 +16,12 @@ import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
 import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, positionText, rowLabel, rowPitches } from './layout';
 import usePianoRollCommands from './usePianoRollCommands';
+import VelocityLane from './VelocityLane';
 
+/** Initial viewport height before the scroller is measured. */
 const VIEW_HEIGHT = 480;
+const PIANO_ROLL_HELP =
+  'Arrow keys move. Enter adds or removes a note; Delete removes it. Alt+arrows move it; Shift+Left and Right change its length; Shift+Up and Down change its velocity. Q quantizes.';
 const GRID_OPTIONS = GRIDS.map((g) => ({ value: String(g.value), label: g.label }));
 const LOOP_OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -94,6 +98,14 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const col = cursor.tick === HEADER ? -1 : Math.min(cols - 1, Math.floor(cursor.tick / grid));
 
   const scroller = useRef(null);
+  // The grid fills its panel, so its visible area follows the panel's size.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const gridRef = useRef(null);
   const focused = useRef(false);
   const drag = useRef(null);
@@ -337,7 +349,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const title = `Piano roll: ${track.name}`;
 
   return (
-    <section aria-labelledby="pianoroll-heading" className="flex flex-col gap-2">
+    <section aria-labelledby="pianoroll-heading" className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       <h2 id="pianoroll-heading" className={sectionHeading}>
         {title}
       </h2>
@@ -368,14 +381,26 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           </Toggle>
         ) : null}
       </Toolbar>
-      <p id="pianoroll-help" className="text-xs text-muted">
-        Arrow keys move. Enter adds or removes a note; Delete removes it. Alt+arrows move it; Shift+Left and Right change
-        its length; Shift+Up and Down change its velocity. Q quantizes.
+      {(clip?.notes.length ?? 0) === 0 ? (
+        <div className="flex flex-wrap items-baseline gap-x-4 text-sm">
+          <p>Press a key or click the grid to add a note.</p>
+          <section aria-labelledby="keyboard-map-heading" className="flex items-baseline gap-2">
+            <h3 id="keyboard-map-heading" className={sectionHeading}>
+              Keyboard map
+            </h3>
+            <p className="text-xs">Keys A to K play the notes C to C. Z and X move the keyboard down or up an octave.</p>
+          </section>
+        </div>
+      ) : null}
+      </div>
+      <p id="pianoroll-help" className="sr-only">
+        {PIANO_ROLL_HELP}
       </p>
       <div
         ref={scroller}
-        className="relative overflow-auto rounded-ds border border-border-strong bg-surface"
-        style={{ height: VIEW_HEIGHT, scrollPaddingLeft: LABEL_W }}
+        data-help={PIANO_ROLL_HELP}
+        className="relative min-h-0 flex-1 overflow-auto rounded-ds border border-border-strong bg-surface"
+        style={{ scrollPaddingLeft: LABEL_W }}
         onScroll={(e) => {
           const el = e.currentTarget;
           setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
@@ -466,6 +491,24 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           </div>
         </div>
       </div>
+      {clip && clip.notes.length > 0 ? (
+        <VelocityLane
+          clip={clip}
+          isDrums={isDrums}
+          meter={meter}
+          grid={grid}
+          cols={cols}
+          scrollX={scroll.scrollX}
+          selectedId={selectedId}
+          onSelect={(id) => {
+            const note = clip.notes.find((n) => n.id === id);
+            setSelectedId(id);
+            if (note) setCursor({ pitch: note.pitch, tick: note.tick });
+          }}
+          commands={commands}
+          readOnly={readOnly}
+        />
+      ) : null}
       <StatusRegion visuallyHidden>{announcement}</StatusRegion>
     </section>
   );

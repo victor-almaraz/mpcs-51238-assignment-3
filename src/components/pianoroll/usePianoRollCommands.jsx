@@ -128,6 +128,19 @@ export default function usePianoRollCommands({
       commit(result, result.ok ? `Velocity ${result.note.velocity}` : undefined);
     },
 
+    /** Sets notes `noteIds` to `velocity` (1–127) in one edit; `say` announces the result. */
+    velocityTo(noteIds, velocity, say = true) {
+      const clip = currentClip();
+      if (readOnly || !clip || noteIds.length === 0) return;
+      let result = { ok: true, doc: docRef.current };
+      for (const id of noteIds) {
+        if (!result.ok) break;
+        result = setVelocity(result.doc, clip.id, id, velocity);
+      }
+      const n = noteIds.length;
+      commit(result, say ? `Velocity ${result.note?.velocity ?? velocity}${n > 1 ? `, ${n} notes` : ''}` : undefined);
+    },
+
     quantize() {
       const clip = currentClip();
       if (readOnly || !clip) return;

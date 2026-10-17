@@ -40,12 +40,12 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
   };
 
   return (
-    <section aria-labelledby="master-strip-heading" className="flex min-w-48 flex-col gap-2 rounded-ds border-2 border-fg bg-surface p-2">
+    <section aria-labelledby="master-strip-heading" className="flex w-80 shrink-0 flex-col gap-2 rounded-ds border-2 border-fg bg-surface p-2">
       <h3 id="master-strip-heading" className={sectionHeading}>
         Master
       </h3>
       <div className="flex items-end gap-2">
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Slider
             id="master-volume"
             label="Master volume"

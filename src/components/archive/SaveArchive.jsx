@@ -27,7 +27,7 @@ export default function SaveArchive({ project, disabled }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const state = archiveState(project, (id) => Boolean(getSource(id)));
-  useCommands([{ id: 'project.save-wrack', group: 'Project', label: 'Save .wrack file', run: () => save(), enabled: () => !disabled && !busy }]);
+  useCommands([{ id: 'project.save-wrack', group: 'Project', label: 'Save .wrack file', keys: 'Mod+S', global: true, run: () => save(), enabled: () => !disabled && !busy }]);
 
   async function save() {
     setBusy(true);
@@ -63,14 +63,14 @@ export default function SaveArchive({ project, disabled }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button onClick={save} disabled={disabled || busy} aria-describedby="save-archive-help">
+      <Button size="sm" onClick={save} disabled={disabled || busy} aria-describedby="save-archive-help" data-help="Save .wrack file (Ctrl/Cmd+S). Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.">
         {busy ? 'Saving file…' : 'Save .wrack file'}
       </Button>
-      <span className="text-sm">{state.saved ? 'Saved to file' : 'Not saved to file'}</span>
-      <p id="save-archive-help" className="basis-full text-sm text-muted">
+      <span className="text-xs whitespace-nowrap">{state.saved ? 'Saved to file' : 'Not saved to file'}</span>
+      <p id="save-archive-help" className="sr-only">
         Edits save in this browser automatically. A .wrack file is a copy of the project and its audio, for backups and other devices.
       </p>
-      <StatusRegion className="text-sm">{message}</StatusRegion>
+      <StatusRegion className="text-xs">{message}</StatusRegion>
       {error ? (
         <p role="alert" className={errorText}>
           {error}

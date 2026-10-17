@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { selectTrack, trackRow } from '../support/editor.js';
 
 const STORAGE_FULL = "This device's browser storage is full. Save a .wrack file, then delete unused projects.";
 
@@ -15,13 +16,13 @@ async function createProject(page, name) {
 const read = (page, key) => page.evaluate((k) => localStorage.getItem(k), key);
 const write = (page, key, value) => page.evaluate(([k, v]) => localStorage.setItem(k, v), [key, value]);
 
-const trackToggle = (page) => page.getByRole('button', { name: 'Track 1: Track 1, Subtractive synth' });
+const trackToggle = (page) => trackRow(page, 'Track 1: Track 1, Subtractive synth');
 
 test('working state is restored after a reload and through Continue; the transport stays stopped', async ({ page }) => {
   const id = await createProject(page, 'Return song');
   const projectBefore = await read(page, `w-rack:v1:project:${id}`);
 
-  await trackToggle(page).click();
+  await selectTrack(page, 'Track 1: Track 1, Subtractive synth');
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await expect(page.getByText('Zoom 400%')).toBeVisible();
@@ -30,14 +31,14 @@ test('working state is restored after a reload and through Continue; the transpo
 
   await page.reload();
   await expect(page.getByText('Zoom 400%')).toBeVisible();
-  await expect(trackToggle(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(trackToggle(page)).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Stopped')).toBeVisible();
 
   await page.goto('/');
   await page.getByRole('region', { name: 'Recent' }).getByRole('link', { name: /^Continue Return song/ }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Return song');
   await expect(page.getByText('Zoom 400%')).toBeVisible();
-  await expect(trackToggle(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(trackToggle(page)).toHaveAttribute('aria-selected', 'true');
 });
 
 test('pending working state is written when the page is hidden', async ({ page }) => {
@@ -52,10 +53,11 @@ test('playhead, loop and open panel are restored from stored working state', asy
   const view = { playhead: 2 * 3840 + 960, loop: { start: 0, end: 7680 }, loopEnabled: true, zoom: 0.5, openPanel: 'pianoroll' };
   await write(page, `w-rack:v1:view:${id}`, JSON.stringify(view));
   await page.reload();
-  await expect(page.getByText('Playhead: bar 3, beat 2')).toBeVisible();
-  await expect(page.getByText('Loop on: bar 1 to bar 3')).toBeVisible();
+  await expect(page.getByTestId('position')).toHaveText('3.2.1');
+  await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Loop' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Zoom 50%')).toBeVisible();
-  await expect(page.getByText('Open panel: Piano roll')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Editor' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' })).toBeVisible();
   await expect(page.getByText('Stopped')).toBeVisible();
 });
 
@@ -72,7 +74,7 @@ test('corrupted working state opens the default view', async ({ page }) => {
   await write(page, `w-rack:v1:view:${id}`, '[[[');
   await page.reload();
   await expect(page.getByText('Zoom 100%')).toBeVisible();
-  await expect(trackToggle(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(trackToggle(page)).toHaveAttribute('aria-selected', 'false');
 });
 
 test('audio clips without loaded audio show "Audio not loaded" and the restore action', async ({ page }) => {
@@ -90,7 +92,7 @@ test('audio clips without loaded audio show "Audio not loaded" and the restore a
   await expect(page.getByRole('treegrid', { name: 'Tracks and clips' }).getByRole('row', { name: /^Clip: Verse take/ })).toHaveText(
     'Clip: Verse take, bar 1 to bar 1 beat 3, Audio not loaded',
   );
-  await expect(page.getByRole('toolbar').getByRole('button', { name: 'Open .wrack file to restore audio' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Missing audio' }).getByRole('button', { name: 'Open .wrack file to restore audio' })).toBeVisible();
 });
 
 test('a quota error while saving working state shows the storage message', async ({ page }) => {

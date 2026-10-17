@@ -1,10 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
-import StatusRegion from '@/components/ui/StatusRegion';
-import Toggle from '@/components/ui/Toggle';
 import Transport, { loopRange } from '@/components/transport/Transport';
 import InstrumentPanel from '@/components/instruments/InstrumentPanel';
 import LiveInputControls from '@/components/input/LiveInputControls';
@@ -12,6 +8,11 @@ import PianoRollGrid from '@/components/pianoroll/PianoRollGrid';
 import MasterStrip from '@/components/mixer/MasterStrip';
 import TrackStrip from '@/components/mixer/TrackStrip';
 import Timeline from '@/components/timeline/Timeline';
+import ClipProperties from '@/components/timeline/ClipProperties';
+import RadioGroup from '@/components/ui/RadioGroup';
+import Dock, { DOCK_MIN } from './Dock';
+import EditorHeader from './EditorHeader';
+import InfoStrip from './InfoStrip';
 import EffectChain from '@/components/effects/EffectChain';
 import OpenArchive from '@/components/archive/OpenArchive';
 import useCommands from '@/components/commands/useCommands';
@@ -25,9 +26,10 @@ import { pruneStoredSources } from '@/lib/audio/source-cleanup';
 import useProjectSources from './useProjectSources';
 import { getEngine } from '@/lib/audio/engine-client';
 import { engineTrackIds } from '@/lib/audio/param-changes';
+import ProjectContext from '@/components/presets/ProjectContext';
 import { METER_FIELDS } from '@/dsp/mixer/meter';
-import { errorText, pageHeading, sectionHeading } from '@/design-systems/industrial/classes';
-import { setDeviceParam, setTrack, ticksPerBar, trackLabel } from '@/lib/project/model';
+import { errorText } from '@/design-systems/industrial/classes';
+import { setDeviceParam, setTrack } from '@/lib/project/model';
 import {
   PROJECT_NEWER,
   SAVE_DELAY_MS,
@@ -49,22 +51,6 @@ import {
   stepZoom,
   subscribeViewSaveState,
 } from '@/lib/project/view-state';
-import { PPQ } from '@/dsp/core/constants';
-
-const PANEL_NAMES = { pianoroll: 'Piano roll', clip: 'Clip view' };
-
-/** "bar 2, beat 3" for a tick position in the project's first meter. */
-function barBeat(tick, meter) {
-  const bar = ticksPerBar(meter.numerator, meter.denominator);
-  const beatTicks = (4 * PPQ) / meter.denominator;
-  return `bar ${Math.floor(tick / bar) + 1}, beat ${Math.floor((tick % bar) / beatTicks) + 1}`;
-}
-
-/** "bar 1 to bar 3" for a loop range; the end bar is exclusive. */
-function barRange({ start, end }, meter) {
-  const bar = ticksPerBar(meter.numerator, meter.denominator);
-  return `bar ${Math.floor(start / bar) + 1} to bar ${Math.ceil(end / bar) + 1}`;
-}
 
 /** Header save status (SAVE-01). */
 function saveStatusText(unsavedCopy, state) {
@@ -75,9 +61,11 @@ function saveStatusText(unsavedCopy, state) {
 }
 
 /**
- * Placeholder editor: project header with save status, restored working state,
- * track selection, zoom and the empty-project hints. Working-state changes save
- * to w-rack:v1:view:<id>; the transport always opens stopped.
+ * The editor workspace, one screen tall: the header (name, save status, file
+ * actions), the transport, banners, the arrangement (track headers and the
+ * timeline), the dock (Editor, Devices and Mixer tabs) and the info strip.
+ * Working-state changes save to w-rack:v1:view:<id>; the transport always
+ * opens stopped.
  * `unsavedCopy` marks an example copy not edited yet; `readOnly` a project
  * saved by a newer build.
  */
@@ -208,172 +196,207 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     engine.setLiveTarget(liveTargetIndex);
   }, [engine, liveTargetIndex]);
 
-  return (
-    <>
-      <div className="flex flex-col gap-2">
-        <h1 className={pageHeading}>{project.name}</h1>
-        <p className="text-sm text-muted">
-          {tempo} BPM · {meter.numerator}/{meter.denominator}
-        </p>
-        <StatusRegion className="text-sm">{saveStatusText(unsavedCopy, saveState)}</StatusRegion>
-        {readOnly ? <p className={errorText}>{PROJECT_NEWER}</p> : null}
-        {faultNotices.length > 0 ? (
-          <ul role="alert" className={errorText}>
-            {faultNotices.map((text, i) => (
-              <li key={i}>
-                <span aria-hidden="true">▲</span> {text}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {failure ? (
-          <p role="alert" className={errorText}>
-            <span aria-hidden="true">▲</span>
-            <span>{failure.error}</span>
-          </p>
-        ) : null}
-      </div>
+  // Lower dock: the active tab is part of the working state; its height follows the window.
+  const rootRef = useRef(null);
+  const [dockHeight, setDockHeight] = useState(360);
+  const [maxDock, setMaxDock] = useState(600);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    let sized = false;
+    const observer = new ResizeObserver(() => {
+      // The arrangement keeps at least 180 px; the dock opens at half the workspace.
+      const max = Math.max(DOCK_MIN, el.clientHeight - 300);
+      setMaxDock(max);
+      if (!sized) setDockHeight(Math.min(max, Math.max(DOCK_MIN, Math.round(el.clientHeight * 0.5))));
+      else setDockHeight((h) => Math.min(h, max));
+      sized = true;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const [chainView, setChainView] = useState('track');
 
-      <div role="toolbar" aria-label="Project" className="flex flex-wrap items-start gap-4">
-        <SaveArchive project={project} disabled={readOnly} />
-        <ExportDialog project={project} loop={loopRange(project, view)} />
-        {anyMissing ? <OpenArchive label="Open .wrack file to restore audio" currentId={project.id} /> : null}
-      </div>
+  // The Editor tab follows the selected track: a selected clip on another track does not hold it.
+  const lastClip = project.clips[view.selectedClipIds[view.selectedClipIds.length - 1]] ?? null;
+  const selectedClip = lastClip && (!view.selectedTrackId || lastClip.trackId === view.selectedTrackId) ? lastClip : null;
+  const statusFor = (clip) => sourceStatus(clip.sourceId, getSource, loading);
+  const missing = audioClips.filter((c) => statusFor(c) === 'Audio not loaded');
 
-      <Transport
+  /** Opens the Editor tab and focuses one of its fields once it renders. */
+  function openProperties(field) {
+    changeView({ dock: 'editor' });
+    setTimeout(() => {
+      const id = view.selectedClipIds[view.selectedClipIds.length - 1];
+      document.getElementById(field === 'name' && id ? `clip-${id}-name` : 'dock-tab-editor')?.focus();
+    }, 50);
+  }
+
+  let editorPanel;
+  if (selectedClip?.kind === 'audio') {
+    editorPanel = (
+      <ClipProperties
+        key={selectedClip.id}
         project={project}
+        clip={selectedClip}
+        status={statusFor(selectedClip)}
+        editCursor={view.playhead}
+        onEdit={edit}
+        readOnly={readOnly}
+      />
+    );
+  } else if (panelDevice) {
+    editorPanel = (
+      <PianoRollGrid
+        key={panelTrackId}
+        project={project}
+        trackId={panelTrackId}
         view={view}
         onViewChange={changeView}
         onEdit={edit}
         readOnly={readOnly}
-        showExampleHint={unsavedCopy}
+        stepInsertRef={stepInsertRef}
       />
+    );
+  } else {
+    editorPanel = <p className="text-sm">Select an instrument track to open its piano roll, or an audio clip to edit its fades, gain and envelope.</p>;
+  }
 
-      <Card as="section" aria-labelledby="studio-tracks">
-        <h2 id="studio-tracks" className={sectionHeading}>
-          Tracks
-        </h2>
-        <ul className="flex flex-col gap-1">
-          {project.trackOrder.map((id, i) => (
-            <li key={id}>
-              <Toggle
-                pressed={view.selectedTrackId === id}
-                onClick={() => changeView({ selectedTrackId: view.selectedTrackId === id ? null : id })}
-                className="justify-start normal-case"
-              >
-                {trackLabel(project, id, i + 1)}
-              </Toggle>
-            </li>
+  const chainTrack = chainTrackId ? project.tracks[chainTrackId] : null;
+  const devicesPanel = (
+    <div className="flex min-h-0 flex-col gap-2">
+      <RadioGroup
+        legend="Chain"
+        options={[
+          { value: 'track', label: chainTrack ? `${chainTrack.name}` : 'Track' },
+          { value: 'master', label: 'Master' },
+        ]}
+        value={chainView}
+        onChange={setChainView}
+        disabled={!chainTrack}
+        className="max-w-md"
+      />
+      {chainView === 'master' || !chainTrack ? (
+        <div className="flex flex-wrap items-start gap-3">
+          <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-3">
+          {panelDevice && chainTrackId === panelTrackId ? (
+            <div className="w-full max-w-xl">
+              <InstrumentPanel
+                project={project}
+                track={panelTrack}
+                device={panelDevice}
+                onEdit={edit}
+                loading={loading}
+                disabled={readOnly}
+                onParamChange={setParam}
+              />
+            </div>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <EffectChain
+              key={`chain-${chainTrackId}`}
+              project={project}
+              trackId={chainTrackId}
+              title={`Effects: ${chainTrack.name}`}
+              onCommand={command}
+              onParam={setParam}
+              disabled={readOnly}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const mixerPanel = (
+    <section aria-labelledby="studio-mixer" className="flex min-h-0 flex-col gap-2">
+      <h2 id="studio-mixer" className="sr-only">
+        Mixer
+      </h2>
+      <div className="flex items-start gap-2 overflow-x-auto">
+        <ul aria-label="Track strips" className="flex gap-2">
+          {mixerTrackIds.map((id, index) => (
+            <TrackStrip
+              key={id}
+              track={project.tracks[id]}
+              readMeter={meterFor(index)}
+              disabled={readOnly}
+              onChange={(changes) => edit(setTrack(projectRef.current, id, changes))}
+            />
           ))}
         </ul>
-        {clips.length > 0 ? null : (
-          <div className="flex flex-col gap-3">
-            <p>Press a key or click the grid to add a note, or add an audio file in the timeline</p>
-            <section aria-labelledby="studio-keyboard-map" className="flex flex-col gap-1">
-              <h3 id="studio-keyboard-map" className={sectionHeading}>
-                Keyboard map
-              </h3>
-              <p className="text-sm">
-                Keys A to K play the notes C to C. Z and X move the keyboard down or up an octave.
+        <MasterStrip
+          volumeDb={engineState.masterVolumeDb}
+          pan={project.tracks[project.masterTrackId].pan}
+          disabled={readOnly}
+          onVolume={(db) => engine.setMasterVolume(db)}
+          onPan={(pan) => edit(setTrack(projectRef.current, project.masterTrackId, { pan }))}
+        />
+      </div>
+    </section>
+  );
+
+  return (
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+      <EditorHeader
+        name={project.name}
+        tempo={tempo}
+        meter={meter}
+        saveStatus={saveStatusText(unsavedCopy, saveState)}
+        readOnly={readOnly}
+        onRename={(name) => edit({ ...projectRef.current, name })}
+        actions={
+          <>
+            <SaveArchive project={project} disabled={readOnly} />
+            <OpenArchive size="sm" inline currentId={project.id} />
+            <ExportDialog project={project} loop={loopRange(project, view)} />
+          </>
+        }
+      />
+
+      <Transport project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} showExampleHint={unsavedCopy} />
+
+      {readOnly || faultNotices.length > 0 || failure || missing.length > 0 ? (
+        <div className="flex shrink-0 flex-col gap-1 border-b border-border-strong bg-warning-bg px-3 py-1.5 text-sm">
+          {readOnly ? <p className={errorText}>{PROJECT_NEWER}</p> : null}
+          {faultNotices.length > 0 ? (
+            <ul role="alert" className={errorText}>
+              {faultNotices.map((text, i) => (
+                <li key={i}>
+                  <span aria-hidden="true">▲</span> {text}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {failure ? (
+            <p role="alert" className={errorText}>
+              <span aria-hidden="true">▲</span>
+              <span>{failure.error}</span>
+            </p>
+          ) : null}
+          {missing.length > 0 ? (
+            <section aria-label="Missing audio" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p>
+                <strong>Audio not loaded</strong> for {missing.map((c) => c.name).join(', ')}.
               </p>
+              <OpenArchive label="Open .wrack file to restore audio" size="sm" inline command={false} currentId={project.id} />
             </section>
-          </div>
-        )}
-      </Card>
-
-      <Timeline project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} loading={loading} />
-
-      {panelDevice ? (
-        <PianoRollGrid
-          key={panelTrackId}
-          project={project}
-          trackId={panelTrackId}
-          view={view}
-          onViewChange={changeView}
-          onEdit={edit}
-          readOnly={readOnly}
-          stepInsertRef={stepInsertRef}
-        />
-      ) : null}
-
-      {panelDevice ? (
-        <InstrumentPanel
-          project={project}
-          track={panelTrack}
-          device={panelDevice}
-          onEdit={edit}
-          loading={loading}
-          disabled={readOnly}
-          onParamChange={setParam}
-        />
-      ) : null}
-
-      {chainTrackId ? (
-        <EffectChain
-          key={`chain-${chainTrackId}`}
-          project={project}
-          trackId={chainTrackId}
-          title={`Effects: ${project.tracks[chainTrackId].name}`}
-          onCommand={command}
-          onParam={setParam}
-          disabled={readOnly}
-        />
-      ) : null}
-
-
-      <section aria-labelledby="studio-mixer" className="flex flex-col gap-2">
-        <h2 id="studio-mixer" className={sectionHeading}>
-          Mixer
-        </h2>
-        <div className="flex flex-wrap items-start gap-2">
-          <ul aria-label="Track strips" className="flex flex-wrap gap-2">
-            {mixerTrackIds.map((id, index) => (
-              <TrackStrip
-                key={id}
-                track={project.tracks[id]}
-                readMeter={meterFor(index)}
-                disabled={readOnly}
-                onChange={(changes) => edit(setTrack(projectRef.current, id, changes))}
-              />
-            ))}
-          </ul>
-          <MasterStrip
-            volumeDb={engineState.masterVolumeDb}
-            pan={project.tracks[project.masterTrackId].pan}
-            disabled={readOnly}
-            onVolume={(db) => engine.setMasterVolume(db)}
-            onPan={(pan) => edit(setTrack(projectRef.current, project.masterTrackId, { pan }))}
-          />
+          ) : null}
         </div>
-      </section>
+      ) : null}
 
-      <EffectChain project={project} trackId={project.masterTrackId} title="Master effects" onCommand={command} onParam={setParam} disabled={readOnly} />
+      <Timeline project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} loading={loading} onOpenProperties={openProperties} />
 
-      <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
+      <Dock tab={view.dock} onTab={(t) => changeView({ dock: t })} height={dockHeight} maxHeight={maxDock} onHeight={setDockHeight}>
+        <ProjectContext value={project}>{view.dock === 'editor' ? editorPanel : view.dock === 'devices' ? devicesPanel : mixerPanel}</ProjectContext>
+      </Dock>
 
-      <section aria-labelledby="studio-view" className="flex flex-col gap-2">
-        <h2 id="studio-view" className={sectionHeading}>
-          View
-        </h2>
-        <p className="text-sm text-muted">Zoom, playhead, loop and the open panel return when this project opens again.</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, -1) })} disabled={view.zoom <= ZOOM_MIN}>
-            Zoom out
-          </Button>
-          <output aria-live="polite" className="min-w-24 text-center tabular-nums">
-            Zoom {Math.round(view.zoom * 100)}%
-          </output>
-          <Button onClick={() => changeView({ zoom: stepZoom(view.zoom, 1) })} disabled={view.zoom >= ZOOM_MAX}>
-            Zoom in
-          </Button>
-        </div>
-        <p>Playhead: {barBeat(view.playhead, meter)} (where playback starts)</p>
-        <p>
-          Loop {view.loopEnabled ? 'on' : 'off'}
-          {view.loop ? `: ${barRange(view.loop, meter)}` : null}
-        </p>
-        <p>Open panel: {view.openPanel ? PANEL_NAMES[view.openPanel] : panelDevice ? PANEL_NAMES.pianoroll : 'none'}</p>
-      </section>
-    </>
+      <InfoStrip rootRef={rootRef}>
+        <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
+      </InfoStrip>
+    </div>
   );
 }

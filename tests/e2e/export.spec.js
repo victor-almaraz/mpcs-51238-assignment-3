@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 /*
- * WAV export (assignment-3-scope.md, Export): two exports of one project hash
- * equal; the peak stays at or below −1 dBFS; headers are 44, 68 and 58 bytes.
+ * WAV export (assignment-3-scope.md, Export; EXP-02): two exports of one
+ * project hash equal; the peak stays at or below −1 dBFS; headers are 44, 68
+ * and 58 bytes; a finished render waits for Download; Cancel discards it.
  * The download path is used in every browser (Chromium's picker cannot be
  * driven headless).
  */
@@ -25,9 +26,11 @@ async function exportWav(page, testInfo, format, name) {
   await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
   const dialog = page.getByRole('dialog', { name: 'Export WAV' });
   await dialog.getByLabel('Format').selectOption({ label: format });
-  const download = page.waitForEvent('download', { timeout: 120_000 });
   await dialog.getByRole('button', { name: 'Export WAV' }).click();
-  await expect(dialog.getByRole('button', { name: 'Exporting…' })).toBeDisabled().catch(() => {});
+  const save = dialog.getByRole('button', { name: /^Download \(\d+(\.\d)? (KB|MB)\)$/ });
+  await expect(save).toBeFocused({ timeout: 120_000 });
+  const download = page.waitForEvent('download');
+  await save.click();
   const file = await download;
   const path = testInfo.outputPath(name);
   await file.saveAs(path);
@@ -69,4 +72,25 @@ test('the export dialog lists silent clips and limits the range', async ({ page 
   await expect(dialog).toContainText(/Length: \d+\.\d s including the tail/);
   await dialog.getByRole('group', { name: 'Range' }).getByText('Loop').click();
   await expect(dialog.getByRole('radio', { name: 'Loop' })).toBeChecked();
+});
+
+test('Cancel stops waiting for a render and discards it; nothing downloads by itself', async ({ page }) => {
+  await openExample(page);
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  await page.getByRole('toolbar', { name: 'Project' }).getByRole('button', { name: 'Export' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Export WAV' });
+  await dialog.getByRole('slider', { name: 'Tail' }).focus();
+  await page.keyboard.press('End');
+  await dialog.getByRole('button', { name: 'Export WAV' }).click();
+  await expect(dialog.getByRole('progressbar', { name: 'Export progress' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog.getByRole('progressbar')).toBeHidden();
+  await expect(dialog.getByRole('status').filter({ hasText: 'Export cancelled' })).toHaveCount(1);
+  // Once the cancelled render ends, Export is available again and no Download appears.
+  await expect(dialog.getByRole('button', { name: 'Export WAV' })).toBeEnabled({ timeout: 120_000 });
+  await expect(dialog.getByRole('button', { name: /^Download/ })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Export WAV' }).click();
+  await expect(dialog.getByRole('button', { name: /^Download/ })).toBeFocused({ timeout: 120_000 });
+  expect(downloads).toBe(0);
 });

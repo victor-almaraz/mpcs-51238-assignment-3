@@ -3,7 +3,8 @@
  * (a3-audio-implementation.md, Shared rules): linear attack to 1, sustain at 1,
  * exponential release to −80 dB over the release time with
  * r = 10^(−4/(release·fs)) computed at note-off; the voice frees below 1e-4.
- * A stolen voice fades out linearly over STEAL_FADE_FRAMES.
+ * A stolen voice fades out linearly over STEAL_FADE_FRAMES. AdsrBank adds a
+ * decay toward a sustain level shared by every voice.
  */
 import { STEAL_FADE_FRAMES } from '../core/constants.js';
 
@@ -89,5 +90,57 @@ export class EnvelopeBank {
   /** True while voice `v` produces sound. */
   active(v) {
     return this.stage[v] !== IDLE;
+  }
+}
+
+/** Envelope stage after ATTACK: decay toward sustain, then hold there until release. */
+export const DECAY = 5;
+
+/** ADSR envelopes: EnvelopeBank with a decay-to-sustain stage shared by every voice. */
+export class AdsrBank extends EnvelopeBank {
+  /**
+   * @param {number} fs sample rate, Hz
+   * @param {number} voices number of envelopes
+   */
+  constructor(fs, voices) {
+    super(fs, voices);
+    this.sustain = 1;
+    this.decayMul = 0;
+  }
+
+  /** Sets the decay time in seconds: d = 10^(−4/(decay·fs)), −80 dB toward sustain over that time. */
+  setDecay(decayS) {
+    this.decayMul = 10 ** (-4 / Math.max(1, decayS * this.fs));
+  }
+
+  /** Advances voice `v` one frame and returns its level; an ended voice turns IDLE and returns 0. */
+  next(v) {
+    const stage = this.stage[v];
+    if (stage === ATTACK) {
+      let l = this.level[v] + this.attackStep[v];
+      if (l >= 1 - 1e-9) {
+        l = 1;
+        this.stage[v] = DECAY;
+      }
+      this.level[v] = l;
+      return l;
+    }
+    if (stage === DECAY) {
+      const s = this.sustain;
+      let l = s + (this.level[v] - s) * this.decayMul;
+      if (s === 0 && l < ENV_FLOOR) {
+        l = 0;
+        this.stage[v] = IDLE;
+      }
+      this.level[v] = l;
+      return l;
+    }
+    return super.next(v);
+  }
+
+  /** Block-end flush: a decay within 1e-15 of sustain snaps to it. */
+  flush(v) {
+    const d = this.level[v] - this.sustain;
+    if (this.stage[v] === DECAY && d < 1e-15 && d > -1e-15) this.level[v] = this.sustain;
   }
 }

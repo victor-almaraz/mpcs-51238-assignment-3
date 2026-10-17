@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { registerCommands } from '@/lib/commands/registry';
 
 /**
- * Registers `list` ({ id, label, group, keys?, run, enabled? }) while the
+ * Registers `list` ({ id, label, group, keys?, global?, run, enabled? }) while the
  * component is mounted. Each render's closures are used when a command runs,
  * so commands always act on current state; the set of IDs is registered once.
  */
@@ -15,6 +15,7 @@ export default function useCommands(list) {
   });
   const ids = list.map((c) => c.id).join('|');
   useEffect(() => {
+    if (!ids) return undefined;
     const proxies = ids.split('|').map((id) => {
       const current = () => latest.current.find((c) => c.id === id);
       const first = current();
@@ -25,6 +26,7 @@ export default function useCommands(list) {
         },
         group: first.group,
         keys: first.keys ?? '',
+        global: first.global === true,
         run: () => current()?.run(),
         enabled: () => {
           const c = current();

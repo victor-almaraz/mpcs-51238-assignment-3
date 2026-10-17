@@ -58,6 +58,9 @@ const FAULT_QUEUE = 16;
 /** Meter index of the master: after the track slots. */
 export const MASTER_METER = MAX_TRACKS;
 
+/** Instrument types bound to a source through sampler-zones: the sampler and granular's File source. */
+const ZONE_TYPES = new Set(['sampler', 'granular']);
+
 export class Engine {
   /** @param {number} fs sample rate, Hz */
   constructor(fs) {
@@ -69,7 +72,7 @@ export class Engine {
     this.clipTracks = new Map(); // trackId → clip player state of the last prepared model
     this.sources = new Map(); // sourceId → [Float32Array] or [L, R], from source-add
     this.mips = new Map(); // sourceId → [[level 1 channels], [level 2 channels]], from source-mips
-    this.zones = new Map(); // sampler deviceId → { sourceId, sourceName }, from sampler-zones
+    this.zones = new Map(); // sampler or granular deviceId → { sourceId, sourceName }, from sampler-zones
     this.reports = []; // source-status and sampler-zone-invalid messages to post
     this.slots = new Map(); // effect deviceId → EffectSlot, reused across models
     this.faults = Array.from({ length: FAULT_QUEUE }, () => ({ t: 'fault', v: 1, trackId: '', deviceId: '', slot: 0, kind: 'nonfinite' }));
@@ -133,7 +136,7 @@ export class Engine {
         kernel.generation = generation;
         kernel.deviceId = track.deviceId;
         kernels.set(track.deviceId, kernel);
-        if (track.type === 'sampler') this.bindSampler(kernel);
+        if (ZONE_TYPES.has(track.type)) this.bindSampler(kernel);
         return kernel;
       },
       (track) => {
@@ -226,11 +229,11 @@ export class Engine {
     if (zone && zone.sourceId) this.zones.set(deviceId, zone);
     else this.zones.delete(deviceId);
     const kernel = this.kernels.get(deviceId);
-    if (kernel?.type === 'sampler') this.bindSampler(kernel);
+    if (ZONE_TYPES.has(kernel?.type)) this.bindSampler(kernel);
   }
 
   rebindSamplers() {
-    for (const kernel of this.kernels.values()) if (kernel.type === 'sampler') this.bindSampler(kernel);
+    for (const kernel of this.kernels.values()) if (ZONE_TYPES.has(kernel.type)) this.bindSampler(kernel);
   }
 
   /**

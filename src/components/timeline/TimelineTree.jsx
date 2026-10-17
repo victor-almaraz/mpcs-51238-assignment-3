@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { trackLabel } from '@/lib/project/model';
-import { clipText, trackClips } from './layout';
+import { HEADER_W, RULER_H, TRACK_H, clipRect, clipText, trackClips } from './layout';
 
 const rowKey = (kind, id) => `${kind}:${id}`;
 
@@ -17,8 +17,9 @@ const rowKey = (kind, id) => `${kind}:${id}`;
  * the first or last row; Space or Enter selects the focused clip (Ctrl/Cmd
  * adds or removes it); Enter on a selected clip opens its properties; Mod+A
  * selects every clip. On a track row, Right expands or enters the first
- * clip, Left collapses, Enter selects the clips under the edit cursor and
- * Alt+Up/Down reorder the track.
+ * clip, Left collapses, Enter selects the clips under the edit cursor,
+ * Alt+Up/Down reorder the track, M and S mute and solo it, and Delete
+ * deletes it (onDeleteTrack confirms one that has clips).
  *
  * Clip commands (ARR-03): Left/Right move by the snap step; Alt+Left/Right
  * trim the start; Alt+Shift+Left/Right trim the end; Alt+Up/Down move to the
@@ -27,7 +28,25 @@ const rowKey = (kind, id) => `${kind}:${id}`;
  * ContextMenu key or Shift+F10 opens the clip menu. Comma and
  * period move the edit cursor by the snap step (with Shift, a bar).
  */
-export default function TimelineTree({ project, rowIds, meter, selection, setSelection, statusFor, commands, onCursorStep, onOpenProperties, onClipMenu, editCursor }) {
+export default function TimelineTree({
+  project,
+  rowIds,
+  meter,
+  zoom,
+  selection,
+  setSelection,
+  selectedTrackId,
+  onSelectTrack,
+  onDeleteTrack,
+  onTrackChange,
+  statusFor,
+  commands,
+  onCursorStep,
+  onOpenProperties,
+  onClipMenu,
+  editCursor,
+  readOnly,
+}) {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [focusKey, setFocusKey] = useState(null);
   const anchor = useRef(null);
@@ -37,9 +56,9 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
   rowIds.forEach((trackId, i) => {
     const track = project.tracks[trackId];
     const clips = trackClips(project, track);
-    rows.push({ key: rowKey('t', trackId), kind: 'track', trackId, track, position: i + 1, clips });
+    rows.push({ key: rowKey('t', trackId), kind: 'track', trackId, track, position: i + 1, row: i, clips });
     if (!collapsed.has(trackId)) {
-      clips.forEach((clip, j) => rows.push({ key: rowKey('c', clip.id), kind: 'clip', trackId, clip, index: j, count: clips.length }));
+      clips.forEach((clip, j) => rows.push({ key: rowKey('c', clip.id), kind: 'clip', trackId, clip, index: j, count: clips.length, row: i }));
     }
   });
   const current = rows.find((r) => r.key === focusKey) ?? rows.find((r) => r.kind === 'clip' && selection.includes(r.clip.id)) ?? rows[0];
@@ -133,7 +152,10 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
         anchor.current = id;
         setSelection([id]);
       }
+    } else if (row.kind === 'track' && !mod && !e.altKey && (key === 'm' || key === 's')) {
+      if (!readOnly) onTrackChange(row.trackId, key === 'm' ? { mute: !row.track.mute } : { solo: !row.track.solo });
     } else if (key === 'Enter') {
+      onSelectTrack(row.trackId);
       const hits = row.clips.filter((c) => c.start <= editCursor && editCursor < commands.clipEnd(c));
       setSelection(hits.map((c) => c.id));
     } else if (key === 'Delete' || key === 'Backspace') {
@@ -147,7 +169,7 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
           setSelection([neighbour.clip.id]);
           focusRow(neighbour);
         } else focusRow(rows.find((r) => r.key === rowKey('t', row.trackId)));
-      }
+      } else if (!readOnly) onDeleteTrack(row.trackId);
     } else handled = false;
     if (handled) e.preventDefault();
   }
@@ -158,7 +180,7 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
       aria-label="Tracks and clips"
       aria-multiselectable="true"
       onKeyDown={onKeyDown}
-      className="flex flex-col rounded-ds border border-border-strong bg-surface"
+      className="pointer-events-none absolute inset-0"
     >
       {rows.map((row) => {
         const tabIndex = row === current ? 0 : -1;
@@ -169,42 +191,99 @@ export default function TimelineTree({ project, rowIds, meter, selection, setSel
           onFocus: () => setFocusKey(row.key),
         };
         if (row.kind === 'track') {
+          const t = row.track;
+          const label = `${trackLabel(project, row.trackId, row.position)}, ${row.clips.length === 1 ? '1 clip' : `${row.clips.length} clips`}`;
+          const kind = trackLabel(project, row.trackId, row.position).split(', ').slice(1).join(', ');
+          const isCurrent = selectedTrackId === row.trackId;
           return (
+            // A track header (ARR-01) that stays at the left edge while the timeline scrolls.
             <div
               key={row.key}
               {...common}
+              aria-label={label}
               aria-level={1}
               aria-expanded={row.clips.length > 0 ? !collapsed.has(row.trackId) : undefined}
               aria-posinset={row.position}
               aria-setsize={rowIds.length}
-              onClick={() => focusRow(row)}
-              className={cx('flex min-h-8 items-center px-2 font-bold', focusRing)}
+              aria-selected={isCurrent}
+              data-track-header=""
+              onClick={() => {
+                focusRow(row);
+                onSelectTrack(row.trackId);
+              }}
+              className={cx(
+                'pointer-events-auto absolute left-0 z-10 flex items-stretch border-r border-b border-border-strong',
+                isCurrent ? 'bg-hover' : 'bg-surface',
+                t.mute ? 'opacity-70' : '',
+                focusRing,
+              )}
+              style={{ top: RULER_H + row.row * TRACK_H, width: HEADER_W, height: TRACK_H, transform: 'translateX(var(--sx, 0px))' }}
             >
-              <span role="gridcell">
-                {trackLabel(project, row.trackId, row.position)}, {row.clips.length === 1 ? '1 clip' : `${row.clips.length} clips`}
+              <span aria-hidden="true" className="w-1.5 shrink-0" style={{ background: t.color }} />
+              <span role="gridcell" className="flex min-w-0 flex-1 flex-col justify-center px-2">
+                <span className="truncate text-sm font-bold">
+                  {row.position} {t.name}
+                </span>
+                <span className="truncate text-xs text-muted">
+                  {kind}
+                  {t.mute ? ' · Muted' : ''}
+                  {t.solo ? ' · Solo' : ''}
+                </span>
+              </span>
+              <span role="gridcell" className="flex items-center gap-1 pr-2">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-pressed={t.mute ? 'true' : 'false'}
+                  aria-label={`Mute ${t.name}`}
+                  disabled={readOnly}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTrackChange(row.trackId, { mute: !t.mute });
+                  }}
+                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs font-bold', t.mute ? 'bg-selected text-selected-fg' : 'bg-surface')}
+                >
+                  M
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-pressed={t.solo ? 'true' : 'false'}
+                  aria-label={`Solo ${t.name}`}
+                  disabled={readOnly}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTrackChange(row.trackId, { solo: !t.solo });
+                  }}
+                  className={cx('min-h-6 min-w-6 rounded-ds border border-border-strong text-xs font-bold', t.solo ? 'bg-selected text-selected-fg' : 'bg-surface')}
+                >
+                  S
+                </button>
               </span>
             </div>
           );
         }
         const isSelected = selection.includes(row.clip.id);
+        const rect = clipRect(project, row.clip, row.row, zoom);
         return (
+          // Over the clip on the canvas, so keyboard focus shows on the clip itself.
           <div
             key={row.key}
             {...common}
+            aria-label={clipText(project, row.clip, meter, statusFor(row.clip))}
             aria-level={2}
             aria-selected={isSelected}
-            aria-haspopup="menu"
-            data-clip-id={row.clip.id}
             aria-posinset={row.index + 1}
             aria-setsize={row.count}
-            onClick={(e) => arrive(row, e)}
-            className={cx(
-              'flex min-h-8 items-center pr-2 pl-6 text-sm',
-              isSelected ? 'bg-selected text-selected-fg' : 'hover:bg-hover',
-              focusRing,
-            )}
+            aria-haspopup="menu"
+            data-clip-id={row.clip.id}
+            // Pointer events reach the arrangement's handlers, which hit-test by position; focus follows the click.
+            className={cx('pointer-events-auto absolute rounded-ds', focusRing)}
+            style={{ left: HEADER_W + rect.x0, top: rect.top, width: Math.max(4, rect.x1 - rect.x0), height: rect.height }}
           >
-            <span role="gridcell">{clipText(project, row.clip, meter, statusFor(row.clip))}</span>
+            <span role="gridcell" className="sr-only">
+              {clipText(project, row.clip, meter, statusFor(row.clip))}
+            </span>
           </div>
         );
       })}

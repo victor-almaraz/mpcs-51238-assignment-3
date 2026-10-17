@@ -19,9 +19,22 @@ export const VIEW_SAVE_DELAY_MS = 500;
 /** Open editor panels. */
 export const PANELS = ['pianoroll', 'clip'];
 
+/** Tabs of the editor's lower dock. */
+export const DOCK_TABS = ['editor', 'devices', 'mixer'];
+
+/** Snap grids in quarter notes (ARR-04), coarse to fine; 'bar' snaps to the bar. */
+export const SNAP_GRIDS = ['bar', '1', '0.5', '0.25'];
+
+/** The snap grid `steps` places finer (+) or coarser (−) than `grid`, clamped to SNAP_GRIDS. */
+export function stepGrid(grid, steps) {
+  const i = Math.max(0, SNAP_GRIDS.indexOf(grid));
+  return SNAP_GRIDS[Math.min(SNAP_GRIDS.length - 1, Math.max(0, i + steps))];
+}
+
 /**
  * Default working state for `doc`: playhead at tick 0, the document's loop
- * range (off), 100 % zoom, no scroll, no selection, no open panel.
+ * range (off), 100 % zoom, no scroll, no selection, no open panel, the
+ * Editor tab of the dock, snap on to the quarter note.
  */
 export function defaultView(doc) {
   return {
@@ -35,6 +48,9 @@ export function defaultView(doc) {
     selectedClipIds: [],
     openPanel: null,
     panelClipId: null,
+    dock: 'editor',
+    snap: '1',
+    snapOn: true,
   };
 }
 
@@ -61,6 +77,9 @@ export function normalizeView(raw, doc) {
     view.openPanel = raw.openPanel;
     view.panelClipId = typeof raw.panelClipId === 'string' && doc.clips[raw.panelClipId] ? raw.panelClipId : null;
   }
+  if (DOCK_TABS.includes(raw.dock)) view.dock = raw.dock;
+  if (SNAP_GRIDS.includes(raw.snap)) view.snap = raw.snap;
+  if (typeof raw.snapOn === 'boolean') view.snapOn = raw.snapOn;
   return view;
 }
 

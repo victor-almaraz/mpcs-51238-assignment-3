@@ -21,13 +21,13 @@ function render(k, frames, block = 128, onBlock) {
   return out;
 }
 
-test('sources: 2 s mono saw, noise and chord buffers; noise is the same in every instance', () => {
+test('sources: 2 s mono saw, noise and chord buffers plus File; noise is the same in every instance', () => {
   const [sawBuf, noise, chord] = buildSources(FS);
   for (const b of [sawBuf, noise, chord]) assert.equal(b.length, 2 * FS);
   assert.deepEqual(buildSources(FS)[1], noise);
   assert.ok(toneMagnitude(sawBuf, 261.63, FS, 0, 32768) > 0.2);
   assert.ok(peak(chord) <= 1.05);
-  assert.deepEqual(SOURCES, ['saw', 'noise', 'chord']);
+  assert.deepEqual(SOURCES, ['saw', 'noise', 'chord', 'sample']);
 });
 
 test('at most 4 voices and 64 grains at maximum density and size', () => {

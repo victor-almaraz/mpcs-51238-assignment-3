@@ -4,20 +4,25 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import Dialog from '@/components/ui/Dialog';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { getCommands, getPaletteRequests, matchesQuery, requestPalette, subscribeCommands } from '@/lib/commands/registry';
+import { dispatchShortcut, displayKeys, getCommands, getPaletteRequests, matchesQuery, requestPalette, subscribeCommands } from '@/lib/commands/registry';
 import useCommands from './useCommands';
 
 const EMPTY = [];
 
-/** True for Ctrl+Shift+P (Cmd+Shift+P on macOS). */
-const isPaletteKey = (e) => (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p';
+/** True for Ctrl+K or Ctrl+Shift+P (Cmd on macOS). */
+const isPaletteKey = (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
+  const key = e.key.toLowerCase();
+  return e.shiftKey ? key === 'p' : key === 'k';
+};
 
 /**
- * Command palette (accessibility.md, Command system): Ctrl+Shift+P
- * (Cmd+Shift+P on macOS) or the header's Commands button opens a dialog with
+ * Command palette (accessibility.md, Command system; HELP-02): Ctrl+K or
+ * Ctrl+Shift+P (Cmd on macOS) or the header's Commands button opens a dialog with
  * a search field (a combobox) over the commands registered on the page. Up
  * and Down move through the matches, Enter runs one, Escape closes. Unavailable
  * commands are listed as disabled. Navigation commands are always present.
+ * The same listener runs global command shortcuts (dispatchShortcut).
  */
 export default function CommandPalette() {
   const router = useRouter();
@@ -41,14 +46,17 @@ export default function CommandPalette() {
     { id: 'nav.home', group: 'Go to', label: 'Home', run: () => router.push('/') },
     { id: 'nav.projects', group: 'Go to', label: 'Projects', run: () => router.push('/projects') },
     { id: 'nav.new', group: 'Go to', label: 'New project', run: () => router.push('/new') },
-    { id: 'nav.settings', group: 'Go to', label: 'Settings', run: () => router.push('/settings') },
+    { id: 'nav.settings', group: 'Go to', label: 'Settings', keys: 'Mod+,', global: true, run: () => router.push('/settings') },
   ]);
 
   useEffect(() => {
     function onKeyDown(e) {
-      if (!isPaletteKey(e)) return;
+      if (!isPaletteKey(e)) {
+        dispatchShortcut(e);
+        return;
+      }
       e.preventDefault();
-      requestPalette();
+      if (!document.querySelector('dialog[open]')) requestPalette();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -121,7 +129,7 @@ export default function CommandPalette() {
                   <span className={i === current ? '' : 'text-muted'}>{c.group}: </span>
                   {c.label}
                 </span>
-                {c.keys ? <kbd className="font-mono text-xs">{c.keys}</kbd> : null}
+                {c.keys ? <kbd className="font-mono text-xs">{displayKeys(c.keys)}</kbd> : null}
               </li>
             );
           })}

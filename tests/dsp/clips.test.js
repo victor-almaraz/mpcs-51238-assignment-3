@@ -18,6 +18,7 @@ import {
   joinBlocker,
   joinClips,
   moveClip,
+  removeTrack,
   renameClip,
   setClipColor,
   setClipGain,
@@ -139,6 +140,23 @@ test('trim start and end follow the edit math and limits', () => {
   assert.equal(short.sourceLength, 64);
   const long = trimEnd(trimStart(doc, clipId, 2500).doc, clipId, 10000).doc.clips[clipId];
   assert.equal(long.sourceLength, 96000 - 2500);
+});
+
+test('removeTrack drops the track with its clips, devices and unused sources; the master stays', () => {
+  const { doc, clipId, trackId } = docWithClip();
+  const instrumentId = doc.trackOrder[0];
+  const gone = removeTrack(doc, trackId);
+  assert.ok(gone.ok);
+  assert.deepEqual(gone.doc.trackOrder, [instrumentId]);
+  assert.equal(gone.doc.tracks[trackId], undefined);
+  assert.equal(gone.doc.clips[clipId], undefined);
+  assert.deepEqual(gone.doc.sources, {});
+  const deviceId = doc.tracks[instrumentId].deviceIds[0];
+  const empty = removeTrack(gone.doc, instrumentId).doc;
+  assert.deepEqual(empty.trackOrder, []);
+  assert.equal(empty.devices[deviceId], undefined);
+  assert.ok(empty.tracks[doc.masterTrackId]);
+  assert.equal(removeTrack(empty, doc.masterTrackId).ok, false);
 });
 
 test('move keeps clips on tracks of their kind; delete drops unused sources', () => {

@@ -73,12 +73,18 @@ export function saveProject(doc) {
   const written = writeJson(projectKey(doc.id), doc);
   if (!written.ok) return { ok: false, error: writeError(written.error) };
   const previous = index.value.find((e) => e.id === doc.id);
+  const { numerator, denominator } = doc.meter[0];
   const entry = {
     id: doc.id,
     name: doc.name,
     modifiedAt: doc.modifiedAt,
     archiveSavedAt: previous?.archiveSavedAt ?? null,
     archivedSources: previous?.archivedSources ?? [],
+    // List metadata (RET-01); origin is the example title for a saved example copy.
+    bpm: doc.tempo[0].bpm,
+    timeSignature: `${numerator}/${denominator}`,
+    trackCount: doc.trackOrder.length,
+    origin: previous?.origin ?? findExample(unsaved.get(doc.id)?.exampleSlug)?.title ?? null,
   };
   const indexed = writeJson(INDEX_KEY, [...index.value.filter((e) => e.id !== doc.id), entry]);
   if (!indexed.ok) {

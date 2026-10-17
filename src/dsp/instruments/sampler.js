@@ -50,7 +50,9 @@ import { Smoother } from '../core/smoother.js';
 import { LOWPASS, svfCoefficients, svfTick } from '../effects/svf.js';
 import { LIVE_NOTE_BASE } from '../engine/live-input.js';
 import { balance, constantPower } from '../mixer/pan.js';
-import { ATTACK, ENV_FLOOR, EnvelopeBank, IDLE, RELEASE, STEAL } from './envelope.js';
+import { ATTACK, AdsrBank, DECAY, IDLE, RELEASE, STEAL } from './envelope.js';
+
+export { AdsrBank, DECAY };
 import { PolyKernel } from './poly-kernel.js';
 import {
   LOOP_FORWARD, LOOP_OFF, LOOP_PINGPONG, MAX_TRANSPOSE, SAMPLER_DEF, SAMPLER_PARAMS,
@@ -75,58 +77,6 @@ const Q_MAX = 12;
 
 /** Lowest modulated cutoff, Hz. */
 const MIN_FC = 10;
-
-/** Envelope stage after ATTACK: decay toward sustain, then hold there until release. */
-export const DECAY = 5;
-
-/** ADSR envelopes: EnvelopeBank with a decay-to-sustain stage shared by every voice. */
-export class AdsrBank extends EnvelopeBank {
-  /**
-   * @param {number} fs sample rate, Hz
-   * @param {number} voices number of envelopes
-   */
-  constructor(fs, voices) {
-    super(fs, voices);
-    this.sustain = 1;
-    this.decayMul = 0;
-  }
-
-  /** Sets the decay time in seconds: d = 10^(−4/(decay·fs)), −80 dB toward sustain over that time. */
-  setDecay(decayS) {
-    this.decayMul = 10 ** (-4 / Math.max(1, decayS * this.fs));
-  }
-
-  /** Advances voice `v` one frame and returns its level; an ended voice turns IDLE and returns 0. */
-  next(v) {
-    const stage = this.stage[v];
-    if (stage === ATTACK) {
-      let l = this.level[v] + this.attackStep[v];
-      if (l >= 1 - 1e-9) {
-        l = 1;
-        this.stage[v] = DECAY;
-      }
-      this.level[v] = l;
-      return l;
-    }
-    if (stage === DECAY) {
-      const s = this.sustain;
-      let l = s + (this.level[v] - s) * this.decayMul;
-      if (s === 0 && l < ENV_FLOOR) {
-        l = 0;
-        this.stage[v] = IDLE;
-      }
-      this.level[v] = l;
-      return l;
-    }
-    return super.next(v);
-  }
-
-  /** Block-end flush: a decay within 1e-15 of sustain snaps to it. */
-  flush(v) {
-    const d = this.level[v] - this.sustain;
-    if (this.stage[v] === DECAY && d < 1e-15 && d > -1e-15) this.level[v] = this.sustain;
-  }
-}
 
 /** Mip level for rate `r` when `levels` levels are bound: clamp(ceil(log2 r), 0, 2), or 0. */
 function mipLevel(r, levels) {

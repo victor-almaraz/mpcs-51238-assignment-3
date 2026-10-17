@@ -287,11 +287,13 @@ renderBlock(off, n):
                  if t > 1 − dt: x = (t − 1)/dt; return x² + 2x + 1
                  return 0
     ```
-- Filter: per-voice TPT state-variable lowpass (Filter). Cutoff 40–16 000 Hz on a log scale, clamped to `0.45·fs`. Resonance 0–20 dB maps to `Q = 0.7071·10^(res/20)`. `g = tan(π·fc/fs)` is computed once per block.
-- Envelope: attack 0.002–2 s, release 0.01–4 s.
+- Filter: per-voice TPT state-variable lowpass (Filter). Cutoff 40–16 000 Hz on a log scale, clamped to `0.45·fs`. Resonance 0–20 dB maps to `Q = 0.7071·10^(res/20)`. `g = tan(π·fc/fs)` is computed once per block, or every 16 frames per voice with a filter envelope.
+- Filter envelope: cutoff `= base·2^(depth·e)`, where `e` is the voice's amplitude envelope level and `depth = min(envAmount, log2(0.45·fs/cutoff))` is fixed at note-on; `base = min(cutoff, 0.45·fs/2^depth)`.
+- Envelope: ADSR, attack 0.002–2 s, decay 0.01–4 s, sustain 0–1, release 0.01–4 s.
 
 ### FM (two-operator)
-- `fm = ratio·fc`; ratio 0.5–12 in steps of 0.5.
+- `fm = max(0.01, ratio + fine)·fc`, fixed at note-on; ratio 0.5–12 in steps of 0.5, fine −0.5 to 0.5.
+- Envelope: ADSR.
 - Output `sin(φc + I(t)·sin(φm))`. Phases are Float64 accumulators wrapped to [0, 2π).
 - `I(t) = min(index, I_max)·exp(−t/τ)`, τ = index decay 0.01–4 s (project limit). The decay factor is computed per block and interpolated per sample.
 - `I_max = max(0, (0.45·fs − fc)/fm − 1)` keeps the highest significant sideband `fc + (I + 1)·fm` (Carson's rule) at or below `0.45·fs`.
@@ -300,26 +302,30 @@ renderBlock(off, n):
 ### Additive
 - Eight amplitudes `h_k ∈ [0, 1]`, normalised by `1/max(1, Σh_k)`. Harmonics with `k·f > 0.45·fs` are omitted; the count is fixed at note-on.
 - Per sample, `sin θ` and `cos θ` come from the sine table; `sin(kθ)` for k = 2–8 comes from the recursion `s_k = 2·cos θ·s_{k−1} − s_{k−2}`, with `s_0 = 0`, `s_1 = sin θ`.
+- Vibrato: a per-voice LFO phase from 0 at note-on; the phase increment is multiplied by `2^(depth·sin(2π·lfo)/1200)`, evaluated as `1 + y + y²/2` with `y = ln 2·depth·sin/1200` (error ≤ 3e-5 at 100 cents).
+- Envelope: ADSR.
 
 ### Pluck (Karplus–Strong)
 - Period `P = fs/f`. Loop filter `y = (1 − S)·x[n] + S·x[n−1]`, phase delay `S = 0.5·damping`.
 - `N = floor(P − S − 0.1)`, `Δ = P − S − N ∈ [0.1, 1.1)`.
 - Fractional allpass: `C = (1 − Δ)/(1 + Δ)`, `y[n] = C·x[n] + x[n−1] − C·y[n−1]`.
 - Loop gain `ρ = min(0.9999, 10^(−3/(T60·f)))`, T60 0.2–10 s.
-- Excitation: N samples of seeded noise in [−1, 1] through a one-pole lowpass with `a = 0.1 + 0.9·brightness`, scaled by velocity gain.
+- Excitation: N samples of seeded noise in [−1, 1] through a one-pole lowpass with `a = 0.1 + 0.9·brightness`, then the circular comb `x[i] − x[(i − k) mod N]`, `k = round(pickPosition·N)` (skipped for k = 0), mean removed, peak normalised and scaled by velocity gain.
+- Note-off: `ρ` glides per sample (τ = 5 ms) to `min(ρ, 10^(−3/(release·f)))`, release 0.02–2 s. A voice ends when a full pass round the loop peaks below 1e-6.
 - Output DC blocker: `y = x − x1 + 0.995·y1`.
 - One 4096-sample delay buffer per voice (project limit); covers MIDI note 24 at 96 kHz.
 
 ### Granular
-- Sources generated at init, 2 s mono at `fs` (project limit): `saw` (PolyBLEP saw at 261.63 Hz), `noise` (seeded), `chord` (PolyBLEP saws at C4, E4, G4, scaled by 1/3).
+- Sources generated at init, 2 s mono at `fs` (project limit): `saw` (PolyBLEP saw at 261.63 Hz), `noise` (seeded), `chord` (PolyBLEP saws at C4, E4, G4, scaled by 1/3). `sample` reads a bound file (`bindSource`, by reference) as the mean of its channels, over at most 20 s.
 - Window: 1025-entry Hann table with linear interpolation.
 - Grain pool: 64 grains as struct-of-arrays (`pos`, `inc`, `age`, `len`, `amp`, `active`); 4 voices.
 - Scheduling per voice: a countdown per sample; at zero a free grain starts and the countdown resets to `round(fs/density)`.
   - Length `size·fs`, size 0.01–0.25 s; density 2–60 grains/s.
-  - Position `base + spray·(rand − 0.5)·sourceLength`, wrapped; spray 0–1.
-  - Increment `f/261.63`; reads use linear interpolation.
+  - Increment `f/261.63` (noise: 1), times `2^(u·pitchSpread/1200)` with `u` uniform in [−1, 1] while pitch spread is on; reads use linear interpolation.
+  - Start `position·(L − c) + spray·(rand − 0.5)·L`, clamped to `[0, L − c]`, where `c = len·inc` is the frames the grain covers; spray 0–1.
   - With no free grain, the start is skipped and counted.
 - Grain amplitude: velocity gain × `1/√(density·size)`, clamped to ≤ 1 (project limit).
+- Envelope: attack 0.002–2 s, release 0.01–4 s, per voice.
 
 ### Drum machine
 A single kernel, `DrumKernel`, synthesizes 14 percussion voices. It ships no sample data. A voice instance is one sounding hit of one voice.

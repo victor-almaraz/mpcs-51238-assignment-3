@@ -5,6 +5,7 @@ import Slider from '@/components/ui/Slider';
 import Toggle from '@/components/ui/Toggle';
 import { sectionHeading } from '@/design-systems/industrial/classes';
 import { TRACK_GAIN } from '@/dsp/mixer/mixer';
+import ClipIndicator from './ClipIndicator';
 import PanSlider from './PanSlider';
 
 /** Fader text: "−6.0 dB"; the minimum reads "−∞ dB". */
@@ -15,16 +16,20 @@ export function faderText(db) {
 
 /**
  * Channel strip for one track (MIX-01, ARR-01): Mute and Solo toggles named
- * for the track, volume fader (−∞ to +6 dB), pan and a peak meter.
+ * for the track, volume fader (−∞ to +6 dB), pan, a peak meter and a clip
+ * indicator (MIX-02).
  * `readMeter()` returns [peakL, peakR] or null.
  */
 export default function TrackStrip({ track, readMeter, onChange, disabled }) {
   const name = track.name;
   return (
-    <li className="flex min-w-48 flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2">
+    <li className="flex w-80 shrink-0 flex-col gap-2 rounded-ds border border-border-strong bg-surface p-2">
       <div className="flex items-center justify-between gap-2">
         <h3 className={sectionHeading}>{name}</h3>
-        <span className="text-xs text-muted">{track.mute ? 'Muted' : track.solo ? 'Solo' : ''}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">{track.mute ? 'Muted' : track.solo ? 'Solo' : ''}</span>
+          <ClipIndicator name={name} read={readMeter} />
+        </div>
       </div>
       <div className="flex gap-2">
         <Toggle size="sm" pressed={track.mute} onClick={() => onChange({ mute: !track.mute })} disabled={disabled}>
@@ -35,7 +40,7 @@ export default function TrackStrip({ track, readMeter, onChange, disabled }) {
         </Toggle>
       </div>
       <div className="flex items-end gap-2">
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Slider
             id={`fader-${track.id}`}
             label={`${name} volume`}

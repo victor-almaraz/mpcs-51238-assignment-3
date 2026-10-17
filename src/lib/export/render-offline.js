@@ -9,6 +9,7 @@ import { compileModel } from '../audio/compile-model.js';
 import { decodeBytes, getSource } from '../audio/decode.js';
 import { ensureModule } from '../audio/engine-client.js';
 import { mipsFor } from '../audio/peaks-client.js';
+import { deviceSource } from '../project/clip-commands.js';
 import { CHANNELS, ENGINE_PROCESSOR, SAFETY_PROCESSOR } from '../../dsp/core/constants.js';
 
 /** Longest export range and tail, s (project limits). */
@@ -44,7 +45,10 @@ export function exportFrames(doc, fs, { range, loop, tailS }) {
 async function sourcesAt(doc, fs) {
   const out = [];
   const ids = new Set(Object.keys(doc.sources));
-  for (const d of Object.values(doc.devices)) if (d.sampler?.sourceId) ids.add(d.sampler.sourceId);
+  for (const d of Object.values(doc.devices)) {
+    const ref = deviceSource(d);
+    if (ref) ids.add(ref.sourceId);
+  }
   for (const id of ids) {
     const source = getSource(id);
     if (!source) continue;
@@ -65,10 +69,14 @@ export async function renderOffline(doc, fs, { range = 'project', loop, tailS = 
   const { model, start, total } = frames.value;
   const sources = await sourcesAt(doc, fs);
   const zones = Object.values(doc.devices)
-    .filter((d) => d.type === 'sampler')
-    .map((d) => ({ deviceId: d.id, zone: d.sampler?.sourceId ? { sourceId: d.sampler.sourceId, sourceName: d.sampler.sourceName ?? '' } : null }));
+    .filter((d) => d.type === 'sampler' || d.type === 'granular')
+    .map((d) => {
+      const ref = deviceSource(d);
+      return { deviceId: d.id, type: d.type, zone: ref ? { sourceId: ref.sourceId, sourceName: ref.sourceName ?? '' } : null };
+    });
   const mips = [];
   for (const z of zones) {
+    if (z.type !== 'sampler') continue;
     const s = z.zone && sources.find((x) => x.sourceId === z.zone.sourceId);
     if (s && !mips.some((m) => m.sourceId === s.sourceId)) {
       const levels = await mipsFor(s.sourceId, s.channels);

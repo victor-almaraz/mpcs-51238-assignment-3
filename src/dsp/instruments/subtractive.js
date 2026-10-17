@@ -1,15 +1,19 @@
 /*
  * Subtractive synth (assignment-3-scope.md, Instruments;
  * a3-audio-implementation.md, Subtractive): a band-limited oscillator through a
- * per-voice TPT state-variable lowpass, with a linear-attack, exponential-release
- * envelope. Renders mono, overwriting its output range.
+ * per-voice TPT state-variable lowpass, with an ADSR envelope. The filter
+ * envelope follows the amplitude envelope's shape: the cutoff rises by up to
+ * `envAmount` octaves, capped per voice at note-on so cutoff·2^octaves stays at
+ * or under 0.45·fs (the base cutoff is lowered to fit while the knob is above
+ * that). Voices with a filter envelope recompute their coefficients every
+ * ENV_STRIDE frames. Renders mono, overwriting its output range.
  */
 import { flushDenormal } from '../core/math.js';
 import { clampParam, defineParam } from '../core/params.js';
 import { Smoother } from '../core/smoother.js';
-import { NOTE_FREQUENCIES, sineAt } from '../core/tables.js';
+import { sineAt } from '../core/tables.js';
 import { LOWPASS, svfCoefficients, svfTick } from '../effects/svf.js';
-import { PolyKernel } from './poly-kernel.js';
+import { PolyKernel, SUSTAIN_PARAM, TUNING_PARAMS, decayParam } from './poly-kernel.js';
 import { saw, square } from './polyblep.js';
 
 export const WAVEFORMS = ['sine', 'square', 'saw', 'triangle'];
@@ -20,12 +24,19 @@ const SAW = 2;
 /** Triangle leak (project limit): y = 0.999·y + 4·dt·square. */
 const TRIANGLE_LEAK = 0.999;
 
+/** Frames between filter-envelope coefficient updates. */
+const ENV_STRIDE = 16;
+
 export const SUBTRACTIVE_PARAMS = [
   defineParam({ id: 'waveform', scale: 'enum', options: WAVEFORMS, default: SAW }),
   defineParam({ id: 'cutoff', min: 40, max: 16000, default: 2000, unit: 'Hz', scale: 'log' }),
   defineParam({ id: 'resonance', min: 0, max: 20, default: 1, unit: 'dB', scale: 'lin', step: 0.1 }),
+  defineParam({ id: 'envAmount', min: 0, max: 6, default: 0, unit: 'oct', scale: 'lin', step: 0.1 }),
   defineParam({ id: 'attack', min: 0.002, max: 2, default: 0.01, unit: 's', scale: 'pow3' }),
+  decayParam(0.3),
+  SUSTAIN_PARAM,
   defineParam({ id: 'release', min: 0.01, max: 4, default: 0.3, unit: 's', scale: 'pow3' }),
+  ...TUNING_PARAMS,
 ];
 
 const DEF = Object.fromEntries(SUBTRACTIVE_PARAMS.map((d) => [d.id, d]));
@@ -42,11 +53,16 @@ export class SubtractiveKernel extends PolyKernel {
     this.tri = new Float64Array(this.slots);
     this.filter = new Float64Array(2 * this.slots); // [ic1, ic2] per voice
     this.coef = new Float64Array(4);
+    this.voiceCoef = new Float64Array(4 * this.slots);
+    this.envOct = new Float64Array(this.slots); // filter-envelope depth, octaves, fixed at note-on
     this.waveform = DEF.waveform.default;
+    this.envAmount = DEF.envAmount.default;
     this.attack = DEF.attack.default;
     this.release = DEF.release.default;
+    this.env.setDecay(DEF.decay.default);
     this.cutoff = new Smoother(fs, DEF.cutoff.default);
     this.resonance = new Smoother(fs, DEF.resonance.default);
+    this.q = 0.7071 * 10 ** (DEF.resonance.default / 20);
   }
 
   /** Sets a parameter by id; the value is clamped through its ParamDef. Unknown ids are ignored. */
@@ -54,7 +70,9 @@ export class SubtractiveKernel extends PolyKernel {
     const def = DEF[id];
     if (!def) return;
     const v = clampParam(def, value);
+    if (this.setShared(id, v)) return;
     if (id === 'waveform') this.waveform = v;
+    else if (id === 'envAmount') this.envAmount = v;
     else if (id === 'attack') this.attack = v;
     else if (id === 'release') this.release = v;
     else if (id === 'cutoff') this.cutoff.setTarget(v);
@@ -66,7 +84,9 @@ export class SubtractiveKernel extends PolyKernel {
     this.tri[v] = 0;
     this.filter[2 * v] = 0;
     this.filter[2 * v + 1] = 0;
-    this.dt[v] = NOTE_FREQUENCIES[pitch] / this.fs;
+    this.dt[v] = this.noteHz(pitch) / this.fs;
+    const room = Math.log2((0.45 * this.fs) / Math.min(this.cutoff.target, 0.45 * this.fs));
+    this.envOct[v] = Math.max(0, Math.min(this.envAmount, room));
   }
 
   /** Smoothed filter parameters advance over the block; coefficients once per block. */
@@ -75,12 +95,16 @@ export class SubtractiveKernel extends PolyKernel {
       this.cutoff.next();
       this.resonance.next();
     }
-    svfCoefficients(this.coef, 0, this.cutoff.y, 0.7071 * 10 ** (this.resonance.y / 20), this.fs);
+    this.q = 0.7071 * 10 ** (this.resonance.y / 20);
+    svfCoefficients(this.coef, 0, this.cutoff.y, this.q, this.fs);
   }
 
   renderVoice(v, out, start, end) {
     const wave = this.waveform;
-    const coef = this.coef;
+    const oct = this.envOct[v];
+    const coef = oct > 0 ? this.voiceCoef : this.coef;
+    const c = oct > 0 ? 4 * v : 0;
+    const base = oct > 0 ? Math.min(this.cutoff.y, (0.45 * this.fs) / 2 ** oct) : 0;
     const state = this.filter;
     const env = this.env;
     const g = this.gain[v];
@@ -88,6 +112,7 @@ export class SubtractiveKernel extends PolyKernel {
     let t = this.phase[v];
     let tri = this.tri[v];
     for (let i = start; i < end; i++) {
+      if (oct > 0 && (i - start) % ENV_STRIDE === 0) svfCoefficients(coef, c, base * 2 ** (oct * env.level[v]), this.q, this.fs);
       let x;
       if (wave === SAW) x = saw(t, dt);
       else if (wave === SQUARE) x = square(t, dt);
@@ -98,7 +123,7 @@ export class SubtractiveKernel extends PolyKernel {
       }
       t += dt;
       if (t >= 1) t -= 1;
-      out[i] += svfTick(x, coef, 0, state, 2 * v, LOWPASS) * g * env.next(v);
+      out[i] += svfTick(x, coef, c, state, 2 * v, LOWPASS) * g * env.next(v);
     }
     this.phase[v] = t;
     this.tri[v] = flushDenormal(tri);

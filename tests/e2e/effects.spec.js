@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { openTab, selectTrack } from '../support/editor.js';
 
 async function createProject(page, name = 'Effects') {
   await page.goto('/new');
@@ -25,6 +26,7 @@ async function add(region, label) {
 
 test('a track chain adds, edits, bypasses, reorders and removes effects with labelled controls', async ({ page }) => {
   const id = await createProject(page);
+  await openTab(page, 'Devices');
   const fx = chain(page, 'Effects: Track 1');
   await expect(fx).toContainText('No effects. The signal passes through unchanged.');
   await add(fx, 'Delay');
@@ -58,9 +60,13 @@ test('a track chain adds, edits, bypasses, reorders and removes effects with lab
 
 test('the master chain holds effects; a project allows at most four reverbs', async ({ page }) => {
   const id = await createProject(page, 'Reverbs');
+  await openTab(page, 'Devices');
+  const chainChoice = page.getByRole('group', { name: 'Chain' });
+  await chainChoice.getByText('Master').click();
   const master = chain(page, 'Master effects');
   await add(master, 'EQ');
   await expect.poll(() => chainTypes(page, id, 'master')).toEqual([['eq3', false]]);
+  await chainChoice.getByText('Track 1').click();
   const fx = chain(page, 'Effects: Track 1');
   for (let i = 0; i < 4; i++) await add(fx, 'Reverb');
   for (let i = 0; i < 4; i++) await add(fx, 'EQ');
@@ -72,6 +78,7 @@ test('the master chain holds effects; a project allows at most four reverbs', as
   await fx.getByLabel('Effect', { exact: true }).selectOption({ label: 'Reverb' });
   await expect(fx.getByRole('button', { name: 'Add effect' })).toBeDisabled();
   await expect(fx).toContainText('A project can have at most 4 reverbs.');
+  await chainChoice.getByText('Master').click();
   await master.getByLabel('Effect', { exact: true }).selectOption({ label: 'Reverb' });
   await expect(master.getByRole('button', { name: 'Add effect' })).toBeDisabled();
 });
@@ -95,7 +102,8 @@ test('an example with filter, reverb and delay plays through its chains after th
 test('Distortion: three curves, labelled controls with units, and the Beat lead stab uses it', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open Beat' }).click();
-  await page.getByRole('button', { name: /^Track 3: Lead stab/ }).click();
+  await selectTrack(page, 'Track 3: Lead stab');
+  await openTab(page, 'Devices');
   const fx = chain(page, 'Effects: Lead stab');
   const dist = fx.getByRole('group', { name: 'Distortion, 1 of 1' });
   await expect(dist).toBeVisible();

@@ -8,7 +8,11 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isString = (v) => typeof v === 'string';
 const isInt = (v) => Number.isInteger(v);
 
-/** Project index: an array of { id, name, modifiedAt, archiveSavedAt, archivedSources }. */
+/**
+ * Project index: an array of { id, name, modifiedAt, archiveSavedAt,
+ * archivedSources, bpm, timeSignature, trackCount, origin }; the list
+ * metadata fields (bpm onward) are optional.
+ */
 export function isIndex(v) {
   return (
     Array.isArray(v) &&

@@ -22,9 +22,10 @@ export const NOT_A_PROJECT = 'project.json is not a W-Rack project.';
  * project"; any other is imported as a new saved project and opened. A
  * failing archive imports nothing and lists its errors. `label` names the
  * button; `currentId` is the open project in the editor, where Restore audio
- * stays on the page.
+ * stays on the page. `inline` lays the button and its messages in a row;
+ * `command` registers the Open command (Mod+O) — one instance per page does.
  */
-export default function OpenArchive({ label = 'Open .wrack file', size = 'md', currentId = null, disabled }) {
+export default function OpenArchive({ label = 'Open .wrack file', size = 'md', currentId = null, disabled, inline = false, command = true }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const buttonRef = useRef(null);
@@ -34,7 +35,11 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null); // { project, audio } awaiting the restore choice
 
-  useCommands([{ id: 'project.open-wrack', group: 'Project', label: 'Open .wrack file…', run: () => inputRef.current?.click(), enabled: () => !disabled && !busy }]);
+  useCommands(
+    command
+      ? [{ id: 'project.open-wrack', group: 'Project', label: 'Open .wrack file…', keys: 'Mod+O', global: true, run: () => inputRef.current?.click(), enabled: () => !disabled && !busy }]
+      : [],
+  );
 
   async function loadAudio(project, audio) {
     const { loaded, failed } = await loadArchiveSources(audio, project.sources, getEngine().decodeRate());
@@ -107,9 +112,9 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={inline ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-2'}>
       <div>
-        <Button ref={buttonRef} size={size} disabled={disabled || busy} onClick={() => inputRef.current?.click()}>
+        <Button ref={buttonRef} size={size} disabled={disabled || busy} onClick={() => inputRef.current?.click()} data-help="Open .wrack file (Ctrl/Cmd+O): opens a saved archive as a project, or restores this project's audio.">
           {busy ? 'Opening file…' : label}
         </Button>
       </div>
@@ -143,7 +148,7 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
           ))}
         </ul>
       ) : null}
-      <StatusRegion className="text-sm">{message}</StatusRegion>
+      <StatusRegion className={inline ? 'text-xs' : 'text-sm'}>{message}</StatusRegion>
       <RestoreDialog
         open={pending !== null}
         name={pending?.project.name ?? ''}

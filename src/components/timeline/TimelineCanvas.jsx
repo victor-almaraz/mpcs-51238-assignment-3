@@ -7,7 +7,7 @@ import { getEngine } from '@/lib/audio/engine-client';
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { faderText } from '@/components/mixer/TrackStrip';
 import { audioTempo, clipEndTick, envelopeGainAt } from '@/lib/project/clip-commands';
-import { RULER_H, TRACK_H, clipRect, envelopeY, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
+import { HEADER_W, RULER_H, TRACK_H, clipRect, envelopeY, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
 
 function cssVar(name, fallback) {
   if (typeof document === 'undefined') return fallback;
@@ -108,8 +108,8 @@ function drawHandles(ctx, doc, clip, rect, zoom, sx, colors, gainDrag) {
 }
 
 /**
- * Visual layer of the timeline: a bar-number ruler, track rows with their
- * names, bar lines, clips with waveforms
+ * Visual layer of the timeline: a bar-number ruler, track lanes, bar lines,
+ * clips with waveforms
  * (from cached peaks) or note sketches, fades, the selection, the edit cursor
  * and the playhead, drawn on Canvas 2D for the visible area only. Hidden from
  * the accessibility tree; the treegrid mirror is the accessible view. `ghost`
@@ -119,8 +119,7 @@ function drawHandles(ctx, doc, clip, rect, zoom, sx, colors, gainDrag) {
  * handles; clips with envelope points show the envelope line. The
  * playhead is read from the engine in a requestAnimationFrame loop.
  */
-export default function TimelineCanvas({ project, rowIds, zoom, meter, selected, ghost, editCursor, scrollRef }) {
-  const canvasRef = useRef(null);
+export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter, selected, ghost, editCursor, scrollRef }) {
   const props = useRef(null);
   useEffect(() => {
     props.current = { project, rowIds, zoom, meter, selected, ghost, editCursor };
@@ -147,7 +146,7 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
       const scroller = scrollRef.current;
       if (!p || !scroller) return;
       const dpr = window.devicePixelRatio || 1;
-      const w = Math.max(1, scroller.clientWidth);
+      const w = Math.max(1, scroller.clientWidth - HEADER_W);
       const h = RULER_H + Math.max(TRACK_H, p.rowIds.length * TRACK_H);
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
         canvas.width = Math.round(w * dpr);
@@ -278,19 +277,6 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
           }
         }
       });
-      // Track names stay at the left edge, above the clips.
-      ctx.font = '11px ui-monospace, monospace';
-      p.rowIds.forEach((trackId, r) => {
-        const label = p.project.tracks[trackId].name;
-        const y = RULER_H + r * TRACK_H + TRACK_H - 8;
-        const tw = ctx.measureText(label).width + 8;
-        ctx.fillStyle = colors.bg;
-        ctx.globalAlpha = 0.85;
-        ctx.fillRect(0, y - 11, tw, 15);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = colors.fg;
-        ctx.fillText(label, 4, y);
-      });
       ctx.fillStyle = colors.focus;
       for (let y = 0; y < h; y += 8) ctx.fillRect(p.editCursor * k - sx, y, 1, 4);
       if (g?.mode === 'marquee') {
@@ -307,7 +293,8 @@ export default function TimelineCanvas({ project, rowIds, zoom, meter, selected,
     }
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-  }, [scrollRef]);
+  }, [scrollRef, canvasRef]);
 
-  return <canvas ref={canvasRef} aria-hidden="true" className="sticky left-0 top-0 block" />;
+  // Right of the track headers, held in view while the arrangement scrolls sideways (--sx).
+  return <canvas ref={canvasRef} aria-hidden="true" className="absolute top-0 block" style={{ left: HEADER_W, transform: 'translateX(var(--sx, 0px))' }} />;
 }

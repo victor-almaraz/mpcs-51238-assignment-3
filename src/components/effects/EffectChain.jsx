@@ -14,6 +14,7 @@ import { clampParam } from '@/dsp/core/params';
 import { EFFECTS, effectFor } from '@/dsp/effects/registry';
 import { MAX_EFFECTS } from '@/dsp/protocol';
 import { addEffect, addEffectBlocker, chainIds, moveEffect, removeEffect, setEffectBypass } from '@/lib/project/effect-commands';
+import SafetyLimiter from './SafetyLimiter';
 
 const LABELS = {
   lowFreq: 'Low frequency',
@@ -155,7 +156,8 @@ function chainNames(devices) {
  * Insert chain of one track or the master (assignment-3-scope.md, Effects;
  * DEV-01): devices left to right, up to 8 (at most 4 reverbs per project),
  * each with bypass, move, preset and remove, every control a labelled native
- * input. Focus follows a moved device and moves on from a removed one.
+ * input. Focus follows a moved device and moves on from a removed one. The
+ * master chain ends in the fixed safety limiter (SAFE-02).
  * `onCommand(fn)` applies fn(latestDoc) when it succeeds and returns its
  * result; `onParam(deviceId, id, value)` edits one parameter.
  */
@@ -172,6 +174,7 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
   const blocker = addEffectBlocker(project, trackId, type);
   const full = ids.length >= MAX_EFFECTS;
   const headingId = `chain-${trackId}-heading`;
+  const isMaster = trackId === project.masterTrackId;
 
   useEffect(() => {
     const key = pendingFocus.current;
@@ -200,7 +203,7 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
       <h2 id={headingId} className={sectionHeading}>
         {title}
       </h2>
-      {ids.length === 0 ? <p className="text-sm">No effects. The signal passes through unchanged.</p> : null}
+      {ids.length === 0 ? <p className="text-sm">{isMaster ? 'No effects before the safety limiter.' : 'No effects. The signal passes through unchanged.'}</p> : null}
       <ol ref={listRef} className="flex flex-wrap items-start gap-2">
         {devices.map((device, i) => (
           <EffectSlot
@@ -215,6 +218,7 @@ export default function EffectChain({ project, trackId, title, onCommand, onPara
           />
         ))}
       </ol>
+      {isMaster ? <SafetyLimiter /> : null}
       <div className="flex flex-wrap items-end gap-2">
         <Select id={`chain-${trackId}-type`} label="Effect" value={type} options={TYPE_OPTIONS} onChange={setType} disabled={disabled} />
         <Button ref={addRef} disabled={disabled || blocker !== null} aria-describedby={`chain-${trackId}-limit`} onClick={() => run((doc, id) => addEffect(doc, id, type), `Added ${effectFor(type).label}`)}>

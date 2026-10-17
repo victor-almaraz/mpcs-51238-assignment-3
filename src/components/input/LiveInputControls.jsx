@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toggle from '@/components/ui/Toggle';
-import { sectionHeading } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
-import { createKeyboardInput, noteName } from '@/lib/audio/keyboard-input';
+import { createKeyboardInput, isNoteKey, noteName } from '@/lib/audio/keyboard-input';
+import { claimKeys } from '@/lib/commands/registry';
 import { MIDI_FIREFOX, connectMidi, isFirefox, midiSupported, MIDI_UNSUPPORTED } from '@/lib/audio/midi-input';
 import { getSettings, updateSettings } from '@/lib/settings/store';
 
@@ -14,7 +14,8 @@ import { getSettings, updateSettings } from '@/lib/settings/store';
  * Live input (midi.md): computer-keyboard playing with an on/off toggle and the
  * octave, and Web MIDI connected from a button. Notes play on the engine's
  * live target track and pass through the volume notice. `onNote(pitch)` also
- * receives each note-on (step input in the piano roll).
+ * receives each note-on (step input in the piano roll). While keyboard playing
+ * is on, its letters play notes rather than run shortcuts (G, K).
  */
 export default function LiveInputControls({ onNote }) {
   const engine = getEngine();
@@ -50,6 +51,12 @@ export default function LiveInputControls({ onNote }) {
     };
   }, [engine]);
 
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+  useEffect(() => claimKeys((e) => enabledRef.current && isNoteKey(e.code)), []);
+
   function toggleKeyboard() {
     keyboard.current?.setEnabled(!enabled);
     setEnabled(!enabled);
@@ -73,24 +80,25 @@ export default function LiveInputControls({ onNote }) {
     }
   }
 
+  const midiNote = midiStatus || (!midiSupported() ? MIDI_UNSUPPORTED : isFirefox() ? MIDI_FIREFOX : '');
   return (
-    <section aria-labelledby="live-input-heading" className="flex flex-col gap-2">
-      <h2 id="live-input-heading" className={sectionHeading}>
+    <section aria-labelledby="live-input-heading" className="flex min-w-0 items-center gap-2">
+      <h2 id="live-input-heading" className="sr-only">
         Live input
       </h2>
-      <div className="flex flex-wrap items-center gap-3">
-        <Toggle pressed={enabled} onClick={toggleKeyboard}>
-          Play with keyboard
-        </Toggle>
-        <StatusRegion className="text-sm">Keyboard octave: {noteName(12 * (octave + 1))}</StatusRegion>
-        <Button onClick={connect}>Connect MIDI device</Button>
-      </div>
+      <Toggle size="sm" pressed={enabled} onClick={toggleKeyboard} data-help="Keys A to K play notes C to C on the selected track; Z and X change the octave.">
+        Play with keyboard
+      </Toggle>
+      <StatusRegion className="shrink-0 text-xs whitespace-nowrap">Keyboard octave: {noteName(12 * (octave + 1))}</StatusRegion>
+      <Button size="sm" onClick={connect} data-help="Asks the browser for MIDI devices; notes play on the selected track.">
+        Connect MIDI device
+      </Button>
       {midiStatus ? (
-        <StatusRegion className="text-sm">{midiStatus}</StatusRegion>
-      ) : !midiSupported() ? (
-        <p className="text-sm text-muted">{MIDI_UNSUPPORTED}</p>
-      ) : isFirefox() ? (
-        <p className="text-sm text-muted">{MIDI_FIREFOX}</p>
+        <StatusRegion className="truncate text-xs">{midiNote}</StatusRegion>
+      ) : midiNote ? (
+        <p className="truncate text-xs text-muted" title={midiNote}>
+          {midiNote}
+        </p>
       ) : null}
     </section>
   );

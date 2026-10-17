@@ -101,8 +101,9 @@ test('a valid submit saves the project and opens it with one empty instrument tr
   await expect(page).toHaveURL(/\/projects\/prj_[A-Za-z0-9_-]{21}$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('First song');
   await expect(page.getByText('96 BPM · 3/4')).toBeVisible();
-  const tracks = page.getByRole('region', { name: 'Tracks' }).getByRole('listitem');
-  await expect(tracks).toHaveText(['Track 1: Track 1, Subtractive synth']);
+  const tracks = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]');
+  await expect(tracks).toHaveCount(1);
+  await expect(tracks.first()).toHaveAccessibleName(/^Track 1: Track 1, Subtractive synth/);
   await expect(page.getByText('Press a key or click the grid to add a note')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add audio file' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Keyboard map' })).toBeVisible();

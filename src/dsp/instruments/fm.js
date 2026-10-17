@@ -1,6 +1,8 @@
 /*
  * Two-operator FM synth (assignment-3-scope.md, Instruments;
- * a3-audio-implementation.md, FM): out = sin(φc + I(t)·sin(φm)), fm = ratio·fc,
+ * a3-audio-implementation.md, FM): out = sin(φc + I(t)·sin(φm)),
+ * fm = (ratio + fine)·fc, where fine moves the modulator off the ratio grid
+ * (inharmonic, bell-like spectra); an ADSR envelope shapes the level.
  * I(t) = min(index, I_max)·exp(−t/τ) with τ = index decay. The decay factor is
  * computed once per block and interpolated per sample.
  * I_max = max(0, (0.45·fs − fc)/fm − 1) keeps the highest significant sideband
@@ -9,17 +11,20 @@
  */
 import { clampParam, defineParam } from '../core/params.js';
 import { Smoother } from '../core/smoother.js';
-import { NOTE_FREQUENCIES } from '../core/tables.js';
-import { PolyKernel } from './poly-kernel.js';
+import { PolyKernel, SUSTAIN_PARAM, TUNING_PARAMS, decayParam } from './poly-kernel.js';
 
 const TWO_PI = 2 * Math.PI;
 
 export const FM_PARAMS = [
   defineParam({ id: 'ratio', min: 0.5, max: 12, default: 2, unit: '×', scale: 'lin', step: 0.5 }),
+  defineParam({ id: 'fine', min: -0.5, max: 0.5, default: 0, unit: 'offset', scale: 'lin', step: 0.01 }),
   defineParam({ id: 'index', min: 0, max: 20, default: 3, scale: 'lin', step: 0.1 }),
   defineParam({ id: 'indexDecay', min: 0.01, max: 4, default: 0.5, unit: 's', scale: 'pow3' }),
   defineParam({ id: 'attack', min: 0.002, max: 2, default: 0.005, unit: 's', scale: 'pow3' }),
+  decayParam(0.5),
+  SUSTAIN_PARAM,
   defineParam({ id: 'release', min: 0.01, max: 4, default: 0.4, unit: 's', scale: 'pow3' }),
+  ...TUNING_PARAMS,
 ];
 
 const DEF = Object.fromEntries(FM_PARAMS.map((d) => [d.id, d]));
@@ -39,8 +44,11 @@ export class FmKernel extends PolyKernel {
     this.phaseC = new Float64Array(this.slots);
     this.phaseM = new Float64Array(this.slots);
     this.fc = new Float64Array(this.slots);
+    this.fmRatio = new Float64Array(this.slots); // ratio + fine, fixed at note-on
     this.decay = new Float64Array(this.slots); // exp(−t/τ) at block start
     this.ratio = DEF.ratio.default;
+    this.fine = DEF.fine.default;
+    this.env.setDecay(DEF.decay.default);
     this.indexDecay = DEF.indexDecay.default;
     this.attack = DEF.attack.default;
     this.release = DEF.release.default;
@@ -54,7 +62,9 @@ export class FmKernel extends PolyKernel {
     const def = DEF[id];
     if (!def) return;
     const v = clampParam(def, value);
+    if (this.setShared(id, v)) return;
     if (id === 'ratio') this.ratio = v;
+    else if (id === 'fine') this.fine = v;
     else if (id === 'index') this.index.setTarget(v);
     else if (id === 'indexDecay') this.indexDecay = v;
     else if (id === 'attack') this.attack = v;
@@ -64,7 +74,8 @@ export class FmKernel extends PolyKernel {
   startVoice(v, pitch) {
     this.phaseC[v] = 0;
     this.phaseM[v] = 0;
-    this.fc[v] = NOTE_FREQUENCIES[pitch];
+    this.fc[v] = this.noteHz(pitch);
+    this.fmRatio[v] = Math.max(0.01, this.ratio + this.fine);
     this.decay[v] = 1;
   }
 
@@ -77,7 +88,7 @@ export class FmKernel extends PolyKernel {
   renderVoice(v, out, start, end) {
     const fs = this.fs;
     const fc = this.fc[v];
-    const fm = this.ratio * fc;
+    const fm = this.fmRatio[v] * fc;
     const peakIndex = Math.min(this.index.y, maxIndex(fc, fm, fs));
     const dC = (TWO_PI * fc) / fs;
     const dM = (TWO_PI * fm) / fs;

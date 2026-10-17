@@ -8,6 +8,8 @@ import { ENVELOPE_GAIN_MAX, audioTempo, clipEndTick } from '@/lib/project/clip-c
 /** Row height, bar-number ruler height and pixels per quarter note at zoom 1, CSS pixels. */
 export const TRACK_H = 56;
 export const RULER_H = 20;
+/** Width of the track header column (ARR-01), CSS pixels. */
+export const HEADER_W = 224;
 export const QUARTER_W = 32;
 /** Pointer distance from a clip edge that grabs a trim handle. */
 export const EDGE_PX = 6;

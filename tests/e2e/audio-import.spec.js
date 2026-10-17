@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { test as base, expect } from '@playwright/test';
+import { openTab, trackRow } from '../support/editor.js';
 
 /** A 16-bit PCM WAV of `seconds` of a `freq` Hz sine at `rate`, `channels` channels. */
 function wav({ seconds = 1, freq = 440, rate = 48000, channels = 1 } = {}) {
@@ -85,7 +86,7 @@ const storedIds = (page) =>
   );
 
 async function importFixtures(page, files = FIXTURES) {
-  await page.locator('input[type="file"]').setInputFiles(files);
+  await page.locator('input[type="file"][accept^="audio"]').first().setInputFiles(files);
   for (const f of files) await expect(results(page)).toContainText(`Added ${f.name}.`);
 }
 
@@ -127,7 +128,7 @@ test('an import that fails the capacity check is session-only with the scope mes
 
 test('an undecodable file reports its error and the next file still imports', async ({ page }) => {
   await createProject(page, 'Mixed');
-  await page.locator('input[type="file"]').setInputFiles([
+  await page.locator('input[type="file"][accept^="audio"]').first().setInputFiles([
     { name: 'notes.wav', mimeType: 'audio/wav', buffer: Buffer.from('not audio at all') },
     FIXTURES[0],
   ]);
@@ -228,16 +229,43 @@ async function addSampler(page) {
   const tools = page.getByRole('toolbar', { name: 'Clip commands' });
   await tools.getByLabel('Instrument').selectOption('sampler');
   await tools.getByRole('button', { name: 'Add instrument track' }).click();
-  // Adding a track selects it, which opens its instrument panel.
-  await expect(page.getByRole('button', { name: /^Track 2: Track 2, Sampler/ })).toHaveAttribute('aria-pressed', 'true');
+  // Adding a track selects it; its instrument panel is in the Devices tab.
+  await expect(trackRow(page, 'Track 2: Track 2, Sampler')).toHaveAttribute('aria-selected', 'true');
+  await openTab(page, 'Devices');
   return page.getByRole('region', { name: 'Sampler: Track 2' });
 }
+
+test('granular File source: choose File, load an audio file, and it saves with the project', async ({ page }) => {
+  const id = await createProject(page, 'Grains');
+  const tools = page.getByRole('toolbar', { name: 'Clip commands' });
+  await tools.getByLabel('Instrument').selectOption('granular');
+  await tools.getByRole('button', { name: 'Add instrument track' }).click();
+  await expect(trackRow(page, 'Track 2: Track 2, Granular')).toHaveAttribute('aria-selected', 'true');
+  await openTab(page, 'Devices');
+  const panel = page.getByRole('region', { name: 'Granular synth: Track 2' });
+  await expect(panel.getByRole('region', { name: 'File source' })).toHaveCount(0);
+  await panel.getByRole('group', { name: 'Source' }).getByText('File').click();
+  const file = panel.getByRole('region', { name: 'File source' });
+  await expect(file).toContainText('No file. Load an audio file for the File source.');
+  await panel.locator('input[type="file"]').setInputFiles([FIXTURES[0]]);
+  await expect(file).toContainText('File: tone-a.wav, 2.00 s, Saved on this device');
+  await expect.poll(async () => {
+    const doc = await saved(page, id);
+    const device = Object.values(doc?.devices ?? {}).find((d) => d.type === 'granular');
+    return [device?.granular?.sourceName, Object.keys(doc?.sources ?? {}).length];
+  }).toEqual(['tone-a.wav', 1]);
+  const axe = await new AxeBuilder({ page }).include('section[aria-labelledby="instrument-panel-heading"]').analyze();
+  expect(axe.violations).toEqual([]);
+  await file.getByRole('button', { name: 'Remove file' }).click();
+  await expect(file).toContainText('No file.');
+  await expect.poll(async () => Object.keys((await saved(page, id)).sources).length).toBe(0);
+});
 
 test('sampler: load a sample, then move markers by keyboard alone within their constraints', async ({ page }) => {
   const id = await createProject(page, 'Sampler');
   const panel = await addSampler(page);
   await expect(panel).toContainText('No sample. Load a sample file or choose a project source.');
-  await page.locator('input[type="file"]').nth(1).setInputFiles([FIXTURES[0]]);
+  await panel.locator('input[type="file"]').setInputFiles([FIXTURES[0]]);
   await expect(panel).toContainText('Sample: tone-a.wav, 2.00 s, Saved on this device');
   await expect.poll(async () => (await saved(page, id)).audioRate).toBeGreaterThan(0);
   const rate = (await saved(page, id)).audioRate;
@@ -286,10 +314,11 @@ test('sampler: a missing source shows "Audio not loaded" and importing the same 
   doc.sources[sha] = { id: sha, name: 'tone-a.wav', path: `audio/${sha}.wav`, sampleRate: 48000, channels: 1, frames: 96000, format: 'audio/wav', sha256: sha };
   await page.evaluate(([key, value]) => localStorage.setItem(key, value), [`w-rack:v1:project:${id}`, JSON.stringify(doc)]);
   await page.reload();
-  await expect(page.getByRole('button', { name: /^Track 2: Track 2, Sampler/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(trackRow(page, 'Track 2: Track 2, Sampler')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Devices' })).toHaveAttribute('aria-selected', 'true');
   const panel = page.getByRole('region', { name: 'Sampler: Track 2' });
   await expect(panel).toContainText('Audio not loaded: tone-a.wav');
-  await page.locator('input[type="file"]').first().setInputFiles([FIXTURES[0]]);
+  await page.locator('input[type="file"][accept^="audio"]').first().setInputFiles([FIXTURES[0]]);
   await expect(panel).toContainText('Sample: tone-a.wav, 2.00 s, Saved on this device');
 });
 

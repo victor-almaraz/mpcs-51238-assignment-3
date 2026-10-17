@@ -26,13 +26,13 @@ export default function SiteHeader() {
   const pathname = normalize(usePathname() ?? '');
 
   return (
-    <header className="border-b border-border-strong bg-surface">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2">
+    <header className="h-12 overflow-x-auto border-b border-border-strong bg-surface">
+      <div className="flex h-full items-center gap-x-6 px-4">
         <span className="font-display text-lg font-bold uppercase">
           W-Rack
         </span>
         <nav aria-label="Main">
-          <ul className="flex flex-wrap gap-2">
+          <ul className="flex gap-2">
             {LINKS.map(({ href, label }) => {
               const current = pathname === href;
               return (
@@ -55,7 +55,7 @@ export default function SiteHeader() {
             })}
           </ul>
         </nav>
-        <Button className="ml-auto" aria-keyshortcuts="Control+Shift+P Meta+Shift+P" onClick={requestPalette}>
+        <Button className="ml-auto" aria-keyshortcuts="Control+K Meta+K Control+Shift+P Meta+Shift+P" onClick={requestPalette}>
           Commands
         </Button>
       </div>

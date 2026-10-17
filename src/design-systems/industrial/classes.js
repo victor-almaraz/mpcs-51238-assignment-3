@@ -25,7 +25,7 @@ export const disabledState = 'disabled:cursor-not-allowed disabled:opacity-40';
 /** Silkscreened legends: compact monospace capitals. */
 export const controlType = 'text-[0.8125rem] font-bold uppercase tracking-[0.06em]';
 
-export const controlBase = `inline-flex items-center justify-center gap-2 rounded-ds border text-center ${controlType} select-none enabled:cursor-pointer motion-safe:transition-colors motion-safe:duration-100 ${focusRing} ${disabledState}`;
+export const controlBase = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-ds border text-center ${controlType} select-none enabled:cursor-pointer motion-safe:transition-colors motion-safe:duration-100 ${focusRing} ${disabledState}`;
 
 /** Chips: the same legends a step smaller, so a widget header fits on one row. */
 export const chipBase = `inline-flex items-center justify-center gap-2 rounded-ds border text-center text-xs font-bold uppercase tracking-[0.04em] select-none enabled:cursor-pointer motion-safe:transition-colors motion-safe:duration-100 ${focusRing} ${disabledState}`;

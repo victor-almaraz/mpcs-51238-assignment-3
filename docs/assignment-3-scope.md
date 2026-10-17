@@ -200,15 +200,15 @@ All seven instruments are kernels inside one engine processor (`instruments.md`,
 
 | Instrument | Parameters and rules |
 |---|---|
-| Subtractive | Waveform sine, square, saw, triangle (band-limited); cutoff 40–16 000 Hz (log); resonance 0–20 dB; attack 0.002–2 s; release 0.01–4 s |
-| FM (two-operator) | Ratio 0.5–12 in steps of 0.5; index 0–20 with `I_max = max(0, (0.45·fs − f_c)/f_m − 1)`; index decay; attack; release |
-| Additive | Eight harmonics, normalised by `max(1, Σh)`; harmonics above `0.45·fs` omitted |
-| Pluck | Damping, brightness, decay T60; `ρ = 10^(−3/(T60·f)) ≤ 0.9999`; allpass `C = (1 − d)/(1 + d)`; DC blocker; seeded noise |
-| Granular | Sources saw, noise, chord; grain size 0.01–0.25 s; density 2–60 grains/s; spray 0–1; ≤ 4 voices, ≤ 64 grains |
+| Subtractive | Waveform sine, square, saw, triangle (band-limited); cutoff 40–16 000 Hz (log); resonance 0–20 dB; filter envelope 0–6 octaves, capped at 0.45·fs; ADSR (attack 0.002–2 s, decay 0.01–4 s, sustain 0–1, release 0.01–4 s) |
+| FM (two-operator) | Ratio 0.5–12 in steps of 0.5; fine −0.5 to 0.5; index 0–20 with `I_max = max(0, (0.45·fs − f_c)/f_m − 1)`; index decay; ADSR |
+| Additive | Eight harmonics, normalised by `max(1, Σh)`; harmonics above `0.45·fs` omitted; ADSR; vibrato rate 0.5–12 Hz and depth 0–100 cents |
+| Pluck | Damping, brightness, pick position 0–0.5, decay T60, release T60 after note-off; `ρ = 10^(−3/(T60·f)) ≤ 0.9999`; allpass `C = (1 − d)/(1 + d)`; DC blocker; seeded noise |
+| Granular | Sources saw, noise, chord and an audio file (first 20 s); position 0–1; grain size 0.01–0.25 s; density 2–60 grains/s; spray 0–1; pitch spread 0–1200 cents; attack; release; ≤ 4 voices, ≤ 64 grains |
 | Drum machine | 14 synthesized voices, no samples; per voice level, tune, decay, tone, pan; kit level, velocity sensitivity, choke; General MIDI percussion map (21 notes); unmapped notes silent; note-off ignored; closed and pedal hat choke open hat; crash and ride layer 2 instances |
 | Sampler | One user-imported source per device; root note, fine tune, start and end, loop mode (off, forward, ping-pong) and points, loop crossfade, trigger or gate, ADSR, lowpass with envelope amount, velocity sensitivity, poly or mono with glide, pan, level; ±24 semitones from the root note; one zone covering every key in this build |
 
-Shared by all seven: velocity gain `0.3·(vel/127)²` (drum machine and sampler scale it by velocity sensitivity); seeded `mulberry32`; 16 voices per instrument and 64 global, with stealing; polyphony auto-gain `min(1, 2/√voices)`; Panic and all-notes-off end every voice, including one-shot drum hits and trigger-mode sampler voices.
+The five synths share an Octave (−3 to 3) and Cents (−100 to 100) tuning. Shared by all seven: velocity gain `0.3·(vel/127)²` (drum machine and sampler scale it by velocity sensitivity); seeded `mulberry32`; 16 voices per instrument and 64 global, with stealing; polyphony auto-gain `min(1, 2/√voices)`; Panic and all-notes-off end every voice, including one-shot drum hits and trigger-mode sampler voices.
 
 ## MIDI
 - MIDI clips are edited in a piano roll and can loop.

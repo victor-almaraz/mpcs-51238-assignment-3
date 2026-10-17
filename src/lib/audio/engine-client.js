@@ -15,6 +15,7 @@ import { PROTOCOL_VERSION } from '../../dsp/protocol.js';
 import { getSettings, updateSettings } from '../settings/store.js';
 import { compileModel } from './compile-model.js';
 import { allSources, getSource, redecodeAll, subscribeSources } from './decode.js';
+import { deviceSource } from '../project/clip-commands.js';
 import { mipsFor } from './peaks-client.js';
 import { paramChanges } from './param-changes.js';
 
@@ -155,7 +156,10 @@ function createClient() {
       .then(() => {
         // Only the open project's sources go to the engine; others are removed.
         const used = { ...(doc?.sources ?? {}) };
-        for (const d of Object.values(doc?.devices ?? {})) if (d.sampler?.sourceId) used[d.sampler.sourceId] = true;
+        for (const d of Object.values(doc?.devices ?? {})) {
+          const ref = deviceSource(d);
+          if (ref) used[ref.sourceId] = true;
+        }
         const loaded = new Map(allSources().filter((s) => s.rate === rate && used[s.sourceId]).map((s) => [s.sourceId, s]));
         for (const [id, source] of loaded) {
           if (sentSources.get(id) === source.channels) continue;
@@ -176,24 +180,26 @@ function createClient() {
       });
   }
 
-  const sentZones = new Map(); // sampler deviceId → sourceId sent in sampler-zones (or null)
+  const sentZones = new Map(); // sampler or granular deviceId → sourceId sent in sampler-zones (or null)
   const sentMips = new Map(); // sourceId → the channel arrays its sent mips were built from
   const mipsPending = new Map(); // sourceId → the channel arrays a mips request is building from
 
   /**
-   * Sends each sampler's zone source when it changes (sampler-zones), and
-   * mip levels for sampler sources at the context rate (source-mips).
+   * Sends each sampler's zone source and each granular File source when it
+   * changes (sampler-zones), and mip levels for sampler sources at the
+   * context rate (source-mips).
    */
   function syncZones() {
     if (!engine || !doc) return;
     for (const device of Object.values(doc.devices)) {
-      if (device.type !== 'sampler') continue;
-      const zone = device.sampler?.sourceId ? device.sampler : null;
+      if (device.type !== 'sampler' && device.type !== 'granular') continue;
+      const zone = deviceSource(device);
       const id = zone?.sourceId ?? null;
       if (sentZones.get(device.id) !== id) {
         send({ t: 'sampler-zones', deviceId: device.id, selection: 0, zones: zone ? [{ sourceId: zone.sourceId, sourceName: zone.sourceName ?? '' }] : [] });
         sentZones.set(device.id, id);
       }
+      if (device.type !== 'sampler') continue;
       const source = id ? getSource(id) : null;
       if (!source || source.rate !== ctx.sampleRate || sentMips.get(id) === source.channels || mipsPending.get(id) === source.channels) continue;
       mipsPending.set(id, source.channels);

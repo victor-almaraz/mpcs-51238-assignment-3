@@ -20,6 +20,9 @@ export const KEYBOARD_VELOCITY = 100;
 
 const TEXT_ENTRY = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]), textarea, select, [contenteditable], [contenteditable="true"]';
 
+/** True for the keys keyboard input uses: the note keys and the octave keys Z and X. */
+export const isNoteKey = (code) => KEY_SEMITONES[code] !== undefined || code === 'KeyZ' || code === 'KeyX';
+
 /** MIDI note for key `code` at base octave `octave`, or null when the key plays no note. */
 export function pitchForCode(code, octave) {
   const semitone = KEY_SEMITONES[code];

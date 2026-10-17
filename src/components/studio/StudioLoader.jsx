@@ -9,7 +9,11 @@ import { isUnsavedCopy, loadProject, openExampleCopy } from '@/lib/project/store
 const linkButton = cx(controlBase, controlSizes.md, buttonVariants.secondary);
 
 function Opening() {
-  return <h1 className={pageHeading}>Opening project</h1>;
+  return (
+    <div className="p-4">
+      <h1 className={pageHeading}>Opening project</h1>
+    </div>
+  );
 }
 
 const Studio = dynamic(() => import('./Studio'), { ssr: false, loading: Opening });
@@ -56,7 +60,7 @@ function resolve(location, shellId) {
 
 function Problem({ title }) {
   return (
-    <>
+    <div className="flex flex-col gap-4 p-4">
       <h1 className={pageHeading}>{title}</h1>
       <ul className="flex flex-wrap gap-2">
         <li>
@@ -70,7 +74,7 @@ function Problem({ title }) {
           </Link>
         </li>
       </ul>
-    </>
+    </div>
   );
 }
 
