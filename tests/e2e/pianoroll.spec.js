@@ -201,3 +201,49 @@ test('stacked notes in one cell are named together', async ({ page }) => {
   await expect.poll(async () => allNotes(await saved(page, id)).length).toBe(2);
   await expect(cursorCell(grid)).toHaveAccessibleName('C4, bar 1 beat 1, length 0.25 beats, velocity 100, and 1 more note');
 });
+
+test('the grid changes the cells and snap, never the note scale; 1/32 needs a zoom in', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  await page.getByRole('treegrid', { name: 'Tracks and clips' }).getByRole('row', { name: /^Track 2: Bass/ }).click({ position: { x: 60, y: 20 } });
+  const grid = page.getByRole('region', { name: /^Piano roll: / }).getByLabel('Grid', { exact: true });
+  const content = () => page.getByRole('grid', { name: 'Notes' }).evaluate((g) => g.parentElement.getBoundingClientRect().width);
+  await grid.selectOption({ label: '1/16' });
+  const width = await content();
+  for (const label of ['1/4', '1/8']) {
+    await grid.selectOption({ label });
+    expect(await content()).toBe(width);
+  }
+  await expect(grid.locator('option', { hasText: '1/32' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Piano roll zoom in' }).click();
+  await expect.poll(content).toBeGreaterThan(width);
+  await grid.selectOption({ label: '1/32' });
+  await expect(page.getByRole('button', { name: 'Piano roll zoom out' })).toBeDisabled();
+});
+
+test('either end of a note stretches it: snapped to the grid, or finer with Alt', async ({ page }) => {
+  const id = await createProject(page);
+  await silence(page);
+  const grid = roll(page, 'Track 1');
+  await grid.getByRole('gridcell', { name: 'C4, bar 1 beat 1', exact: true }).click();
+  const box = await grid.locator('[data-note="start"]').boundingBox();
+  const spans = async () => allNotes(await saved(page, id)).map((n) => [n.tick, n.length]);
+  await expect.poll(spans).toEqual([[0, 240]]);
+  // Right end: three 1/16 steps (24 px each) longer, in one edit.
+  await page.mouse.move(box.x + box.width - 2, box.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 24, box.y + 12, { steps: 4 });
+  await page.mouse.move(box.x + box.width + 48, box.y + 12, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(spans).toEqual([[0, 720]]);
+  // Left end with Alt: the start moves by 1/64 steps (60 ticks, 6 px) and the end stays.
+  const start = await grid.locator('[data-note="start"]').boundingBox();
+  await page.mouse.move(start.x + 2, start.y + 12);
+  await page.mouse.down();
+  await page.keyboard.down('Alt');
+  await page.mouse.move(start.x + 8, start.y + 12, { steps: 3 });
+  await page.mouse.move(start.x + 14, start.y + 12, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  await expect.poll(spans).toEqual([[120, 600]]);
+});

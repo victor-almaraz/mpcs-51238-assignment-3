@@ -119,14 +119,14 @@ The piano roll (`src/components/pianoroll/PianoRollGrid.jsx`) is a canvas (`Pian
 | Item | Behaviour |
 |---|---|
 | Rows | Pitches 127 to 0, top to bottom; on drum machine tracks the 21 mapped General MIDI notes, low to high, or 0–127 with `Show all notes` |
-| Cells | 24 × 24 px, one grid step wide |
-| Toolbar | Grid (1/4, 1/8, 1/16, 1/32; default 1/16), Clip loop (Off, 1, 2 or 4 bars), Step input, Preview notes, Quantize (`Q`), and `Show all notes` on drum tracks |
+| Cells | One grid step wide and 24 px tall. The time scale is fixed: a 1/16 step is 24 px at zoom 1×, so a grid change never resizes notes |
+| Toolbar | Grid (1/4, 1/8, 1/16, 1/32; default 1/16), Piano roll zoom out and zoom in (0.5×, 1×, 2×, 4×; a grid whose cells would be narrower than 24 px is disabled until a zoom in), Clip loop (Off, 1, 2 or 4 bars), Step input, Preview notes, Quantize (`Q`), and `Show all notes` on drum tracks |
 | Notes | Drawn in the track colour; drum notes draw as fixed-width markers whose opacity follows velocity |
 | Empty clip | "Press a key or click the grid to add a note. Drag to draw a longer one." with the keyboard map; step input starts on |
 
 ### Pointer
 - A click on an empty cell adds a note one grid step long; a drag from an empty cell draws a note as long as the drag.
-- A drag from a note's body moves it in time and pitch; a drag from its right edge (the last 8 px, with the resize cursor) changes its length. The edit commits on release.
+- A drag from a note's body moves it in time and pitch. A drag from either end (the last 6 px, or a third of a short note, with the resize cursor) stretches it from that end; the other end stays. Stretches snap to the grid; with Alt they snap to 1/64. The selected note shows grips at both ends. The edit commits on release.
 - A click on a note selects and previews it; a double-click removes it.
 - Drum notes keep their length under the pointer.
 - A row header previews its pitch, or auditions its drum voice.

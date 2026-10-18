@@ -40,6 +40,7 @@ const EDITOR_KEYS = [
       ['Delete', 'Remove the note'],
       ['Alt+Arrows', 'Move the note'],
       ['Shift+Left, Shift+Right', 'Shorten or lengthen the note'],
+      ['Drag a note end', 'Stretch the note; hold Alt for finer than the grid'],
       ['Shift+Up, Shift+Down', 'Raise or lower the velocity'],
       ['Q', 'Quantize the clip'],
       ['Up, Down, Page Up, Page Down', 'Velocity lane: change the selected note'],

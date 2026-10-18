@@ -100,6 +100,16 @@ export function resizeNote(doc, clipId, noteId, dLength, minLength = 1) {
   return updateNote(doc, clipId, noteId, (n) => ({ ...n, length: Math.max(Math.max(1, minLength), n.length + dLength) }));
 }
 
+/**
+ * Sets a note's start and length in one edit (stretching either edge): the start is
+ * clamped into the clip, the length to at least 1 tick.
+ */
+export function setNoteSpan(doc, clipId, noteId, tick, length) {
+  requireTick(tick, 'tick');
+  requireTick(length, 'length');
+  return updateNote(doc, clipId, noteId, (n, clip) => ({ ...n, tick: clamp(tick, 0, clip.length - 1), length: Math.max(1, length) }));
+}
+
 /** Sets a note's velocity, clamped to 1–127. */
 export function setVelocity(doc, clipId, noteId, velocity) {
   return updateNote(doc, clipId, noteId, (n) => ({ ...n, velocity: clamp(Math.round(velocity), VELOCITY_MIN, VELOCITY_MAX) }));

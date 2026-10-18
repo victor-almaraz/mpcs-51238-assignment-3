@@ -23,8 +23,8 @@ test('working state is restored after a reload and through Continue; the transpo
   const projectBefore = await read(page, `w-rack:v1:project:${id}`);
 
   await selectTrack(page, 'Track 1: Track 1, Subtractive synth');
-  await page.getByRole('button', { name: 'Zoom in' }).click();
-  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect(page.getByText('Zoom 400%')).toBeVisible();
   await expect.poll(() => read(page, `w-rack:v1:view:${id}`)).toContain('"zoom":4');
   expect(await read(page, `w-rack:v1:project:${id}`)).toBe(projectBefore);
@@ -43,7 +43,7 @@ test('working state is restored after a reload and through Continue; the transpo
 
 test('pending working state is written when the page is hidden', async ({ page }) => {
   const id = await createProject(page, 'Hide song');
-  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
   expect(await read(page, `w-rack:v1:view:${id}`)).toContain('"zoom":2');
 });
@@ -103,7 +103,7 @@ test('a quota error while saving working state shows the storage message', async
       throw new DOMException('full', 'QuotaExceededError');
     };
   });
-  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText(STORAGE_FULL);
 });
 

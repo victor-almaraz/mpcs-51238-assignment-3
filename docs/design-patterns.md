@@ -311,7 +311,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Problem:** DAW zoom collides with browser zoom on `Mod+wheel` and `Mod+=`/`Mod+-`.
 - **Solution:** Wheel scrolls vertically; Shift+wheel scrolls horizontally; Alt+wheel zooms at the pointer; `Alt+=`, `Alt+-` and `Alt+0` zoom in, zoom out and fit. A zoom keeps the edit cursor in place when it is in view, else the centre of the view. `Mod+=`, `Mod+-` and `Mod+0` stay with the browser.
 - **Prior art:** Ableton Live zooms to the selection with `Z` and back with `X`.
-- **W-Rack application:** Timeline: the browser's wheel scrolling, `Alt+=`, `Alt+-` and the zoom buttons (25 % to 800 %, in steps of 2×), with the anchor rule above; zoom persists in the working state. Alt+wheel and `Alt+0` are not bound, and the piano roll has no zoom.
+- **W-Rack application:** Timeline: the browser's wheel scrolling, `Alt+=`, `Alt+-` and the zoom buttons (25 % to 800 %, in steps of 2×), with the anchor rule above; zoom persists in the working state. Alt+wheel and `Alt+0` are not bound. The piano roll has its own zoom buttons (0.5× to 4×, in steps of 2×), and its time scale does not change with its grid.
 - **Accessibility:** Zoom changes are announced; the page reflows at 200% browser zoom (WCAG 1.4.4, 1.4.10).
 - **Anti-patterns:** Intercepting Ctrl+wheel.
 
@@ -320,7 +320,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 ### `PR-01` Single tool with keyboard entry
 - **Problem:** Modal tool palettes confuse; mouse-only entry excludes keyboard users.
 - **Solution:**
-  - Pointer: clicking an empty cell adds a grid-length note; dragging from an empty cell draws a note as long as the drag; clicking a note selects it; dragging a note moves it; dragging its right edge resizes it; double-clicking it removes it. Each drag commits one edit on release. `B` toggles a paint mode.
+  - Pointer: clicking an empty cell adds a grid-length note; dragging from an empty cell draws a note as long as the drag; clicking a note selects it; dragging a note moves it; dragging either end stretches it from that end (snapped to the grid, or to 1/64 with Alt); double-clicking it removes it. Each drag commits one edit on release. `B` toggles a paint mode.
   - Keyboard: arrows move the cursor; Enter adds or removes a note; Delete removes it; Alt+Left/Right moves it by a grid step and Alt+Up/Down transposes it by a row; Shift+Left/Right changes length; Shift+Up/Down changes velocity by 8. Left from the first column reaches the row header, where Space or Enter previews the row.
   - A Clip loop select (Off, 1, 2 or 4 bars) sets the length the clip's notes repeat over.
 - **Prior art:** Ableton Live's draw mode and grid-stepped insert marker; Song Maker's click-to-toggle cells.

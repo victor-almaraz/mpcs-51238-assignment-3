@@ -40,13 +40,13 @@ export default function Select({
           opt.group ? (
             <optgroup key={`group-${opt.group}`} label={opt.group}>
               {opt.options.map((o) => (
-                <option key={String(o.value)} value={o.value}>
+                <option key={String(o.value)} value={o.value} disabled={o.disabled}>
                   {o.label}
                 </option>
               ))}
             </optgroup>
           ) : (
-            <option key={String(opt.value)} value={opt.value}>
+            <option key={String(opt.value)} value={opt.value} disabled={opt.disabled}>
               {opt.label}
             </option>
           ),

@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import { getEngine } from '@/lib/audio/engine-client';
-import { CELL_W, LABEL_W, ROW_H, isBlackKey } from './layout';
+import { PPQ } from '@/dsp/core/constants';
+import { LABEL_W, ROW_H, isBlackKey } from './layout';
+
+/** Drum hits draw one 1/16 step wide at the current scale, whatever the grid. */
+const DRUM_HIT_TICKS = PPQ / 4;
 
 function cssVar(name, fallback) {
   if (typeof document === 'undefined') return fallback;
@@ -19,12 +23,12 @@ function cssVar(name, fallback) {
 /** Longest gap between redraws of an idle, unchanged piano roll, ms. */
 const IDLE_REDRAW_MS = 250;
 
-export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
+export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
   const canvasRef = useRef(null);
   const props = useRef(null);
   const playheadRef = useRef(null);
   useEffect(() => {
-    props.current = { view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
+    props.current = { tickW, view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
   });
 
   useEffect(() => {
@@ -54,7 +58,7 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
         if (inClip) {
           head.style.display = '';
           head.style.height = `${Math.max(1, p.view.height)}px`;
-          head.style.transform = `translate(${Math.round(tick * (CELL_W / p.grid))}px, ${p.view.scrollY}px)`;
+          head.style.transform = `translate(${Math.round(tick * p.tickW)}px, ${p.view.scrollY}px)`;
         } else if (head.style.display !== 'none') head.style.display = 'none';
       }
       if (!p || (drawn.p === p && drawn.playing === playing && now - drawn.at < IDLE_REDRAW_MS)) {
@@ -74,7 +78,7 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = colors.bg;
       ctx.fillRect(0, 0, w, h);
-      const tickW = CELL_W / p.grid;
+      const tickW = p.tickW;
       const sx = p.view.scrollX;
       const sy = p.view.scrollY;
       const firstRow = Math.max(0, Math.floor(sy / ROW_H));
@@ -100,7 +104,7 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
           const r = rowOf.get(n.pitch);
           if (r === undefined || r < firstRow || r > lastRow) continue;
           const x = n.tick * tickW - sx;
-          const width = p.isDrums ? CELL_W - 2 : Math.max(3, n.length * tickW - 1);
+          const width = p.isDrums ? DRUM_HIT_TICKS * tickW - 2 : Math.max(3, n.length * tickW - 1);
           if (x + width < 0 || x > w) continue;
           ctx.globalAlpha = p.isDrums ? 0.35 + (0.65 * n.velocity) / 127 : 1;
           // Notes take the track's colour, so the piano roll reads as the track it edits.
@@ -110,12 +114,18 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
           ctx.strokeStyle = colors.noteEdge;
           ctx.lineWidth = n.id === p.selectedId ? 2 : 1;
           ctx.strokeRect(x + 1.5, r * ROW_H - sy + 3.5, width - 1, ROW_H - 7);
+          // The selected note shows grips at both ends: drag either one to stretch it.
+          if (n.id === p.selectedId && !p.isDrums && width >= 10) {
+            ctx.fillStyle = colors.noteEdge;
+            ctx.fillRect(x + 3, r * ROW_H - sy + 8, 2, ROW_H - 16);
+            ctx.fillRect(x + width - 3, r * ROW_H - sy + 8, 2, ROW_H - 16);
+          }
         }
       }
       if (p.ghost) {
         const r = p.rows.indexOf(p.ghost.pitch);
         const x = p.ghost.tick * tickW - sx;
-        const width = p.isDrums ? CELL_W - 2 : Math.max(3, p.ghost.length * tickW - 1);
+        const width = p.isDrums ? DRUM_HIT_TICKS * tickW - 2 : Math.max(3, p.ghost.length * tickW - 1);
         ctx.setLineDash([4, 3]);
         ctx.strokeStyle = colors.playhead;
         ctx.lineWidth = 2;

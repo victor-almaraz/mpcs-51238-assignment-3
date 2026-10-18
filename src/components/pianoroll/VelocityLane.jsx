@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { CELL_W, LABEL_W, rowLabel, rowShortLabel } from './layout';
+import { LABEL_W, rowLabel, rowShortLabel } from './layout';
 
 export const LANE_H = 48;
 const VELOCITY_MIN = 1;
@@ -18,12 +18,12 @@ function barBeat(tick, meter, grid) {
 }
 
 /** Notes in time order, then low to high, each with its stem's x in the lane. */
-function stems(notes, grid) {
+function stems(notes, grid, cellW) {
   const sorted = [...notes].sort((a, b) => a.tick - b.tick || a.pitch - b.pitch);
   return sorted.map((note, i) => {
     let chord = 0;
     for (let j = i - 1; j >= 0 && sorted[j].tick === note.tick; j--) chord++;
-    return { note, x: LABEL_W + (note.tick / grid) * CELL_W + 2 + chord * CHORD_STEP };
+    return { note, x: LABEL_W + (note.tick / grid) * cellW + 2 + chord * CHORD_STEP };
   });
 }
 
@@ -37,12 +37,12 @@ const velocityAtY = (y) => Math.round(Math.min(VELOCITY_MAX, Math.max(VELOCITY_M
  * selected note: arrows step by 1, Page Up and Page Down by 10, Home and End
  * go to 1 and 127; Shift+Left and Shift+Right move to the previous or next note.
  */
-export default function VelocityLane({ clip, isDrums, meter, grid, cols, scrollX, selectedId, onSelect, commands, readOnly }) {
+export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, scrollX, selectedId, onSelect, commands, readOnly }) {
   const [hover, setHover] = useState(null); // note id under the pointer
   const [focused, setFocused] = useState(false);
   const painting = useRef(null); // { ids: Set } while dragging
   const laneRef = useRef(null);
-  const list = clip ? stems(clip.notes, grid) : [];
+  const list = clip ? stems(clip.notes, grid, cellW) : [];
   const current = list.find((s) => s.note.id === selectedId) ?? list[0] ?? null;
   const shown = list.find((s) => s.note.id === hover) ?? (focused ? current : null);
   const name = (note) => `Velocity ${rowLabel(note.pitch, isDrums)} ${barBeat(note.tick, meter, grid)}`;
@@ -51,7 +51,7 @@ export default function VelocityLane({ clip, isDrums, meter, grid, cols, scrollX
     const rect = laneRef.current.getBoundingClientRect();
     return { x: e.clientX - rect.left + scrollX, y: e.clientY - rect.top };
   }
-  const under = (x) => list.filter((s) => x >= s.x - CELL_W / 2 && x <= s.x + STEM_W + CELL_W / 2 - CHORD_STEP);
+  const under = (x) => list.filter((s) => x >= s.x - cellW / 2 && x <= s.x + STEM_W + cellW / 2 - CHORD_STEP);
 
   function paint(e) {
     const { x, y } = pointAt(e);
@@ -117,7 +117,7 @@ export default function VelocityLane({ clip, isDrums, meter, grid, cols, scrollX
         }}
         onPointerLeave={() => setHover(null)}
       >
-        <div className="absolute top-0 left-0 h-full" style={{ width: LABEL_W + cols * CELL_W, transform: `translateX(${-scrollX}px)` }}>
+        <div className="absolute top-0 left-0 h-full" style={{ width: LABEL_W + cols * cellW, transform: `translateX(${-scrollX}px)` }}>
           {list.map(({ note, x }) => {
             const h = (note.velocity / VELOCITY_MAX) * LANE_H;
             const on = note.id === current?.note.id;

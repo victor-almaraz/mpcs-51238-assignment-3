@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { getEngine } from '@/lib/audio/engine-client';
 import {
-  addNote, createClip, deleteNote, moveNote, noteAt, quantize, resizeNote, setLoopLength, setVelocity,
+  addNote, createClip, deleteNote, moveNote, noteAt, quantize, resizeNote, setLoopLength, setNoteSpan, setVelocity,
 } from '@/lib/project/midi-commands';
 import { noteText } from './layout';
 
@@ -118,6 +118,14 @@ export default function usePianoRollCommands({
       if (readOnly || !clip) return;
       const result = resizeNote(docRef.current, clip.id, noteId, dTicks, grid);
       commit(result, result.ok ? describe(result.note) : undefined);
+    },
+
+    /** Sets a note's start and length in one edit (a stretch from either edge). Returns the note. */
+    span(noteId, tick, length) {
+      const clip = currentClip();
+      if (readOnly || !clip) return null;
+      const result = setNoteSpan(docRef.current, clip.id, noteId, tick, length);
+      return commit(result, result.ok ? describe(result.note) : undefined) ? result.note : null;
     },
 
     velocity(noteId, delta) {

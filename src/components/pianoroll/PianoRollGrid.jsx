@@ -12,7 +12,7 @@ import { getEngine } from '@/lib/audio/engine-client';
 import { noteAt, notesStartingIn } from '@/lib/project/midi-commands';
 import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
-import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROW_H, inChokeGroup, noteText, positionText, rowLabel, rowPitches, rowShortLabel } from './layout';
+import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROLL_ZOOMS, ROW_H, cellWidth, inChokeGroup, noteText, positionText, rowLabel, rowPitches, rowShortLabel } from './layout';
 import usePianoRollCommands from './usePianoRollCommands';
 import VelocityLane from './VelocityLane';
 import IconButton from '@/components/ui/IconButton';
@@ -21,7 +21,7 @@ import IconToggle from '@/components/ui/IconToggle';
 /** Initial viewport height before the scroller is measured. */
 const VIEW_HEIGHT = 480;
 const PIANO_ROLL_HELP =
-  'Arrow keys move. Enter adds or removes a note; Delete removes it. Alt+arrows move it; Shift+Left and Right change its length; Shift+Up and Down change its velocity. Q quantizes.';
+  'Arrow keys move. Enter adds or removes a note; Delete removes it. Alt+arrows move it; Shift+Left and Right change its length; Shift+Up and Down change its velocity. Q quantizes. With the pointer, drag either end of a note to stretch it (Alt for finer than the grid).';
 const GRID_OPTIONS = GRIDS.map((g) => ({ value: String(g.value), label: g.label }));
 const LOOP_OPTIONS = [
   { value: 'off', label: 'Off' },
@@ -34,7 +34,10 @@ const HEADER = -1;
 /** Smallest note-grid height: three rows and the border; below it the panel scrolls. */
 const GRID_MIN_H = 3 * ROW_H + 2;
 /** Width of a note's resize zone at its end, px (the last third of a one-step note). */
-const EDGE_PX = 8;
+/** Stretch zone at each end of a note, px (a third of the note on short notes). */
+const EDGE_PX = 6;
+/** Stretch resolution while Alt is held: a 1/64 note. */
+const FREE_STEP = PPQ / 16;
 
 /**
  * Piano roll (PR-01 to PR-04): a canvas for the picture and a role="grid"
@@ -62,6 +65,10 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const clip = clips.find((c) => c.id === view.panelClipId) ?? clips[0] ?? null;
 
   const [grid, setGrid] = useState(DEFAULT_GRID);
+  // Horizontal zoom is the piano roll's own: changing the grid never rescales the notes.
+  const [zoom, setZoom] = useState(1);
+  const cellW = cellWidth(grid, zoom);
+  const zoomIndex = ROLL_ZOOMS.indexOf(zoom);
   const [showAll, setShowAll] = useState(false);
   // An empty clip starts in step input, so the empty-editor hint holds: pressing a key adds a note.
   const [stepInput, setStepInput] = useState(() => !clip || clip.notes.length === 0);
@@ -115,6 +122,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const gridRef = useRef(null);
   const focused = useRef(false);
   const drag = useRef(null);
+  /** Set while the pointer moves the cursor: the cell under it is in view, so the view stays put. */
+  const pointerCursor = useRef(false);
 
   const commands = usePianoRollCommands({
     project, trackId, clipId: clip?.id ?? null, grid, isDrums, meter, readOnly,
@@ -150,21 +159,24 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     };
   });
 
-  // Keep the cursor in view when the rows, the grid or the cursor change.
+  // Keep the cursor in view when the rows, the grid or the cursor change (not when the pointer moved it).
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
+    const followPointer = pointerCursor.current;
+    pointerCursor.current = false;
+    if (followPointer) return;
     const top = row * ROW_H;
     if (top < el.scrollTop || top + ROW_H > el.scrollTop + el.clientHeight) {
       el.scrollTop = Math.max(0, top - el.clientHeight / 2);
     }
     if (col >= 0) {
-      const left = col * CELL_W;
+      const left = col * cellW;
       const visible = el.clientWidth - LABEL_W;
-      if (left < el.scrollLeft || left + CELL_W > el.scrollLeft + visible) el.scrollLeft = Math.max(0, left - visible / 2);
+      if (left < el.scrollLeft || left + cellW > el.scrollLeft + visible) el.scrollLeft = Math.max(0, left - visible / 2);
     }
     setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
-  }, [rows, grid, row, col]);
+  }, [rows, grid, row, col, cellW]);
 
   // Keep the focused cell focused as the cursor moves.
   useEffect(() => {
@@ -174,8 +186,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
 
   const firstRow = Math.max(0, Math.floor(scroll.scrollY / ROW_H) - 1);
   const lastRow = Math.min(rows.length - 1, Math.ceil((scroll.scrollY + scroll.height) / ROW_H) + 1);
-  const firstCol = Math.max(0, Math.floor(scroll.scrollX / CELL_W) - 1);
-  const lastCol = Math.min(cols - 1, Math.ceil((scroll.scrollX + scroll.width - LABEL_W) / CELL_W) + 1);
+  const firstCol = Math.max(0, Math.floor(scroll.scrollX / cellW) - 1);
+  const lastCol = Math.min(cols - 1, Math.ceil((scroll.scrollX + scroll.width - LABEL_W) / cellW) + 1);
   const visibleRows = [];
   for (let r = firstRow; r <= lastRow; r++) visibleRows.push(r);
   if (!visibleRows.includes(row)) visibleRows.push(row);
@@ -271,17 +283,42 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
 
   function cellFromPoint(e) {
     const rect = gridRef.current.getBoundingClientRect();
-    const c = Math.floor((e.clientX - rect.left - LABEL_W) / CELL_W);
+    const c = Math.floor((e.clientX - rect.left - LABEL_W) / cellW);
     const r = Math.floor((e.clientY - rect.top) / ROW_H);
     return { r: Math.max(0, Math.min(rows.length - 1, r)), c: Math.max(0, Math.min(cols - 1, c)) };
   }
 
-  /** True when the pointer is on the resize zone at the end of `note` (pitched tracks only). */
-  function onNoteEdge(e, note) {
-    if (!note || isDrums) return false;
+  /** Pointer x in ticks from the clip start. */
+  const tickAtPointer = (e) => (e.clientX - gridRef.current.getBoundingClientRect().left - LABEL_W) / (cellW / grid);
+
+  /**
+   * Which edge of `note` the pointer is on: 'resizeEnd', 'resizeStart' or null (pitched tracks
+   * only). Each zone is EDGE_PX wide, or a third of a short note, so its middle still moves it.
+   */
+  function noteEdge(e, note) {
+    if (!note || isDrums) return null;
+    const tickW = cellW / grid;
     const x = e.clientX - gridRef.current.getBoundingClientRect().left - LABEL_W;
-    const end = ((note.tick + note.length) / grid) * CELL_W;
-    return x <= end && end - x <= EDGE_PX;
+    const start = note.tick * tickW;
+    const end = (note.tick + note.length) * tickW;
+    const zone = Math.min(EDGE_PX, (end - start) / 3);
+    if (x <= end && end - x <= zone) return 'resizeEnd';
+    if (x >= start && x - start <= zone) return 'resizeStart';
+    return null;
+  }
+
+  /**
+   * The span a stretch from `d.mode`'s edge leaves with the pointer at tick `t`: snapped to the
+   * grid, or to FREE_STEP with Alt; the note keeps at least one step and the other edge stays.
+   */
+  function stretched(d, t, free) {
+    const n = d.note;
+    const step = free ? FREE_STEP : grid;
+    const at = Math.round(t / step) * step;
+    const end = n.tick + n.length;
+    if (d.mode === 'resizeEnd') return { ...n, length: Math.max(step, Math.min(length, at) - n.tick) };
+    const start = Math.max(0, Math.min(at, end - step));
+    return { ...n, tick: start, length: end - start };
   }
 
   /** Steps of a note drawn from the origin cell to cell `c`: at least one, within the clip. */
@@ -292,7 +329,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     if (d.mode === 'add') return { id: null, tick: d.originC * grid, pitch: rows[d.originR], length: drawSteps(d) * grid, velocity: 100 };
     const n = d.note;
     const dTick = (d.c - d.originC) * grid;
-    if (d.mode === 'resize') return { ...n, length: Math.max(grid, n.length + dTick) };
+    if (d.stretch) return d.stretch;
     const r = Math.max(0, Math.min(rows.length - 1, rows.indexOf(n.pitch) + (d.r - d.originR)));
     return { ...n, tick: Math.max(0, Math.min(length - 1, n.tick + dTick)), pitch: rows[r] };
   }
@@ -308,19 +345,33 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     const [r, c] = cell.dataset.cell.split(':').map(Number);
     if (c < 0) return; // row headers keep their native click (preview or audition)
     const note = cellNote(r, c);
-    const mode = note ? (onNoteEdge(e, note) ? 'resize' : 'move') : 'add';
+    const mode = note ? (noteEdge(e, note) ?? 'move') : 'add';
     drag.current = { originR: r, originC: c, r, c, note, mode, moved: false };
     gridRef.current.setPointerCapture(e.pointerId);
+    pointerCursor.current = true;
     moveCursor(r, c);
   }
 
   function onPointerMove(e) {
     const d = drag.current;
     if (!d) {
-      // Hover: the resize cursor over a note's right edge.
+      // Hover: the stretch cursor over either edge of a note.
       const cell = e.target.closest?.('[data-cell]');
       const [r, c] = cell ? cell.dataset.cell.split(':').map(Number) : [-1, -1];
-      gridRef.current.style.cursor = !readOnly && c >= 0 && onNoteEdge(e, cellNote(r, c)) ? 'ew-resize' : '';
+      gridRef.current.style.cursor = !readOnly && c >= 0 && noteEdge(e, cellNote(r, c)) ? 'ew-resize' : '';
+      return;
+    }
+    if (d.mode === 'resizeEnd' || d.mode === 'resizeStart') {
+      // Stretching works in ticks, not cells: any length on the grid, or finer with Alt.
+      if (!(e.buttons & 1)) {
+        endDrag();
+        return;
+      }
+      const next = stretched(d, tickAtPointer(e), e.altKey);
+      if (next.tick === (d.stretch ?? d.note).tick && next.length === (d.stretch ?? d.note).length) return;
+      d.moved = true;
+      d.stretch = next;
+      setGhost(next);
       return;
     }
     if (!(e.buttons & 1)) {
@@ -335,16 +386,18 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     d.c = c;
     const next = dragResult(d);
     setGhost(next);
+    pointerCursor.current = true;
     setCursor({ pitch: next.pitch, tick: next.tick + (d.mode === 'move' ? 0 : next.length - grid) });
   }
 
   function onPointerUp() {
     const d = drag.current;
+    pointerCursor.current = false; // a cursor move to the same cell left it set
     endDrag();
     if (!d) return;
     if (d.moved && d.note) {
       const next = dragResult(d);
-      if (d.mode === 'resize') commands.resize(d.note.id, next.length - d.note.length);
+      if (d.stretch) commands.span(d.note.id, next.tick, next.length);
       else commands.move(d.note.id, next.tick - d.note.tick, next.pitch - d.note.pitch);
       setSelectedId(d.note.id);
       return;
@@ -381,7 +434,31 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
         {title}
       </h2>
       <Toolbar label="Piano roll tools" className="flex flex-wrap items-center gap-2">
-        <Select id="pianoroll-grid" label="Grid" labelClassName="w-auto" className="w-auto" value={String(grid)} onChange={(v) => setGrid(Number(v))} options={GRID_OPTIONS} />
+        <Select
+          id="pianoroll-grid"
+          label="Grid"
+          labelClassName="w-auto"
+          className="w-auto"
+          value={String(grid)}
+          onChange={(v) => setGrid(Number(v))}
+          // A grid whose cells would be under the 24 px target at this zoom waits for zoom in.
+          options={GRID_OPTIONS.map((o) => (cellWidth(Number(o.value), zoom) < CELL_W ? { ...o, label: `${o.label} (zoom in)`, disabled: true } : o))}
+          data-help="Grid: the snap step and cell size; it never changes the note scale."
+        />
+        <IconButton
+          icon="zoom-out"
+          label="Piano roll zoom out"
+          disabled={zoomIndex === 0 || cellWidth(grid, ROLL_ZOOMS[zoomIndex - 1]) < CELL_W}
+          onClick={() => setZoom(ROLL_ZOOMS[zoomIndex - 1])}
+          data-help="Zoom out: shows more bars; stops while the grid's cells would be under 24 px."
+        />
+        <IconButton
+          icon="zoom-in"
+          label="Piano roll zoom in"
+          disabled={zoomIndex === ROLL_ZOOMS.length - 1}
+          onClick={() => setZoom(ROLL_ZOOMS[zoomIndex + 1])}
+          data-help="Zoom in: wider beats, for finer grids such as 1/32."
+        />
         <Select
           id="pianoroll-loop"
           label="Clip loop"
@@ -413,8 +490,9 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
             setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
           }}
         >
-          <div className="relative" style={{ width: LABEL_W + cols * CELL_W, height: rows.length * ROW_H }}>
+          <div className="relative" style={{ width: LABEL_W + cols * cellW, height: rows.length * ROW_H }}>
             <PianoRollCanvas
+              tickW={cellW / grid}
               view={scroll}
               rows={rows}
               clip={clip}
@@ -434,7 +512,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
               aria-describedby="pianoroll-help"
               aria-rowcount={rows.length}
               aria-colcount={cols + 1}
-              className="absolute inset-0"
+              className="absolute inset-0 select-none"
               style={{ touchAction: 'none' }}
               onKeyDown={onKeyDown}
               onPointerDown={onPointerDown}
@@ -456,7 +534,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
                 const label = rowLabel(pitch, isDrums);
                 const cellCols = r === row && col >= 0 && !visibleCols.includes(col) ? [...visibleCols, col] : visibleCols;
                 return (
-                  <div key={pitch} role="row" aria-rowindex={r + 1} className="absolute left-0" style={{ top: r * ROW_H, height: ROW_H, width: LABEL_W + cols * CELL_W }}>
+                  <div key={pitch} role="row" aria-rowindex={r + 1} className="absolute left-0" style={{ top: r * ROW_H, height: ROW_H, width: LABEL_W + cols * cellW }}>
                     <div
                       role="rowheader"
                       aria-colindex={1}
@@ -495,7 +573,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
                           aria-label={cellLabel(r, c)}
                           tabIndex={r === row && c === col ? 0 : -1}
                           className={cx('absolute', focusRing, 'focus-visible:z-20')}
-                          style={{ left: LABEL_W + c * CELL_W, top: 0, width: CELL_W, height: ROW_H }}
+                          style={{ left: LABEL_W + c * cellW, top: 0, width: cellW, height: ROW_H }}
                         />
                       );
                     })}
@@ -520,6 +598,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       </div>
       {/* The lane stays with an empty clip ("No notes"), so the layout does not jump. */}
       <VelocityLane
+        cellW={cellW}
         clip={clip}
         isDrums={isDrums}
         meter={meter}

@@ -6,8 +6,20 @@ import { DRUM_MAP, DRUM_VOICE_NAMES, drumRowLabel } from '@/dsp/instruments/drum
 import { NOTE_COUNT, PPQ } from '@/dsp/core/constants';
 import { noteName } from '@/lib/audio/keyboard-input';
 
-/** Cell size in CSS pixels: the 24 × 24 minimum target (WCAG 2.5.8). */
+/** Smallest cell in CSS pixels: the 24 × 24 minimum target (WCAG 2.5.8). */
 export const CELL_W = 24;
+
+/**
+ * Horizontal scale, px per tick, at zoom 1: a 1/16 step is CELL_W wide. The grid
+ * never changes it; a grid step is grid · TICK_W · zoom pixels wide.
+ */
+export const TICK_W = CELL_W / (PPQ / 4);
+
+/** Piano-roll zoom factors; a grid is usable at a zoom where its cells are at least CELL_W wide. */
+export const ROLL_ZOOMS = [0.5, 1, 2, 4];
+
+/** Width in px of a `grid`-tick cell at `zoom`. */
+export const cellWidth = (grid, zoom) => grid * TICK_W * zoom;
 export const ROW_H = 24;
 export const LABEL_W = 208;
 
