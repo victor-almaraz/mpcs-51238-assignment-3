@@ -58,6 +58,18 @@ test('kick fundamental is 50 Hz ± 0.5 Hz', () => {
   assert.ok(Math.abs(f - 50) <= 0.5, `${f} Hz`);
 });
 
+test('the kick drive lifts its body, and the soft clip keeps the peak at the velocity gain', () => {
+  const k = kernel();
+  k.noteOn(1, 36, 127);
+  const [l] = render(k, FS / 4);
+  const gain = 0.3 * Math.SQRT1_2; // velocity gain at 127, centre pan
+  let ss = 0;
+  for (const x of l) ss += x * x;
+  assert.ok(peak(l) <= gain * 1.05, `peak ${peak(l) / gain} of the velocity gain`);
+  // Undriven, the body's 250 ms RMS is 0.22 of the gain; driven ×3 it is 0.33.
+  assert.ok(Math.sqrt(ss / l.length) > 0.3 * gain, `RMS ${Math.sqrt(ss / l.length) / gain} of the velocity gain`);
+});
+
 test('the kick pitch envelope starts above 50 Hz: the first period is shorter than 20 ms', () => {
   const k = kernel();
   k.noteOn(1, 36, 127);

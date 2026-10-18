@@ -377,7 +377,7 @@ Tune offsets are project limits.
 
 | Voice | Model | fBase | baseT60 | Tone controls |
 |---|---|---|---|---|
-| Kick | Damped sine from phase 0; pitch envelope A = 1.5·(0.75 + 0.25v), τp 6 ms; 1 ms noise click through a one-pole lowpass at 3 kHz | 50 Hz | 600 ms | Click level 0–0.5 |
+| Kick | Damped sine from phase 0; pitch envelope A = 1.5·(0.75 + 0.25v), τp 6 ms; driven ×3 into the soft clip x(27 + x²)/(27 + 9x²); 1 ms noise click through a one-pole lowpass at 3 kHz | 50 Hz | 600 ms | Click level 0–0.5 |
 | Snare | Damped sines at f and 1.94f, body T60 = 0.6·T60; noise through SVF highpass 1.2 kHz (Q 0.7) with its own T60 | 173 Hz | 250 ms | Body/noise mix |
 | Side stick | Damped sines at f and 3.66f; sum through SVF highpass | 455 Hz | 30 ms | Highpass 300–1500 Hz |
 | Clap | Noise through SVF bandpass (Q 2); burst and tail envelopes (Clap) | 1000 Hz | 300 ms | Bandpass centre 700–2000 Hz |
