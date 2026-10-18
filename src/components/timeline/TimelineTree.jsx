@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Icon from '@/components/ui/icons/Icon';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { trackLabel } from '@/lib/project/model';
 import { HEADER_W, RULER_H, TRACK_H, clipRect, clipText, trackClips } from './layout';
@@ -43,6 +44,9 @@ export default function TimelineTree({
   commands,
   onCursorStep,
   onOpenProperties,
+  onRename,
+  armed = [],
+  onArm,
   onClipMenu,
   editCursor,
   readOnly,
@@ -113,6 +117,9 @@ export default function TimelineTree({
     let handled = true;
     if (row.kind === 'clip' && (key === 'ContextMenu' || (e.shiftKey && key === 'F10'))) {
       onClipMenu(row.clip, rowRefs.current.get(row.key));
+    } else if (key === 'F2' && !mod) {
+      // F2 renames the focused track or clip.
+      onRename(row);
     } else if (!mod && (key === ',' || key === '.' || key === '<' || key === '>')) {
       onCursorStep(key === ',' || key === '<' ? -1 : 1, e.shiftKey ? 'bar' : 'step');
     } else if (mod && key === 'a') {
@@ -152,6 +159,8 @@ export default function TimelineTree({
         anchor.current = id;
         setSelection([id]);
       }
+    } else if (row.kind === 'track' && row.track.kind === 'instrument' && !mod && !e.altKey && key === 'r') {
+      onArm(row.trackId);
     } else if (row.kind === 'track' && !mod && !e.altKey && (key === 'm' || key === 's')) {
       if (!readOnly) onTrackChange(row.trackId, key === 'm' ? { mute: !row.track.mute } : { solo: !row.track.solo });
     } else if (key === 'Enter') {
@@ -211,6 +220,10 @@ export default function TimelineTree({
                 focusRow(row);
                 onSelectTrack(row.trackId);
               }}
+              // Double-clicking the header renames the track; its Mute and Solo buttons keep their own clicks.
+              onDoubleClick={(e) => {
+                if (!e.target.closest('button')) onRename(row);
+              }}
               className={cx(
                 'pointer-events-auto absolute left-0 z-10 flex items-stretch border-r border-b border-border-strong',
                 isCurrent ? 'bg-hover' : 'bg-surface',
@@ -260,6 +273,22 @@ export default function TimelineTree({
                 >
                   S
                 </button>
+                {t.kind === 'instrument' ? (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-pressed={armed.includes(row.trackId) ? 'true' : 'false'}
+                    aria-label={`Arm ${t.name} for live input`}
+                    data-tip={`Arm ${t.name} for live input (R on the track)`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArm(row.trackId);
+                    }}
+                    className={cx('inline-flex min-h-6 min-w-6 items-center justify-center rounded-ds border border-border-strong', armed.includes(row.trackId) ? 'bg-selected text-selected-fg' : 'bg-surface')}
+                  >
+                    <Icon name="circle-dot" className="size-3.5" />
+                  </button>
+                ) : null}
               </span>
             </div>
           );

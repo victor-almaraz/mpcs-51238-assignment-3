@@ -265,6 +265,15 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     engine.setLiveTarget(liveTargetIndex);
   }, [engine, liveTargetIndex]);
 
+  // Live input (keyboard and MIDI) plays on the armed instrument tracks, else on the track being edited.
+  const armedIds = view.armedTrackIds.filter((id) => project.tracks[id]?.kind === 'instrument');
+  const armedIndices = armedIds.map((id) => mixerTrackIds.indexOf(id)).filter((i) => i >= 0);
+  const armedKey = armedIndices.join(',');
+  useEffect(() => {
+    engine.setArmedTargets(armedKey ? armedKey.split(',').map(Number) : []);
+  }, [engine, armedKey]);
+  const inputTo = armedIds.length > 0 ? armedIds.map((id) => project.tracks[id].name).join(', ') : panelTrack ? `${panelTrack.name} (selected)` : null;
+
   // Lower dock: the active tab is part of the working state; its height follows the window.
   const rootRef = useRef(null);
   const [dockHeight, setDockHeight] = useState(360);
@@ -483,7 +492,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
       </Dock>
 
       <InfoStrip rootRef={rootRef}>
-        <LiveInputControls onNote={(pitch) => stepInsertRef.current?.(pitch)} />
+        <LiveInputControls inputTo={inputTo} onNote={(pitch) => stepInsertRef.current?.(pitch)} />
       </InfoStrip>
     </div>
   );

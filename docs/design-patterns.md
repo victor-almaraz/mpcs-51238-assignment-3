@@ -573,6 +573,7 @@ Single-letter keys act only outside text fields. No global single-letter shortcu
 | Snap | `N` | — | — |
 | Zoom in / out / fit | `Alt+=` / `Alt+-` / `Alt+0` | `Mod+=`/`-`/`0` page zoom | Alt-modified |
 | Mute / solo | `M` / `S` | — | Focused track |
+| Arm for live input | `R` | — | Focused instrument track |
 | Paint mode / quantize | `B` / `Q` | — | Piano roll |
 | Save / open `.wrack` | `Mod+S` / `Mod+O` | Save page / open file | Captured |
 | Export WAV | `Mod+Shift+E` | — | — |

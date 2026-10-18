@@ -17,7 +17,7 @@ import IconToggle from '@/components/ui/IconToggle';
  * receives each note-on (step input in the piano roll). While keyboard playing
  * is on, its letters play notes rather than run shortcuts (G, K).
  */
-export default function LiveInputControls({ onNote }) {
+export default function LiveInputControls({ onNote, inputTo }) {
   const engine = getEngine();
   const [enabled, setEnabled] = useState(true);
   const [octave, setOctave] = useState(() => Math.min(7, getSettings().keyboardOctave));
@@ -87,6 +87,12 @@ export default function LiveInputControls({ onNote }) {
         Live input
       </h2>
       <IconToggle icon="keyboard" label="Play with keyboard" size="sm" pressed={enabled} onClick={toggleKeyboard} data-help="Keys A to K play notes C to C on the selected track; Z and X change the octave." />
+      {/* Where live notes go: the armed tracks, else the selected one. */}
+      {inputTo ? (
+        <span className="max-w-64 truncate text-xs" title={`Live input: ${inputTo}`} data-help="Live input plays on the armed tracks (the arm button on a track header, or R), else on the selected instrument track.">
+          Input: {inputTo}
+        </span>
+      ) : null}
       <StatusRegion className="shrink-0 text-xs whitespace-nowrap">Keyboard octave: {noteName(12 * (octave + 1))}</StatusRegion>
       <IconButton icon="cable" label="Connect MIDI device" size="sm" onClick={connect} data-help="Asks the browser for MIDI devices; notes play on the selected track." />
       {midiStatus ? (

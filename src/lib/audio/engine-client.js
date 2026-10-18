@@ -67,12 +67,24 @@ function createClient() {
   let meters = null; // latest engine meters (Float32Array)
   let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
   const pendingParams = new Map(); // "target:paramId" → value, sent once per frame
-  let liveTarget = 0; // engine track index for keyboard, MIDI and previews
+  let liveTarget = 0; // engine track index being edited: previews, and live input while no track is armed
+  let armedTargets = []; // engine track indices armed for live input (keyboard and MIDI)
   const liveLimiter = new FloodLimiter();
   const nowS = () => performance.now() / 1000;
 
-  function sendLive(status, data1, data2) {
-    send({ t: 'live', track: liveTarget, events: Uint8Array.of(status, data1, data2) });
+  /** Tracks live input plays on: the armed ones, else the track being edited. */
+  const inputTargets = () => (armedTargets.length > 0 ? armedTargets : [liveTarget]);
+
+  /** Sends one MIDI event to each of `targets` (default: the live input targets). */
+  function sendLive(status, data1, data2, targets = inputTargets()) {
+    for (const track of targets) send({ t: 'live', track, events: Uint8Array.of(status, data1, data2) });
+  }
+
+  /** Ends held live notes on tracks that no longer receive live input. */
+  function releaseDropped(before) {
+    const now = inputTargets();
+    const dropped = before.filter((t) => !now.includes(t));
+    if (engine && dropped.length > 0) sendLive(CONTROL_CHANGE, CC_ALL_NOTES_OFF, 0, dropped);
   }
   const listeners = new Set();
 
@@ -412,8 +424,21 @@ function createClient() {
 
     /** Sets the engine track index that live notes and previews play on. */
     setLiveTarget(index) {
-      if (index !== liveTarget && engine) sendLive(CONTROL_CHANGE, CC_ALL_NOTES_OFF, 0);
+      const before = inputTargets();
+      if (index !== liveTarget && engine) sendLive(CONTROL_CHANGE, CC_ALL_NOTES_OFF, 0, [liveTarget]);
       liveTarget = index;
+      releaseDropped(before);
+    },
+
+    /**
+     * Sets the engine track indices armed for live input. Keyboard and MIDI notes play on
+     * every armed track, or on the track being edited when none is armed; previews always
+     * play on the track being edited.
+     */
+    setArmedTargets(indices) {
+      const before = inputTargets();
+      armedTargets = [...indices];
+      releaseDropped(before);
     },
 
     /**
@@ -448,8 +473,8 @@ function createClient() {
       if (state.playing) return;
       this.requestSound(() => {
         if (!liveLimiter.allow(nowS())) return;
-        sendLive(NOTE_ON | PREVIEW_CHANNEL, pitch, velocity);
-        setTimeout(() => sendLive(NOTE_OFF | PREVIEW_CHANNEL, pitch, 0), 250);
+        sendLive(NOTE_ON | PREVIEW_CHANNEL, pitch, velocity, [liveTarget]);
+        setTimeout(() => sendLive(NOTE_OFF | PREVIEW_CHANNEL, pitch, 0, [liveTarget]), 250);
       });
     },
 

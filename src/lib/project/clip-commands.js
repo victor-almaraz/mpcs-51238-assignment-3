@@ -610,6 +610,16 @@ export function removeEnvelopePoint(doc, clipId, pointId) {
   return { ok: true, doc: setClip(doc, { ...clip, envelope: clip.envelope.filter((p) => p.id !== pointId) }) };
 }
 
+/** Renames a track (1–60 characters after trimming). The master bus keeps its name. */
+export function renameTrack(doc, trackId, name) {
+  const track = doc.tracks[trackId];
+  const trimmed = String(name ?? '').trim();
+  if (!track || trackId === doc.masterTrackId) return fail('missing', 'Choose a track to rename.');
+  if (!trimmed) return fail('invalid', 'Enter a track name.');
+  if ([...trimmed].length > 60) return fail('invalid', 'Use 60 characters or fewer.');
+  return { ok: true, doc: { ...doc, tracks: { ...doc.tracks, [trackId]: { ...track, name: trimmed } } } };
+}
+
 /** Renames a clip (1–60 characters after trimming). */
 export function renameClip(doc, clipId, name) {
   const clip = getClip(doc, clipId);

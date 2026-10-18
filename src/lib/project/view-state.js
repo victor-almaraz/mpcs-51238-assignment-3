@@ -52,6 +52,7 @@ export function defaultView(doc) {
     dockCollapsed: false,
     snap: '1',
     snapOn: true,
+    armedTrackIds: [],
   };
 }
 
@@ -82,6 +83,7 @@ export function normalizeView(raw, doc) {
   if (typeof raw.dockCollapsed === 'boolean') view.dockCollapsed = raw.dockCollapsed;
   if (SNAP_GRIDS.includes(raw.snap)) view.snap = raw.snap;
   if (typeof raw.snapOn === 'boolean') view.snapOn = raw.snapOn;
+  if (Array.isArray(raw.armedTrackIds)) view.armedTrackIds = raw.armedTrackIds.filter((id) => doc.tracks[id]?.kind === 'instrument');
   return view;
 }
 

@@ -33,6 +33,7 @@ import {
   setClipGain,
   setEnvelopePoint,
   renameClip,
+  renameTrack,
   setFade,
 } from '@/lib/project/clip-commands';
 import { INSTRUMENT_LABELS, setTrack, ticksPerBar } from '@/lib/project/model';
@@ -116,7 +117,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   };
   const [menu, setMenu] = useState(null); // { clipId, x, y, returnFocus }
   const [doomedTrackId, setDoomedTrackId] = useState(null); // a track with clips awaiting confirmation
-  const [renaming, setRenaming] = useState(null); // { clipId, draft, error }: the Rename clip dialog
+  const [renaming, setRenaming] = useState(null); // { kind: 'clip' | 'track', id, draft, error }: the rename dialog
   const renameRef = useRef(null);
   const cancelDeleteRef = useRef(null);
   // Keyboard nudges always step by the grid; pointer drags follow it while snap is on.
@@ -315,7 +316,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { separator: true },
       { label: 'Select all clips', keys: 'Mod+A', disabled: !hasClips, run: () => setSelection(Object.keys(project.clips)) },
       { label: last?.muted ? 'Unmute clip' : 'Mute clip', disabled: readOnly || !last, run: toggleMute },
-      { label: 'Rename clip…', disabled: readOnly || !last, run: () => startRename(last) },
+      { label: 'Rename clip…', keys: 'F2', disabled: readOnly || !last, run: () => startRename(last) },
+      { label: track ? `Rename track ${track.name}…` : 'Rename track…', disabled: readOnly || !track, run: () => startRenameTrack(track) },
       { separator: true },
       { label: track ? `Delete track ${track.name}` : 'Delete track', icon: 'trash-2', disabled: readOnly || !track, run: () => deleteTrack(track.id) },
     ];
@@ -346,21 +348,29 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     ];
   }
 
-  /** Opens the Rename clip dialog for `clip`. */
+  /** Opens the rename dialog for `clip`, or for track `track`. */
   function startRename(clip) {
-    if (clip) setRenaming({ clipId: clip.id, draft: clip.name, error: null });
+    if (clip && !readOnly) setRenaming({ kind: 'clip', id: clip.id, draft: clip.name, error: null });
+  }
+  function startRenameTrack(track) {
+    if (track && !readOnly) setRenaming({ kind: 'track', id: track.id, draft: track.name, error: null });
   }
 
   function submitRename(e) {
     e.preventDefault();
-    const result = renameClip(commands.docRef.current, renaming.clipId, renaming.draft);
+    const doc = commands.docRef.current;
+    const result = renaming.kind === 'track' ? renameTrack(doc, renaming.id, renaming.draft) : renameClip(doc, renaming.id, renaming.draft);
     if (!result.ok) {
       setRenaming({ ...renaming, error: result.error.message });
       return;
     }
-    commands.commit(result.doc, `Renamed clip to ${result.doc.clips[renaming.clipId].name}`);
+    const renamed = renaming.kind === 'track' ? result.doc.tracks[renaming.id] : result.doc.clips[renaming.id];
+    commands.commit(result.doc, `Renamed ${renaming.kind} to ${renamed.name}`);
     setRenaming(null);
   }
+
+  // What the rename dialog names: the clip or track it is open for, while that still exists.
+  const renameTarget = renaming ? (renaming.kind === 'track' ? project.tracks[renaming.id] : project.clips[renaming.id]) : null;
 
   const clipRow = (id) => document.querySelector(`[role="treegrid"] [data-clip-id="${id}"]`);
 
@@ -860,6 +870,13 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
             editCursor={editCursor}
             onCursorStep={stepCursor}
             onOpenProperties={() => onOpenProperties('name')}
+            armed={view.armedTrackIds}
+            onArm={(trackId) => {
+              const on = !view.armedTrackIds.includes(trackId);
+              onViewChange({ armedTrackIds: on ? [...view.armedTrackIds, trackId] : view.armedTrackIds.filter((id) => id !== trackId) });
+              announce(`${project.tracks[trackId].name} ${on ? 'armed for live input' : 'disarmed'}`);
+            }}
+            onRename={(row) => (row.kind === 'track' ? startRenameTrack(project.tracks[row.trackId]) : startRename(row.clip))}
             readOnly={readOnly}
             onClipMenu={(clip, el) => {
               const r = el.getBoundingClientRect();
@@ -897,16 +914,16 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         </p>
       </Dialog>
       <Dialog
-        open={renaming !== null && Boolean(project.clips[renaming.clipId])}
+        open={Boolean(renameTarget)}
         onClose={() => setRenaming(null)}
-        title={renaming && project.clips[renaming.clipId] ? `Rename ${project.clips[renaming.clipId].name}` : 'Rename clip'}
+        title={renameTarget ? `Rename ${renameTarget.name}` : 'Rename'}
         initialFocusRef={renameRef}
       >
         <form noValidate onSubmit={submitRename} className="flex flex-col gap-3">
           <Field
-            id="timeline-rename-clip"
+            id="timeline-rename"
             ref={renameRef}
-            label="Clip name"
+            label={renaming?.kind === 'track' ? 'Track name' : 'Clip name'}
             value={renaming?.draft ?? ''}
             error={renaming?.error}
             autoComplete="off"

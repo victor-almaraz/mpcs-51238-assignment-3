@@ -111,3 +111,75 @@ test('Rename clip opens a name field for a MIDI clip', async ({ page }) => {
   await field.press('Enter');
   await expect.poll(async () => (await clipNamed(page, 'Bassline'))?.kind).toBe('midi');
 });
+
+test('a track renames by F2 on its row or a double-click on its header; F2 renames a clip too', async ({ page }) => {
+  await openBeat(page);
+  const row = tree(page).getByRole('row', { name: /^Track 2: Bass/ });
+  await row.focus();
+  await page.keyboard.press('F2');
+  const field = page.getByRole('dialog', { name: 'Rename Bass' }).getByRole('textbox', { name: 'Track name' });
+  await expect(field).toBeFocused();
+  await field.fill('Sub bass');
+  await field.press('Enter');
+  await expect(tree(page).getByRole('row', { name: /^Track 2: Sub bass/ })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Renamed track to Sub bass' })).toHaveCount(1);
+
+  await tree(page).getByRole('row', { name: /^Track 3: Lead stab/ }).dblclick({ position: { x: 60, y: 20 } });
+  const second = page.getByRole('dialog', { name: 'Rename Lead stab' }).getByRole('textbox', { name: 'Track name' });
+  await second.fill('');
+  await second.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Rename Lead stab' })).toContainText('Enter a track name.');
+  await page.keyboard.press('Escape');
+
+  await clipRow(page, 'Drums').focus();
+  await page.keyboard.press('F2');
+  await expect(page.getByRole('dialog', { name: 'Rename Drums' }).getByRole('textbox', { name: 'Clip name' })).toBeFocused();
+});
+
+test('arming sends live notes only to armed tracks; with none armed they follow the selection', async ({ page }) => {
+  // Record the track index of every live MIDI message sent to the engine.
+  await page.addInitScript(() => {
+    globalThis.__liveTracks = [];
+    const post = MessagePort.prototype.postMessage;
+    MessagePort.prototype.postMessage = function (msg, ...rest) {
+      if (msg && msg.t === 'live' && msg.events?.[0] === 0x90) globalThis.__liveTracks.push(msg.track);
+      return post.call(this, msg, ...rest);
+    };
+  });
+  await openBeat(page);
+  const sent = () => page.evaluate(() => globalThis.__liveTracks.splice(0));
+  const play = async () => {
+    await page.getByRole('heading', { level: 1 }).click();
+    await page.keyboard.down('a');
+    await page.keyboard.up('a');
+  };
+  const arm = (name) => tree(page).getByRole('button', { name: `Arm ${name} for live input` });
+
+  // The first note opens the volume notice (a note released meanwhile is dropped); after Continue,
+  // notes play on the selected track: track 1 while none is chosen.
+  await play();
+  await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
+  await sent();
+  await play();
+  await expect.poll(sent).toEqual([0]);
+  await expect(page.getByText(/^Input: .+ \(selected\)$/)).toBeVisible();
+
+  await arm('Bass').click();
+  await arm('Lead stab').click();
+  await expect(arm('Bass')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Input: Bass, Lead stab', { exact: true })).toBeVisible();
+  await play();
+  await expect.poll(async () => (await sent()).sort()).toEqual([1, 2]);
+
+  // R on a focused track row toggles its arm.
+  await tree(page).getByRole('row', { name: /^Track 3: Lead stab/ }).focus();
+  await page.keyboard.press('r');
+  await expect(arm('Lead stab')).toHaveAttribute('aria-pressed', 'false');
+  await play();
+  await expect.poll(sent).toEqual([1]);
+
+  // The arm state is part of the working state.
+  await page.waitForTimeout(700);
+  await page.reload();
+  await expect(arm('Bass')).toHaveAttribute('aria-pressed', 'true');
+});
