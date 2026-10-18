@@ -7,7 +7,6 @@ import Dialog from '@/components/ui/Dialog';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { displayKeys, getCommands, subscribeCommands } from '@/lib/commands/registry';
 import useCommands from './useCommands';
-import IconButton from '@/components/ui/IconButton';
 
 const EMPTY = [];
 

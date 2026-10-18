@@ -31,8 +31,6 @@ export const controlType = 'text-[0.8125rem]';
 
 export const controlBase = `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-ds border text-center ${controlType} select-none enabled:cursor-pointer motion-safe:transition-colors motion-safe:duration-100 ${focusRing} ${disabledState}`;
 
-/** Chips: the same legends a step smaller, so a widget header fits on one row. */
-export const chipBase = `inline-flex items-center justify-center gap-2 rounded-ds border text-center text-xs select-none enabled:cursor-pointer motion-safe:transition-colors motion-safe:duration-100 ${focusRing} ${disabledState}`;
 
 /** sm 24 px, md 32 px, lg 44 px minimum targets. */
 export const controlSizes = {
@@ -78,9 +76,6 @@ export const selectedLook = 'border-selected bg-selected text-selected-fg';
 /** Unpressed toggle look (button elements only, uses :enabled). */
 export const unselectedLook = 'border-border-strong bg-surface text-fg enabled:hover:border-fg enabled:hover:bg-hover enabled:active:bg-active';
 
-/** Secondary look for non-button elements (labels) that have no :enabled state. */
-export const secondaryLabelLook =
-  'border-border-strong bg-surface text-fg hover:border-fg hover:bg-hover active:bg-active';
 
 /** Field labels beside sliders, selects and segmented controls: small, regular, muted. */
 export const fieldLabel = 'w-24 shrink-0 text-xs text-muted';

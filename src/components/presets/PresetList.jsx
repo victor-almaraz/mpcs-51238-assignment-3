@@ -1,12 +1,12 @@
 'use client';
 
-import { groupHeading, sectionHeading, useRef, useState, useSyncExternalStore } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Dialog from '@/components/ui/Dialog';
 import Field from '@/components/ui/Field';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { errorText } from '@/design-systems/industrial/classes';
+import { errorText, groupHeading, sectionHeading } from '@/design-systems/industrial/classes';
 import { deletePreset, getPresets, renamePreset, subscribePresets } from '@/lib/presets/store';
 import { MAX_PRESETS } from '@/lib/presets/validate';
 import { typeLabel } from './labels';

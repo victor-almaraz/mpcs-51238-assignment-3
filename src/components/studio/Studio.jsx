@@ -162,7 +162,6 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const failure = [saveState, viewSaveState].find((s) => s.status === 'error');
   const engine = getEngine();
   const { loading } = useProjectSources(project.id, initialProject.sources, engine.decodeRate());
-  const anyMissing = audioClips.some((c) => sourceStatus(c.sourceId, getSource, loading) === 'Audio not loaded');
   const engineState = useSyncExternalStore(engine.subscribe, engine.getState, engine.getState);
   const mixerTrackIds = engineTrackIds(project);
   const meterFor = (index) => () => {

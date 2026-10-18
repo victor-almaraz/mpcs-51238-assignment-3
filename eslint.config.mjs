@@ -72,6 +72,8 @@ const config = [
   {
     rules: {
       'no-undef': 'error',
+      // Leftover imports, variables and parameters are removed, not kept.
+      'no-unused-vars': ['error', { args: 'after-used', ignoreRestSiblings: true, varsIgnorePattern: '^_', argsIgnorePattern: '^_' }],
       'no-empty': ['error', { allowEmptyCatch: false }],
     },
   },

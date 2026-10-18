@@ -1,13 +1,13 @@
 'use client';
 
-import { focusRing, groupHeading, sectionHeading, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import ParamControl from '@/components/instruments/ParamControl';
 import { sectionParams } from '@/components/instruments/sections';
-import { cx } from '@/design-systems/industrial/classes';
+import { cx, focusRing, groupHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { LOOP_OFF, MAX_TRANSPOSE, SAMPLER_DEF, SAMPLER_PARAMS } from '@/dsp/instruments/sampler-zones';
 import { getSource, importFiles } from '@/lib/audio/decode';

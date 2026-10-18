@@ -1,7 +1,8 @@
 'use client';
 
-import { groupHeading, useEffect, useState } from 'react';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+import { useEffect, useState } from 'react';
+import { groupHeading } from '@/design-systems/industrial/classes';
+
 import { getEngine } from '@/lib/audio/engine-client';
 
 /** Readout refresh, ms: the group name changes at most this often. */

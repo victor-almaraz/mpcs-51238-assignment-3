@@ -1,11 +1,11 @@
 'use client';
 
-import { focusRing, groupHeading, sectionHeading, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Select from '@/components/ui/Select';
 import StatusRegion from '@/components/ui/StatusRegion';
 import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
-import { cx } from '@/design-systems/industrial/classes';
+import { cx, focusRing, groupHeading, sectionHeading } from '@/design-systems/industrial/classes';
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getEngine } from '@/lib/audio/engine-client';

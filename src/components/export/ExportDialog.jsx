@@ -15,7 +15,6 @@ import { FORMATS, encodeWav } from '@/lib/export/wav-writer';
 import { safeFileName, saveFile } from '@/lib/files/save-file';
 import { flushSaves } from '@/lib/project/store';
 import { getSettings, updateSettings } from '@/lib/settings/store';
-import IconButton from '@/components/ui/IconButton';
 
 const FORMAT_OPTIONS = Object.entries(FORMATS).map(([value, f]) => ({ value, label: f.label }));
 const RANGE_OPTIONS = [

@@ -4,7 +4,6 @@ import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
 import { getEngine } from '@/lib/audio/engine-client';
-import IconButton from '@/components/ui/IconButton';
 
 const engine = getEngine();
 const serverState = { noticeOpen: false };

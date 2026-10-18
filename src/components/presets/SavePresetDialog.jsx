@@ -8,7 +8,6 @@ import { errorText } from '@/design-systems/industrial/classes';
 import { savePreset } from '@/lib/presets/store';
 import { MAX_PRESET_NAME } from '@/lib/presets/validate';
 import { typeLabel } from './labels';
-import IconButton from '@/components/ui/IconButton';
 
 /**
  * Save preset dialog (assignment-3-scope.md, Presets): one Name field with

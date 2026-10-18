@@ -1,8 +1,8 @@
 'use client';
 
-import { groupHeading, sectionHeading, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { cx } from '@/design-systems/industrial/classes';
+import { cx, groupHeading } from '@/design-systems/industrial/classes';
 import { GRANULAR_MAX_SOURCE_S } from '@/dsp/instruments/granular';
 import { getSource, importFiles } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';

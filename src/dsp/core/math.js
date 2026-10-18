@@ -23,7 +23,3 @@ export function flushDenormal(x) {
   return x < DENORMAL_THRESHOLD && x > -DENORMAL_THRESHOLD ? 0 : x;
 }
 
-/** Linear interpolation from `a` (t = 0) to `b` (t = 1). */
-export function lerp(a, b, t) {
-  return a + (b - a) * t;
-}

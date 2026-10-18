@@ -13,7 +13,7 @@ import Toolbar from '@/components/ui/Toolbar';
 import useThrottledAnnouncer from '@/components/ui/useThrottledAnnouncer';
 import useCommands from '@/components/commands/useCommands';
 import { commandEnabled, displayKeys, runCommand } from '@/lib/commands/registry';
-import { cx } from '@/design-systems/industrial/classes';
+
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getSource, importFiles } from '@/lib/audio/decode';

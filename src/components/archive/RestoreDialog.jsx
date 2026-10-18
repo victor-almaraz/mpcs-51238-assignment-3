@@ -3,7 +3,6 @@
 import { useRef } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
-import IconButton from '@/components/ui/IconButton';
 
 /**
  * Asked when an opened archive's project ID matches a saved project:

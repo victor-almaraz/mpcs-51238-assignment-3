@@ -9,7 +9,7 @@ import IconToggle from '@/components/ui/IconToggle';
 import ParamControl from '@/components/instruments/ParamControl';
 import PresetPicker from '@/components/presets/PresetPicker';
 import { applyPreset } from '@/lib/presets/store';
-import { cx, sectionHeading } from '@/design-systems/industrial/classes';
+import { sectionHeading } from '@/design-systems/industrial/classes';
 import { clampParam } from '@/dsp/core/params';
 import { EFFECTS, effectFor } from '@/dsp/effects/registry';
 import { MAX_EFFECTS } from '@/dsp/protocol';

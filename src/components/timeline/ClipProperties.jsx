@@ -1,13 +1,14 @@
 'use client';
 
-import { Fragment, groupHeading, useState } from 'react';
+import { Fragment, useState } from 'react';
+import { groupHeading } from '@/design-systems/industrial/classes';
 import IconButton from '@/components/ui/IconButton';
 import Field from '@/components/ui/Field';
 import Select from '@/components/ui/Select';
 import Slider from '@/components/ui/Slider';
 import IconToggle from '@/components/ui/IconToggle';
 import { faderText } from '@/components/mixer/TrackStrip';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+
 import { dbToGain, gainToDb } from '@/dsp/core/math';
 import {
   CLIP_GAIN_MAX_DB,

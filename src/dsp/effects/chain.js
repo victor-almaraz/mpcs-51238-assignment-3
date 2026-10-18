@@ -14,9 +14,6 @@
  */
 import { BLOCK } from '../core/constants.js';
 
-/** Chain length limit (project limit). */
-export const MAX_SLOTS = 8;
-
 /** Bypass crossfade time, s (project limit). */
 export const BYPASS_FADE_S = 0.01;
 

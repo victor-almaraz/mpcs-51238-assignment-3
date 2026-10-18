@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  CLOSED_HAT, COWBELL, CRASH, DRUM_MAP, KICK, OPEN_HAT, PEDAL_HAT, RIDE, drumRowLabel, voiceOfNote,
+  CLOSED_HAT, CRASH, DRUM_MAP, KICK, OPEN_HAT, PEDAL_HAT, RIDE, drumRowLabel, voiceOfNote,
 } from '../../src/dsp/instruments/drum-map.js';
 import { DRUM_PARAMS, DrumKernel } from '../../src/dsp/instruments/drums.js';
 import { GlobalVoices } from '../../src/dsp/instruments/voice-pool.js';

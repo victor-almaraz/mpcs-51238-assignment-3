@@ -1,8 +1,9 @@
 'use client';
 
-import { groupHeading, useState } from 'react';
+import { useState } from 'react';
+import { groupHeading } from '@/design-systems/industrial/classes';
 import Select from '@/components/ui/Select';
-import { sectionHeading } from '@/design-systems/industrial/classes';
+
 import { clampParam } from '@/dsp/core/params';
 import { DRUM_VOICES, DRUM_VOICE_NAMES } from '@/dsp/instruments/drum-map';
 import { DRUM_PARAMS } from '@/dsp/instruments/drums';
