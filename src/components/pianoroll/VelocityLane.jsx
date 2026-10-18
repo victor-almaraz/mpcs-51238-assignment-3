@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
 import { LABEL_W, barBeatText, rowLabel, rowShortLabel } from './layout';
 
@@ -33,9 +33,11 @@ const velocityAtY = (y) => Math.round(Math.min(VELOCITY_MAX, Math.max(VELOCITY_M
 export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, scrollX, selectedId, onSelect, commands, readOnly }) {
   const [hover, setHover] = useState(null); // note id under the pointer
   const [focused, setFocused] = useState(false);
-  const painting = useRef(null); // { ids: Set } while dragging
+  // While painting: note ID → the velocity painted at its stem. The lane shows it; release commits it as one edit.
+  const [painted, setPainted] = useState(null);
   const laneRef = useRef(null);
-  const list = clip ? stems(clip.notes, grid, cellW) : [];
+  const list = useMemo(() => (clip ? stems(clip.notes, grid, cellW) : []), [clip, grid, cellW]);
+  const velocityOf = (note) => painted?.get(note.id) ?? note.velocity;
   const current = list.find((s) => s.note.id === selectedId) ?? list[0] ?? null;
   const shown = list.find((s) => s.note.id === hover) ?? (focused ? current : null);
   const name = (note) => `Velocity ${rowLabel(note.pitch, isDrums)} ${barBeatText(note.tick, meter, grid)}`;
@@ -46,12 +48,15 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
   }
   const under = (x) => list.filter((s) => x >= s.x - cellW / 2 && x <= s.x + STEM_W + cellW / 2 - CHORD_STEP);
 
-  function paint(e) {
+  /** Paints the stems under the pointer to the velocity at its height; each stem keeps the last height painted on it. */
+  function paint(e, values) {
     const { x, y } = pointAt(e);
     const hits = under(x);
-    if (hits.length === 0) return;
-    for (const s of hits) painting.current.ids.add(s.note.id);
-    commands.velocityTo(hits.map((s) => s.note.id), velocityAtY(y), false);
+    if (hits.length === 0) return values;
+    const next = new Map(values);
+    for (const s of hits) next.set(s.note.id, velocityAtY(y));
+    setPainted(next);
+    return next;
   }
 
   function onKeyDown(e) {
@@ -85,7 +90,7 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
       >
         <span className="uppercase tracking-[0.06em]">Velocity</span>
         <span aria-hidden="true" className="truncate tabular-nums text-muted">
-          {shown ? `${shown.note.velocity} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeatText(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
+          {shown ? `${velocityOf(shown.note)} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeatText(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
         </span>
       </div>
       <div
@@ -96,23 +101,22 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
         onPointerDown={(e) => {
           if (readOnly || e.button !== 0 || pointAt(e).x - scrollX < LABEL_W) return;
           e.currentTarget.setPointerCapture(e.pointerId);
-          painting.current = { ids: new Set() };
-          paint(e);
+          paint(e, new Map());
         }}
         onPointerMove={(e) => {
-          if (painting.current) paint(e);
+          if (painted) paint(e, painted);
           else setHover(under(pointAt(e).x)[0]?.note.id ?? null);
         }}
-        onPointerUp={(e) => {
-          const p = painting.current;
-          painting.current = null;
-          if (p && p.ids.size > 0) commands.velocityTo([...p.ids], velocityAtY(pointAt(e).y));
+        onPointerUp={() => {
+          if (painted?.size > 0) commands.paintVelocities(painted);
+          setPainted(null);
         }}
+        onPointerCancel={() => setPainted(null)}
         onPointerLeave={() => setHover(null)}
       >
         <div className="absolute top-0 left-0 h-full" style={{ width: LABEL_W + cols * cellW, transform: `translateX(${-scrollX}px)` }}>
           {list.map(({ note, x }) => {
-            const h = (note.velocity / VELOCITY_MAX) * LANE_H;
+            const h = (velocityOf(note) / VELOCITY_MAX) * LANE_H;
             const on = note.id === current?.note.id;
             return (
               <div key={note.id} className="absolute bottom-0" style={{ left: x, width: STEM_W, height: h }}>

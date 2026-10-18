@@ -3,7 +3,7 @@
  * the command hook. Pure functions; no React.
  */
 import { PPQ } from '@/dsp/core/constants';
-import { ENVELOPE_GAIN_MAX, audioTempo, clipEndTick } from '@/lib/project/clip-commands';
+import { ENVELOPE_GAIN_MAX, audioTempo, clipEndTick, isLooping } from '@/lib/project/clip-commands';
 
 /** Row height, bar-number ruler height and pixels per quarter note at zoom 1, CSS pixels. */
 export const TRACK_H = 56;
@@ -49,18 +49,38 @@ export function sourceStatus(sourceId, getSource, loading) {
 /** "Clip: Verse riff, bar 5 to bar 9", plus "loops every 1 bar" on looping clips, "muted", and the storage status of audio clips. */
 export function clipText(doc, clip, meter, status) {
   const parts = [`Clip: ${clip.name}, ${barText(clip.start, meter)} to ${barText(clipEndTick(doc, clip), meter)}`];
-  if (clip.kind === 'midi' && clip.loopLength > 0 && clip.loopLength < clip.length) parts.push(`loops every ${spanText(clip.loopLength, meter, clip.start)}`);
+  if (isLooping(clip) && clip.loopLength < clip.length) parts.push(`loops every ${spanText(clip.loopLength, meter, clip.start)}`);
   if (clip.muted) parts.push('muted');
   if (clip.kind === 'audio') parts.push(status);
   return parts.join(', ');
 }
 
-/** A duration in bars when it is whole bars ("1 bar", "2 bars"), else in beats ("3 beats", "1.5 beats"). */
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+
+/**
+ * `ticks` in beats of `beatTicks`: a decimal ("0.25", "1.5") when it ends within three
+ * places, else a fraction ("1/3", "1 2/3"), as triplet values give.
+ */
+export function beatsText(ticks, beatTicks) {
+  const g = gcd(ticks, beatTicks);
+  const num = ticks / g;
+  const den = beatTicks / g;
+  if (1000 % den === 0) return String(num / den);
+  const whole = Math.floor(num / den);
+  return `${whole ? `${whole} ` : ''}${num % den}/${den}`;
+}
+
+/** "1 beat", "0.5 beats", "1/3 beat", "1 1/3 beats": a fraction alone counts as one beat. */
+export function beatCountText(ticks, beatTicks) {
+  const beats = beatsText(ticks, beatTicks);
+  return `${beats} ${beats === '1' || /^\d+\/\d+$/.test(beats) ? 'beat' : 'beats'}`;
+}
+
+/** A duration in bars when it is whole bars ("1 bar", "2 bars"), else in beats ("3 beats", "1/3 beat"). */
 export function spanText(ticks, meter, at) {
   const bar = meter.barTicksAt(at);
   if (ticks % bar === 0) return ticks === bar ? '1 bar' : `${ticks / bar} bars`;
-  const beats = Math.round((ticks / meter.beatTicksAt(at)) * 1000) / 1000;
-  return beats === 1 ? '1 beat' : `${beats} beats`;
+  return beatCountText(ticks, meter.beatTicksAt(at));
 }
 
 /** Clips of `track` in time order. */
@@ -80,8 +100,13 @@ export function contentEnd(doc) {
 
 /** Topmost clip of `track` under `tick` (the last one in time order), or null. */
 export function clipAt(doc, track, tick) {
+  // The last in trackClips order without sorting: the greatest start, then the greatest ID.
   let hit = null;
-  for (const clip of trackClips(doc, track)) if (clip.start <= tick && tick < clipEndTick(doc, clip)) hit = clip;
+  for (const id of track.clipIds) {
+    const clip = doc.clips[id];
+    if (!clip || clip.start > tick || tick >= clipEndTick(doc, clip)) continue;
+    if (!hit || clip.start > hit.start || (clip.start === hit.start && clip.id > hit.id)) hit = clip;
+  }
   return hit;
 }
 

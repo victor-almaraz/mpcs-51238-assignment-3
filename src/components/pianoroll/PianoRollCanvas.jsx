@@ -4,14 +4,13 @@ import { useEffect, useRef } from 'react';
 import { getEngine } from '@/lib/audio/engine-client';
 import { PPQ } from '@/dsp/core/constants';
 import { LABEL_W, ROW_H, isBlackKey } from './layout';
+import { cssVar } from '@/components/ui/css-var';
 
 /** Drum hits draw one 1/16 step wide at the current scale, whatever the grid. */
 const DRUM_HIT_TICKS = PPQ / 4;
 
-function cssVar(name, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
+/** Longest gap between redraws of an idle, unchanged piano roll, ms. */
+const IDLE_REDRAW_MS = 250;
 
 /**
  * Visual layer of the piano roll: row shading, bar and beat lines, notes and
@@ -20,9 +19,6 @@ function cssVar(name, fallback) {
  * all input. `ghost` is the provisional note of a drag, drawn dashed. `view` is { scrollX, scrollY, width, height }; the playhead is
  * read from the engine in a requestAnimationFrame loop, never React state.
  */
-/** Longest gap between redraws of an idle, unchanged piano roll, ms. */
-const IDLE_REDRAW_MS = 250;
-
 export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
   const canvasRef = useRef(null);
   const props = useRef(null);
@@ -149,7 +145,7 @@ export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, gr
         className="pointer-events-none absolute"
         style={{ left: LABEL_W, top: 0, transform: `translate(${view.scrollX}px, ${view.scrollY}px)` }}
       />
-      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 w-0.5 bg-focus" style={{ left: LABEL_W, display: 'none' }} />
+      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 w-0.5 bg-focus will-change-transform" style={{ left: LABEL_W, display: 'none' }} />
     </>
   );
 }

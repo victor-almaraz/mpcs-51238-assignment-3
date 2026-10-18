@@ -3,8 +3,7 @@
  * beside it, so a level and a mark of the same dB sit at the same height.
  * Pure functions; no React.
  */
-
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+import { clamp } from '../../dsp/core/math.js';
 
 /**
  * Height of `db` on a `min`–`max` dB scale, 0 (bottom) to 1 (top), on a square

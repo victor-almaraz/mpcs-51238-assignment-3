@@ -3,11 +3,10 @@
 import { useRef } from 'react';
 import { cx } from '@/design-systems/industrial/classes';
 import { taperFraction, taperValue } from './level-scale';
+import { clamp } from '@/dsp/core/math';
 
 /** dB marks on the scale, where they fall inside the range. */
 const MARKS = [6, 0, -6, -12, -24, -60];
-
-const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 /**
  * Vertical channel fader (MIX-01): a dB scale beside a track and cap, on a

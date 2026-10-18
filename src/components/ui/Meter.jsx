@@ -27,8 +27,11 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
   const [lo, hi] = scale ?? [];
   const toFraction = scale ? (db) => (db <= lo ? 0 : taperFraction(db, lo, hi)) : linearFraction;
   const toFractionRef = useRef(toFraction);
+  // The latest getter: a strip's track index changes when tracks move or one before it is deleted.
+  const readRef = useRef(read);
   useEffect(() => {
     toFractionRef.current = toFraction;
+    readRef.current = read;
   });
 
   useEffect(() => {
@@ -42,7 +45,7 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
     function draw(now) {
       const dt = (now - last) / 1000;
       last = now;
-      const peaks = read();
+      const peaks = readRef.current();
       const toFraction = toFractionRef.current;
       for (let ch = 0; ch < 2; ch++) {
         const db = peaks ? toDb(peaks[ch]) : -Infinity;
@@ -62,7 +65,7 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
     }
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
-    // `read` is a stable getter for the component's lifetime.
+    // One loop per mount: the getter, the scale and the elements are all read through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -72,11 +75,11 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
         <div key={ch} className="relative flex-1 overflow-hidden">
           <div
             ref={bars[ch]}
-            className="absolute inset-0 origin-bottom bg-gradient-to-t from-level-low via-level-mid to-level-high"
+            className="absolute inset-0 origin-bottom bg-gradient-to-t from-level-low via-level-mid to-level-high will-change-transform"
             style={{ transform: 'scaleY(0)' }}
           />
           {/* The hold line is the top edge of a full-height layer moved by translateY. */}
-          <div ref={holds[ch]} className="pointer-events-none absolute inset-0 border-t border-lamp" style={{ transform: 'translateY(100%)' }} />
+          <div ref={holds[ch]} className="pointer-events-none absolute inset-0 border-t border-lamp will-change-transform" style={{ transform: 'translateY(100%)' }} />
         </div>
       ))}
     </div>

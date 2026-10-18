@@ -2,14 +2,13 @@
 
 import { useRef, useState } from 'react';
 import { cx, focusRing, valueReadout } from '@/design-systems/industrial/classes';
+import { clamp } from '@/dsp/core/math';
 
 /** Arc sweep, degrees either side of straight up. */
 const SWEEP = 135;
 /** Vertical drag distance for the whole range, px; Shift divides the speed by 10. */
 const DRAG_PX = 160;
 const R = 18;
-
-const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 /** Point on the knob circle at `deg` from straight up, clockwise. */
 function at(deg, r = R) {

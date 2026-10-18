@@ -5,6 +5,7 @@
 import { DRUM_MAP, DRUM_VOICE_NAMES, drumRowLabel } from '@/dsp/instruments/drum-map';
 import { NOTE_COUNT, PPQ } from '@/dsp/core/constants';
 import { noteName } from '@/lib/audio/keyboard-input';
+import { beatCountText, beatsText } from '@/components/timeline/layout';
 
 /** Smallest cell in CSS pixels: the 24 × 24 minimum target (WCAG 2.5.8). */
 export const CELL_W = 24;
@@ -13,7 +14,7 @@ export const CELL_W = 24;
  * Horizontal scale, px per tick, at zoom 1: a 1/16 step is CELL_W wide. The grid
  * never changes it; a grid step is grid · TICK_W · zoom pixels wide.
  */
-export const TICK_W = CELL_W / (PPQ / 4);
+const TICK_W = CELL_W / (PPQ / 4);
 
 /** Piano-roll zoom factors; a grid is usable at a zoom where its cells are at least CELL_W wide. */
 export const ROLL_ZOOMS = [0.5, 1, 2, 4];
@@ -63,21 +64,6 @@ export function inChokeGroup(pitch) {
 const isBlackKey = (pitch) => [1, 3, 6, 8, 10].includes(pitch % 12);
 export { isBlackKey };
 
-const gcd = (a, b) => (b ? gcd(b, a % b) : a);
-
-/**
- * `ticks` in beats of `beatTicks`: a decimal ("0.25", "1.5") when it ends within three
- * places, else a fraction ("1/3", "1 2/3"), as triplet values give.
- */
-export function beatsText(ticks, beatTicks) {
-  const g = gcd(ticks, beatTicks);
-  const num = ticks / g;
-  const den = beatTicks / g;
-  if (1000 % den === 0) return String(num / den);
-  const whole = Math.floor(num / den);
-  return `${whole ? `${whole} ` : ''}${num % den}/${den}`;
-}
-
 /** Where tick `inBeat` lies in a beat of `beatTicks`: the grid step when the grid divides the beat, else the fraction. */
 function inBeatText(inBeat, beatTicks, grid) {
   return beatTicks % grid === 0 ? { step: Math.floor(inBeat / grid) + 1 } : { fraction: beatsText(inBeat, beatTicks) };
@@ -106,10 +92,7 @@ export function barBeatText(t, meter, grid) {
 }
 
 /** "length 1 beat", "length 0.5 beats", "length 1/3 beat". */
-export function lengthText(ticks, meter, at) {
-  const beats = beatsText(ticks, meter.beatTicksAt(at));
-  return `length ${beats} ${beats === '1' || /^\d+\/\d+$/.test(beats) ? 'beat' : 'beats'}`;
-}
+const lengthText = (ticks, meter, at) => `length ${beatCountText(ticks, meter.beatTicksAt(at))}`;
 
 /** Accessible note name: "C4, bar 2 beat 1, length 1 beat, velocity 100". */
 export function noteText(note, isDrums, meter, grid) {

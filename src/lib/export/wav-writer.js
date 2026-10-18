@@ -8,6 +8,7 @@
  * stereo in every format, so no pad byte is needed).
  */
 import { createTpdf } from './dither.js';
+import { clamp } from '../../dsp/core/math.js';
 
 export const FORMATS = Object.freeze({
   wav16: Object.freeze({ header: 44, blockAlign: 4, bits: 16, label: 'WAV 16-bit (dithered)' }),
@@ -19,8 +20,6 @@ const CHANNELS = 2;
 /** KSDATAFORMAT_SUBTYPE_PCM: 00000001-0000-0010-8000-00AA00389B71, in file byte order. */
 // eslint-disable-next-line no-restricted-syntax -- 0x80 is a GUID byte, not the render quantum
 const PCM_SUBFORMAT = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71];
-
-const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 
 function ascii(view, at, text) {
   for (let i = 0; i < text.length; i++) view.setUint8(at + i, text.charCodeAt(i));

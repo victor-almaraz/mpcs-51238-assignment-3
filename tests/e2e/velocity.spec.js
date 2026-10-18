@@ -59,4 +59,15 @@ test('the lane edits the selected note by keyboard and several notes by a drag',
   await page.mouse.move(box.x + 308, y, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => (await velocities(page, id)).every((v) => v > 50 && v < 80)).toBe(true);
+
+  // A rising stroke paints a ramp: each stem keeps the height painted on it, in one edit.
+  await page.mouse.move(box.x + 212, box.y + 1 + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 260, box.y + 1 + 24, { steps: 6 });
+  await page.mouse.move(box.x + 308, box.y + 1 + 8, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => {
+    const [a, b] = await velocities(page, id);
+    return a < 50 && b > 90;
+  }).toBe(true);
 });

@@ -7,8 +7,7 @@
 import { MAX_REVERBS } from '../../dsp/effects/reverb.js';
 import { MAX_EFFECTS } from '../../dsp/protocol.js';
 import { createDevice, createId } from './model.js';
-
-const fail = (code, message) => ({ ok: false, error: { code, message } });
+import { fail } from './result.js';
 
 /** Index of the first chain entry in `track.deviceIds`. */
 const chainStart = (track) => (track.kind === 'instrument' ? 1 : 0);

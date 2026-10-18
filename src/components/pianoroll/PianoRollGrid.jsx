@@ -30,12 +30,13 @@ const LOOP_BARS = [1, 2, 4];
 const HEADER = -1;
 /** Smallest note-grid height: three rows and the border; below it the panel scrolls. */
 const GRID_MIN_H = 3 * ROW_H + 2;
-/** Width of a note's resize zone at its end, px (the last third of a one-step note). */
 /** Stretch zone at each end of a note, px (a third of the note on short notes). */
 const EDGE_PX = 6;
 /** Autoscroll while dragging: within AUTOSCROLL_BAND px of a view edge, or past it, up to AUTOSCROLL_MAX px per frame. */
 const AUTOSCROLL_BAND = 8;
 const AUTOSCROLL_MAX = 20;
+/** The note index entry of a pitch without notes. */
+const NO_NOTES = { notes: [] };
 /** Stretch resolution while Alt is held: a 1/64 note. */
 const FREE_STEP = PPQ / 16;
 
@@ -50,9 +51,11 @@ const FREE_STEP = PPQ / 16;
  * the row header); Enter adds or removes a note; Delete removes it;
  * Alt+arrows move it; Shift+Left/Right change its length; Shift+Up/Down change
  * its velocity by 8; Q quantizes the clip. Pointer: a drag from an empty
- * cell draws a note as long as the drag (grid steps); a drag from a note's
- * right edge (the last 8 px, cursor ew-resize) resizes it and from its body
- * moves it, in one edit on release. Drum notes keep one length. The cursor is
+ * cell draws a note as long as the drag (grid steps); a drag from either end
+ * of a note (EDGE_PX, cursor ew-resize) stretches it, on the grid or finer
+ * with Alt, and from its body moves it, auditioning each pitch and scrolling
+ * at the view's edges; each drag is one edit on release. Drum notes keep one
+ * length. The cursor is
  * a pitch and a tick, so it stays put when the grid or the row set changes.
  * `stepInsertRef.current(pitch)` is set while step input is on.
  */
@@ -194,7 +197,17 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const visibleCols = [];
   for (let c = firstCol; c <= lastCol; c++) visibleCols.push(c);
 
-  const cellNote = (r, c) => (clip ? noteAt(clip, c * grid, rows[r], grid, isDrums) : undefined);
+  // Each visible cell looks up its notes: an index by pitch keeps that to the row's few notes.
+  const byPitch = useMemo(() => {
+    const index = new Map();
+    for (const n of clip?.notes ?? []) {
+      if (!index.has(n.pitch)) index.set(n.pitch, { notes: [] });
+      index.get(n.pitch).notes.push(n);
+    }
+    return index;
+  }, [clip?.notes]);
+  const rowNotes = (r) => byPitch.get(rows[r]) ?? NO_NOTES;
+  const cellNote = (r, c) => (clip ? noteAt(rowNotes(r), c * grid, rows[r], grid, isDrums) : undefined);
 
   /**
    * "C4, bar 2 beat 1" for an empty cell; the note's full name where a note
@@ -205,7 +218,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     const pitch = rows[r];
     const base = `${rowLabel(pitch, isDrums)}, ${positionText(c * grid, meter, grid)}`;
     if (!clip) return base;
-    const starting = notesStartingIn(clip, c * grid, pitch, grid);
+    const starting = notesStartingIn(rowNotes(r), c * grid, pitch, grid);
     if (starting.length > 0) {
       const more = starting.length - 1;
       return more > 0 ? `${noteText(starting[0], isDrums, meter, grid)}, and ${more} more ${more === 1 ? 'note' : 'notes'}` : noteText(starting[0], isDrums, meter, grid);
@@ -327,9 +340,9 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   /** The note a drag would leave: the origin note moved or resized by the drag, or the drawn note; clamped like the commands. */
   function dragResult(d) {
     if (d.mode === 'add') return { id: null, tick: d.originC * grid, pitch: rows[d.originR], length: drawSteps(d) * grid, velocity: 100 };
+    if (d.stretch) return d.stretch;
     const n = d.note;
     const dTick = (d.c - d.originC) * grid;
-    if (d.stretch) return d.stretch;
     const r = Math.max(0, Math.min(rows.length - 1, rows.indexOf(n.pitch) + (d.r - d.originR)));
     return { ...n, tick: Math.max(0, Math.min(length - 1, n.tick + dTick)), pitch: rows[r] };
   }

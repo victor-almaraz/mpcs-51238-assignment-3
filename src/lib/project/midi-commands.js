@@ -5,6 +5,8 @@
  * Results are { ok: true, doc, ... } or { ok: false, error: { code, message } }.
  */
 import { createId, ticksPerBar } from './model.js';
+import { clamp } from '../../dsp/core/math.js';
+import { fail } from './result.js';
 
 /** Default velocity of a new note (midi.md, project limit). */
 export const DEFAULT_VELOCITY = 100;
@@ -19,9 +21,6 @@ export const NEW_CLIP_BARS = 4;
 function requireTick(value, name) {
   if (!Number.isInteger(value)) throw new Error(`${name} must be an integer tick count, got ${value}`);
 }
-
-const fail = (code, message) => ({ ok: false, error: { code, message } });
-const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 
 function withClip(doc, clip) {
   return { ...doc, clips: { ...doc.clips, [clip.id]: clip } };
@@ -142,16 +141,12 @@ export function quantize(doc, clipId, grid, noteIds = null) {
 }
 
 /**
- * Sets the clip's loop length in ticks (the notes in [0, loopLength) repeat to
- * fill the clip), or removes it with null.
+ * Sets the clip's loop length in ticks: the notes in [0, loopLength) repeat to
+ * fill the clip. Ending a loop is setClipLooping(…, false), which keeps its repeats.
  */
 export function setLoopLength(doc, clipId, loopLength) {
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No MIDI clip.');
-  if (loopLength === null) {
-    const { loopLength: _removed, ...rest } = clip;
-    return { ok: true, doc: withClip(doc, rest) };
-  }
   requireTick(loopLength, 'loopLength');
   if (loopLength < 1) return fail('invalid', 'A loop lasts at least one tick.');
   return { ok: true, doc: withClip(doc, { ...clip, loopLength }) };

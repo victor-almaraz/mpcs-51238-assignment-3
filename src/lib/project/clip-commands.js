@@ -8,6 +8,8 @@
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { INSTRUMENT_LABELS, createId, createDevice, createTrack } from './model.js';
 import { expandClipNotes } from './midi-commands.js';
+import { clamp } from '../../dsp/core/math.js';
+import { fail } from './result.js';
 
 export const MAX_TRACKS = 16;
 /** Shortest audio clip after a trim, in frames (project limit). */
@@ -20,8 +22,6 @@ export const ENVELOPE_GAIN_MAX = 1.9953;
 export const FADE_CURVES = ['linear', 'equalPower', 'exp'];
 export const DEFAULT_AUDIO_RATE = 48000;
 
-const fail = (code, message) => ({ ok: false, error: { code, message } });
-const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 const requireInt = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`${name} must be an integer, got ${v}`);
 };
@@ -509,13 +509,13 @@ export function joinClips(doc, aId, bId, makeId = createId) {
  * srcLength ≥ 64 hold. MIDI clips trim by `deltaFrames` read as ticks, with
  * any loop written out first (unrollLoop).
  */
-export function trimStart(doc, clipId, delta) {
+export function trimStart(doc, clipId, delta, makeId = createId) {
   requireInt(delta, 'delta');
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No such clip.');
   if (clip.kind === 'midi') {
     const d = clamp(delta, -clip.start, clip.length - 1);
-    const flat = unrollLoop(clip);
+    const flat = unrollLoop(clip, makeId);
     return {
       ok: true,
       doc: setClip(doc, {

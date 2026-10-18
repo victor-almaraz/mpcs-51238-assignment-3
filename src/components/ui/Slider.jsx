@@ -1,10 +1,7 @@
 'use client';
 
 import { cx, fieldLabel, focusRing, readout, valueReadout } from '@/design-systems/industrial/classes';
-
-function clamp(v, min, max) {
-  return Math.min(max, Math.max(min, v));
-}
+import { clamp } from '@/dsp/core/math';
 
 /**
  * Native range input with a visible label and a value readout.

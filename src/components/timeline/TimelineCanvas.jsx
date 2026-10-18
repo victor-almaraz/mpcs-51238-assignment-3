@@ -9,11 +9,7 @@ import { faderText } from '@/components/mixer/TrackStrip';
 import { audioTempo, clipEndTick, envelopeGainAt, isLooping } from '@/lib/project/clip-commands';
 import { expandClipNotes } from '@/lib/project/midi-commands';
 import { HEADER_W, RULER_H, TRACK_H, clipRect, envelopeY, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
-
-function cssVar(name, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
+import { cssVar } from '@/components/ui/css-var';
 
 /** Min/max of `level` over source frames [from, to). */
 function bucketRange(level, from, to) {
@@ -109,6 +105,24 @@ function drawHandles(ctx, doc, clip, rect, zoom, sx, colors, gainDrag) {
     ctx.fillStyle = colors.bg;
     ctx.fillText(text, mid - w / 2 + 4, rect.top + 27);
   }
+}
+
+/** Per clip object (documents are immutable): the notes as they play, loop repeats included, and their pitch range. */
+const pictures = new WeakMap();
+function clipPicture(clip) {
+  let picture = pictures.get(clip);
+  if (!picture) {
+    const notes = expandClipNotes(clip);
+    let lo = 127;
+    let hi = 0;
+    for (const n of notes) {
+      lo = Math.min(lo, n.pitch);
+      hi = Math.max(hi, n.pitch);
+    }
+    picture = { notes, lo, span: Math.max(12, hi - lo + 1) };
+    pictures.set(clip, picture);
+  }
+  return picture;
 }
 
 /**
@@ -229,6 +243,7 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
         }
       });
       const g = p.ghost;
+      ctx.font = '11px ui-monospace, monospace'; // clip names, set once for every clip
       p.rowIds.forEach((trackId, r) => {
         const track = p.project.tracks[trackId];
         for (const original of trackClips(p.project, track)) {
@@ -276,14 +291,13 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
               ctx.stroke();
             }
           } else {
-            // The notes as they play, loop repeats included.
-            const notes = expandClipNotes(clip);
-            const pitches = notes.map((n) => n.pitch);
-            const lo = Math.min(...pitches);
-            const span = Math.max(12, Math.max(...pitches) - lo + 1);
+            const { notes, lo, span } = clipPicture(clip);
             ctx.fillStyle = clip.muted ? colors.line : colors.muted;
+            // Notes are in time order: those left of the view are skipped, and drawing stops past its right edge.
             for (const n of notes) {
               const nx = (clip.start + n.tick) * k - sx;
+              if (nx > w) break;
+              if (nx + n.length * k < 0) continue;
               const ny = top + 14 + (ch - 18) * (1 - (n.pitch - lo + 1) / span);
               ctx.fillRect(nx, ny, Math.max(2, n.length * k), 2);
             }
@@ -304,7 +318,6 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
             }
           }
           ctx.fillStyle = colors.fg;
-          ctx.font = '11px ui-monospace, monospace';
           ctx.fillText(clip.name, x + 4, top + 15);
           ctx.restore();
           const isSelected = p.selected.has(clip.id);
@@ -376,7 +389,7 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
   return (
     <>
       <canvas ref={canvasRef} aria-hidden="true" className="absolute top-0 block" style={{ left: HEADER_W, transform: 'translate(var(--sx, 0px), var(--sy, 0px))' }} />
-      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 z-[5] w-0.5 bg-fg" style={{ left: HEADER_W, display: 'none' }} />
+      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 z-[5] w-0.5 bg-fg will-change-transform" style={{ left: HEADER_W, display: 'none' }} />
     </>
   );
 }

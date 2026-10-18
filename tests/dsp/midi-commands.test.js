@@ -4,6 +4,7 @@ import { compileModel } from '../../src/lib/audio/compile-model.js';
 import {
   addNote, createClip, deleteNote, expandClipNotes, moveNote, noteAt, notesStartingIn, quantize, resizeNote, setLoopLength, setVelocity,
 } from '../../src/lib/project/midi-commands.js';
+import { setClipLooping } from '../../src/lib/project/clip-commands.js';
 import { createProject } from '../../src/lib/project/model.js';
 
 let counter = 0;
@@ -130,9 +131,11 @@ test('compile: a looping clip expands into frames, sorted, at most 20 000 notes 
   const notes = model.tracks[0].notes;
   assert.deepEqual([...notes.pitch], [60, 72, 60, 72, 60, 72, 60, 72]);
   assert.deepEqual([...notes.start].slice(0, 4), [0, 24000, 96000, 120000]);
-  const off = setLoopLength(doc, s.clipId, null).doc;
+  // Ending the loop writes its repeats out: the clip compiles to the same notes.
+  const off = setClipLooping(doc, s.clipId, false, makeId).doc;
   assert.equal(off.clips[s.clipId].loopLength, undefined);
-  assert.equal(compileModel(off, 48000).model.tracks[0].notes.start.length, 2);
+  assert.equal(off.clips[s.clipId].notes.length, 8);
+  assert.deepEqual([...compileModel(off, 48000).model.tracks[0].notes.start], [...notes.start]);
 });
 
 test('noteAt with startOnly matches drum markers: a long note does not cover later cells', () => {

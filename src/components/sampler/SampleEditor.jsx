@@ -7,13 +7,9 @@ import { LOOP_FORWARD, LOOP_OFF, MAX_CROSSFADE_MS } from '@/dsp/instruments/samp
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { MARKERS, loopMarkersFor, markerFrames, markerRange, markerText, nearestZeroCrossing } from './markers';
 import IconToggle from '@/components/ui/IconToggle';
+import { cssVar } from '@/components/ui/css-var';
 
 const WAVE_H = 96;
-
-function cssVar(name, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
 
 /** The source waveform with the region, loop and marker lines; hidden from assistive technology. */
 function Waveform({ source, markers, loopOn, crossfade }) {

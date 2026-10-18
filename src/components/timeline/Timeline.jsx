@@ -139,10 +139,16 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const stepTicks = view.snap === 'bar' ? barTicks : Number(view.snap) * PPQ;
   const snapTick = (t, free) => (free || !view.snapOn ? t : Math.round(t / stepTicks) * stepTicks);
   const loop = loopRange(project, view);
+  /** The last clip end plus TAIL_BARS: how far the lanes and the loop end reach. */
+  const lanesEnd = useMemo(() => contentEnd(project) + TAIL_BARS * barTicks, [project, barTicks]);
   const loopMin = Math.max(1, stepTicks); // shortest loop: one grid step
   const fileRef = useRef(null);
-  /** Where the file picker's audio goes, when it opened from a double-click on an audio lane. */
+  /** Where the file picker's audio goes: set by each opening, so a cancelled pick leaves nothing behind. */
   const pickTarget = useRef(null);
+  const openPicker = (target = null) => {
+    pickTarget.current = target;
+    fileRef.current?.click();
+  };
   const scrollRef = useRef(null);
   const contentRef = useRef(null);
   const canvasRef = useRef(null);
@@ -174,8 +180,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const showJoin = selection.length > 0;
   const focusTree = () => document.querySelector('[role="treegrid"][aria-label="Tracks and clips"] [role="row"][tabindex="0"]')?.focus();
   const editable = () => !readOnly;
+  /** The last selected clip: the one menus name and the piano roll edits. */
+  const lastSelected = project.clips[selection[selection.length - 1]] ?? null;
   useCommands([
-    { id: 'timeline.add-audio', group: 'Timeline', label: 'Add audio file…', run: () => fileRef.current?.click(), enabled: () => editable() && !importing },
+    { id: 'timeline.add-audio', group: 'Timeline', label: 'Add audio file…', run: () => openPicker(), enabled: () => editable() && !importing },
     { id: 'timeline.add-midi-clip', group: 'Timeline', label: 'Add MIDI clip at edit cursor', run: () => addMidiClip(midiTarget()?.id, editCursor), enabled: () => editable() && Boolean(midiTarget()) },
     { id: 'timeline.add-audio-track', group: 'Timeline', label: 'Add audio track', run: () => addTrack(null), enabled: editable },
     ...INSTRUMENT_TYPES.map((type) => ({ id: `timeline.add-${type}`, group: 'Timeline', label: `Add ${INSTRUMENT_LABELS[type]} track`, run: () => addTrack(type), enabled: editable })),
@@ -186,9 +194,9 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     {
       id: 'timeline.loop-clip',
       group: 'Clip',
-      label: project.clips[selection[selection.length - 1]] && isLooping(project.clips[selection[selection.length - 1]]) ? 'Stop looping clip' : 'Loop clip',
-      run: () => commands.setLooping(!isLooping(project.clips[selection[selection.length - 1]])),
-      enabled: () => editable() && project.clips[selection[selection.length - 1]]?.kind === 'midi',
+      label: lastSelected && isLooping(lastSelected) ? 'Stop looping clip' : 'Loop clip',
+      run: () => commands.setLooping(!isLooping(lastSelected)),
+      enabled: () => editable() && lastSelected?.kind === 'midi',
     },
     { id: 'timeline.select-all', group: 'Clip', label: 'Select all clips', keys: 'Mod+A', run: () => setSelection(Object.keys(project.clips)), enabled: () => hasClips },
     { id: 'timeline.focus', group: 'Go to', label: 'Tracks and clips', run: focusTree },
@@ -231,7 +239,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     if (files.length === 0) return;
     setImporting(true);
     const lines = [];
-    const selected = project.tracks[at.trackId ?? view.selectedTrackId];
+    const selected = project.tracks['trackId' in at ? at.trackId : view.selectedTrackId];
     let trackId = selected?.kind === 'audio' ? selected.id : null;
     let tick = at.tick ?? editCursor;
     let lastClipId = null;
@@ -336,7 +344,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     return selected?.kind === 'instrument' ? selected : rowIds.map((id) => doc.tracks[id]).find((t) => t?.kind === 'instrument');
   };
 
-  /** "Add" menu items: an instrument track of each type, an audio track, audio files. */
+  /** "Add" menu items: a MIDI clip at the edit cursor, an instrument track of each type, an audio track, audio files. */
   function addItems({ audio = true } = {}) {
     const instruments = INSTRUMENT_TYPES.map((type) => ({ label: `${INSTRUMENT_LABELS[type]} track`, icon: 'piano', disabled: readOnly, run: () => addTrack(type) }));
     if (!audio) return instruments;
@@ -347,7 +355,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       ...instruments,
       { separator: true },
       { label: 'Audio track', icon: 'audio-lines', disabled: readOnly, run: () => addTrack(null) },
-      { label: importing ? 'Adding audio…' : 'Audio file…', icon: 'plus', disabled: readOnly || importing, run: () => fileRef.current?.click() },
+      { label: importing ? 'Adding audio…' : 'Audio file…', icon: 'plus', disabled: readOnly || importing, run: () => openPicker() },
     ];
   }
 
@@ -364,7 +372,6 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
 
   /** "Edit" menu items. */
   function editItems() {
-    const last = project.clips[selection[selection.length - 1]];
     // With no selected track the dock shows the first track, so Delete track offers that one.
     const track = project.tracks[view.selectedTrackId] ?? (rowIds.length > 0 ? project.tracks[rowIds[0]] : null);
     return [
@@ -372,9 +379,9 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { label: 'Redo', keys: 'Mod+Shift+Z', disabled: !commandEnabled('edit.redo'), run: () => runCommand('edit.redo') },
       { separator: true },
       { label: 'Select all clips', keys: 'Mod+A', disabled: !hasClips, run: () => setSelection(Object.keys(project.clips)) },
-      { label: last?.muted ? 'Unmute clip' : 'Mute clip', disabled: readOnly || !last, run: toggleMute },
-      { label: last && isLooping(last) ? 'Stop looping clip' : 'Loop clip', disabled: readOnly || last?.kind !== 'midi', run: () => commands.setLooping(!isLooping(last)) },
-      { label: 'Rename clip…', keys: 'F2', disabled: readOnly || !last, run: () => startRename(last) },
+      { label: lastSelected?.muted ? 'Unmute clip' : 'Mute clip', disabled: readOnly || !lastSelected, run: toggleMute },
+      { label: lastSelected && isLooping(lastSelected) ? 'Stop looping clip' : 'Loop clip', disabled: readOnly || lastSelected?.kind !== 'midi', run: () => commands.setLooping(!isLooping(lastSelected)) },
+      { label: 'Rename clip…', keys: 'F2', disabled: readOnly || !lastSelected, run: () => startRename(lastSelected) },
       { label: track ? `Rename track ${track.name}…` : 'Rename track…', disabled: readOnly || !track, run: () => startRenameTrack(track) },
       { separator: true },
       { label: track ? `Delete track ${track.name}` : 'Delete track', icon: 'trash-2', disabled: readOnly || !track, run: () => deleteTrack(track.id) },
@@ -443,7 +450,6 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     openMenu(hit, e.clientX, e.clientY, clipRow(hit.id));
   }
 
-  /** Content coordinates of a pointer event: x along the timeline (scroll included), y from the ruler's top. */
   /**
    * Pointer position in content coordinates (x from the lanes' left edge, y from the top
    * of the ruler as if unscrolled), plus `inRuler`: the sticky ruler band at the top of the view.
@@ -652,7 +658,11 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       const raw = Math.round((x - d.x0) / pxPerTick(view.zoom));
       // Alt while dragging bypasses snap (ARR-04).
       const dTick = snapTick(raw, e.altKey);
-      setGhost({ clipIds: d.clipIds, mode: d.mode, dTick, dRow: d.mode === 'move' ? row - d.row0 : 0 });
+      const dRow = d.mode === 'move' ? row - d.row0 : 0;
+      // Most pointer moves stay within a snap step: only a changed result re-renders the timeline.
+      const g = ghostRef.current;
+      if (g && g.mode === d.mode && g.dTick === dTick && g.dRow === dRow) return;
+      setGhost({ clipIds: d.clipIds, mode: d.mode, dTick, dRow });
     }
   }
 
@@ -673,7 +683,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   /** Loop start and end handles by keyboard: arrows by the grid, Page Up and Page Down by bars, Home and End to the limits. */
   function onLoopKey(e, edge) {
     const value = loop[edge];
-    const limit = Math.max(loop.end, contentEnd(project) + TAIL_BARS * barTicks);
+    const limit = Math.max(loop.end, lanesEnd);
     let next;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = value - stepTicks;
     else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = value + stepTicks;
@@ -744,7 +754,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     }
   }
 
-  /** Double-click on a selected audio clip adds an envelope point there; on a point, removes it (ARR-05). */
+  /**
+   * Double-click on empty lane space adds a clip there; on a selected audio clip it adds an
+   * envelope point, and on a point removes it (ARR-05).
+   */
   function onDoubleClick(e) {
     if (readOnly || !onTimeline(e)) return;
     const pos = pointerPosition(e);
@@ -755,8 +768,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       const tick = Math.max(0, snapTick(xToTick(pos.x, view.zoom), e.altKey));
       if (track?.kind === 'instrument') addMidiClip(track.id, tick);
       else if (track?.kind === 'audio' && !importing) {
-        pickTarget.current = { trackId: track.id, tick };
-        fileRef.current?.click();
+        openPicker({ trackId: track.id, tick });
       }
       return;
     }
@@ -782,7 +794,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     importAudio(files, { trackId: rowIds[pos.row] ?? null, tick: Math.max(0, snapTick(xToTick(pos.x, view.zoom), e.altKey)) });
   }
 
-  const width = tickToX(Math.max(contentEnd(project), editCursor) + TAIL_BARS * barTicks, view.zoom);
+  const width = tickToX(Math.max(lanesEnd, editCursor + TAIL_BARS * barTicks), view.zoom);
 
   const contentHeight = RULER_H + Math.max(1, rowIds.length) * TRACK_H;
 
@@ -792,8 +804,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         Timeline
       </h2>
       <Toolbar label="Clip commands" className="flex items-center gap-2 overflow-x-auto border-b border-border bg-surface px-3 py-1 [&>*]:shrink-0">
-        <MenuButton label="Add" icon="plus" items={() => addItems()} disabled={readOnly} help="Add: an instrument track with a four-bar clip, an audio track, or audio files at the edit cursor." />
-        <MenuButton label="Edit" items={editItems} help="Edit: select, mute or rename clips; delete the selected track." />
+        <MenuButton label="Add" icon="plus" items={() => addItems()} disabled={readOnly} help="Add: a MIDI clip at the edit cursor, an instrument track with a four-bar clip, an audio track, or audio files at the edit cursor." />
+        <MenuButton label="Edit" items={editItems} help="Edit: select, mute, loop or rename clips; rename or delete the selected track." />
         <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
         <IconToggle icon="magnet" label="Snap" shortcut="N" size="sm" pressed={view.snapOn} onClick={() => setSnap({ snapOn: !view.snapOn })} data-help="Snap (N): drags land on the grid; hold Alt while dragging to place freely." />
         <Select
@@ -902,7 +914,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
             >
               <p className="text-sm">No tracks.</p>
               <MenuButton label="Add instrument track" icon="plus" variant="primary" items={() => addItems({ audio: false })} disabled={readOnly} />
-              <Button size="sm" onClick={() => fileRef.current?.click()} disabled={readOnly || importing}>
+              <Button size="sm" onClick={() => openPicker()} disabled={readOnly || importing}>
                 Add audio file
               </Button>
             </section>
@@ -939,7 +951,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
               tabIndex={0}
               aria-label={label}
               aria-valuemin={edge === 'start' ? 0 : loop.start + loopMin}
-              aria-valuemax={edge === 'start' ? loop.end - loopMin : Math.max(loop.end, contentEnd(project) + TAIL_BARS * barTicks)}
+              aria-valuemax={edge === 'start' ? loop.end - loopMin : Math.max(loop.end, lanesEnd)}
               aria-valuenow={loop[edge]}
               aria-valuetext={barText(loop[edge], meter)}
               data-help={`${label}: drag the loop band's edges in the ruler, or use the arrow keys (grid steps) and Page Up and Page Down (bars).`}

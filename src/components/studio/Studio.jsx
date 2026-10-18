@@ -62,6 +62,12 @@ function saveStatusText(unsavedCopy, state) {
   return 'Saved on this device';
 }
 
+/** Undo history: steps kept, and the gap in ms within which edits join one step. */
+const UNDO_LIMIT = 200;
+const UNDO_GROUP_MS = 600;
+/** Milliseconds for grouping edits (read in event handlers only). */
+const clock = () => performance.now();
+
 /**
  * The editor workspace, one screen tall: the header (name, save status, file
  * actions), the transport, banners, the arrangement (track headers and the
@@ -71,12 +77,6 @@ function saveStatusText(unsavedCopy, state) {
  * `unsavedCopy` marks an example copy not edited yet; `readOnly` a project
  * saved by a newer build.
  */
-/** Undo history: steps kept, and the gap in ms within which edits join one step. */
-const UNDO_LIMIT = 200;
-const UNDO_GROUP_MS = 600;
-/** Milliseconds for grouping edits (read in event handlers only). */
-const clock = () => performance.now();
-
 export default function Studio({ project: initialProject, unsavedCopy, readOnly }) {
   const [project, setProject] = useState(initialProject);
   const [view, setView] = useState(() => readView(initialProject));
@@ -109,12 +109,6 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const pruneTimer = useRef(0);
   useEffect(() => () => clearTimeout(pruneTimer.current), []);
 
-  /**
-   * Applies an edited document: it saves after 500 ms and reaches the engine
-   * at once. Handlers build edits on projectRef.current, the newest document,
-   * so several edits in one event all take effect. An edit that drops a source removes stored audio no saved
-   * project uses, once the save has happened.
-   */
   /*
    * Undo and redo (project-model.md, Commands and undo): documents are immutable, so the
    * history keeps whole documents. Edits within UNDO_GROUP_MS of the last one join its step,
@@ -122,6 +116,12 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
    */
   const history = useRef({ past: [], future: [], last: 0 });
 
+  /**
+   * Applies an edited document: it saves after 500 ms and reaches the engine
+   * at once. Handlers build edits on projectRef.current, the newest document,
+   * so several edits in one event all take effect. An edit that drops a source removes stored audio no saved
+   * project uses, once the save has happened.
+   */
   function edit(next, fromHistory = false) {
     if (readOnly) return;
     const prev = projectRef.current;
