@@ -1,7 +1,7 @@
 # AudioWorklet and WASM
 
 ## Worklet module rules
-- W-Rack modules load as same-origin files through `audioWorklet.addModule(url)`.
+- Wrack modules load as same-origin files through `audioWorklet.addModule(url)`.
 - `AudioWorkletGlobalScope` has no `fetch`, no `Response` (so no `WebAssembly.compileStreaming`) and no `performance`. Processor code does not use `TextEncoder` or `TextDecoder`; strings cross into the audio thread as pre-encoded bytes.
 - `process()` returns `true`.
 - The hot path performs no allocation, closure creation or structured-data `postMessage`.

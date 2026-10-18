@@ -62,7 +62,7 @@ test('Play opens the volume notice first; Cancel performs nothing', async ({ pag
   await playPause(page).click();
   const dialog = notice(page);
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('Turn your device volume down. W-Rack is about to play sound.');
+  await expect(dialog).toContainText('Turn your device volume down. Wrack is about to play sound.');
   await expect(dialog.getByRole('checkbox', { name: "Don't show this again on this device" })).not.toBeChecked();
   await expect(dialog.getByRole('button', { name: 'Continue' })).toBeFocused();
   const results = await new AxeBuilder({ page }).analyze();
@@ -172,7 +172,7 @@ test('"Don\'t show this again" stores the dismissal; later visits skip the notic
   await notice(page).getByRole('checkbox', { name: "Don't show this again on this device" }).check();
   await notice(page).getByRole('button', { name: 'Continue' }).click();
   await expect(pauseButton(page)).toBeVisible();
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('wrack:v1:settings')));
   expect(settings.volumeNoticeDismissed).toBe(true);
 
   await openExample(page, 'Ambient');
@@ -189,7 +189,7 @@ test('the metronome choice is saved in settings', async ({ page }) => {
   await expect(metronome).toHaveAttribute('aria-pressed', 'false');
   await metronome.click();
   await expect(metronome).toHaveAttribute('aria-pressed', 'true');
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('wrack:v1:settings')));
   expect(settings.metronome).toBe(true);
   expect(await contexts(page)).toBe(0, 'toggling the metronome makes no sound');
 });
@@ -203,7 +203,7 @@ test('a tempo edit is the first edit: the example copy saves as a project', asyn
   await tempo.press('Enter');
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   await expect(page.getByText('90 BPM · 4/4')).toBeVisible();
-  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
   expect(saved.name).toBe('Beat (copy)');
   expect(saved.tempo[0].bpm).toBe(90);
   await page.goto('/');
@@ -218,7 +218,7 @@ test('the transport sets any time signature over a real note value; undo restore
   await transport.getByRole('combobox', { name: 'Beats per bar' }).selectOption('7');
   await transport.getByRole('combobox', { name: 'Note value' }).selectOption('16');
   await expect(page.getByText(/ BPM · 7\/16$/)).toBeVisible();
-  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key))?.meter, `w-rack:v1:project:${id}`)).toEqual([{ tick: 0, numerator: 7, denominator: 16 }]);
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key))?.meter, `wrack:v1:project:${id}`)).toEqual([{ tick: 0, numerator: 7, denominator: 16 }]);
   await page.getByRole('heading', { level: 1 }).click();
   // Edits within 600 ms join one undo step, so the two selects may undo together.
   await expect(async () => {
@@ -261,7 +261,7 @@ test('the Subtractive panel shows labelled controls with units, and an edit save
   await expect(panel.getByRole('radio', { name: 'Square' })).toBeChecked();
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   const id = new URL(page.url()).pathname.split('/').pop();
-  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
   const bass = Object.values(saved.devices).find((d) => d.type === 'subtractive');
   expect(bass.params.waveform).toBe(1);
   expect(bass.params.cutoff).toBeGreaterThan(2000);
@@ -450,14 +450,14 @@ test('the mixer: named strips with volume, pan, mute and solo, and a master stri
   await expect(pan).toHaveAttribute('aria-valuetext', 'Centre');
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
   const id = new URL(page.url()).pathname.split('/').pop();
-  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
   expect(Object.values(saved.tracks).find((t) => t.name === 'Bass').mute).toBe(true);
 
   const master = mixer.getByRole('slider', { name: 'Master volume' });
   await master.focus();
   await page.keyboard.press('PageDown');
   await expect(master).toHaveAttribute('aria-valuetext', '−18.0 dB');
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('wrack:v1:settings')));
   expect(settings.masterVolumeDb).toBe(-18);
 });
 
@@ -525,7 +525,7 @@ test('Z and X change the keyboard octave and save it; typing in a field plays no
   await page.keyboard.press('KeyZ');
   await page.keyboard.press('KeyZ');
   await expect(page.getByText('Keyboard octave: C3')).toBeVisible();
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('w-rack:v1:settings')));
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('wrack:v1:settings')));
   expect(settings.keyboardOctave).toBe(3);
   await page.getByRole('textbox', { name: 'Tempo (BPM)' }).focus();
   await page.keyboard.press('KeyA');
@@ -563,7 +563,7 @@ test('a track changes instrument in place; clips and effects stay, and Undo rest
   const panel = page.getByRole('region', { name: 'Subtractive synth: Bass' });
   const id = new URL(page.url()).pathname.split('/').pop();
   const bassOf = async () => {
-    const doc = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+    const doc = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
     const track = Object.values(doc?.tracks ?? {}).find((t) => t.name === 'Bass');
     return track && { type: doc.devices[track.deviceIds[0]].type, effects: track.deviceIds.length - 1, clips: track.clipIds.length };
   };

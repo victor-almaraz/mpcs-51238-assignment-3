@@ -72,7 +72,7 @@ const clock = () => performance.now();
  * The editor workspace, one screen tall: the header (name, save status, file
  * actions), the transport, banners, the arrangement (track headers and the
  * timeline), the dock (Editor, Devices and Mixer tabs) and the info strip.
- * Working-state changes save to w-rack:v1:view:<id>; the transport always
+ * Working-state changes save to wrack:v1:view:<id>; the transport always
  * opens stopped.
  * `unsavedCopy` marks an example copy not edited yet; `readOnly` a project
  * saved by a newer build.
@@ -103,7 +103,7 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
   // The tab names the project.
   useEffect(() => {
-    document.title = `${project.name} · W-Rack`;
+    document.title = `${project.name} · Wrack`;
   }, [project.name]);
 
   const pruneTimer = useRef(0);

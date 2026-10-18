@@ -9,8 +9,8 @@ import './globals.css';
 
 export const metadata = {
   title: {
-    default: 'W-Rack',
-    template: '%s · W-Rack',
+    default: 'Wrack',
+    template: '%s · Wrack',
   },
   description: 'An arrangement sketchpad that runs in the browser.',
 };

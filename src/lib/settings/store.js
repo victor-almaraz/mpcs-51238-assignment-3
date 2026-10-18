@@ -1,5 +1,5 @@
 /*
- * Saved settings (assignment-3-scope.md, Saved settings) at w-rack:v1:settings.
+ * Saved settings (assignment-3-scope.md, Saved settings) at wrack:v1:settings.
  * "Remember settings on this device" is on by default and held in memory:
  * turning it off removes the key, nothing is written for the rest of the page
  * session, and the next visit starts from the defaults.

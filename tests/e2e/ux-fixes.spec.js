@@ -13,7 +13,7 @@ const tree = (page) => page.getByRole('treegrid', { name: 'Tracks and clips' });
 const clipRow = (page, name) => tree(page).locator('[role="row"][aria-level="2"]').filter({ hasText: name }).first();
 const savedDoc = (page) =>
   page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith('w-rack:v1:project:'));
+    const key = Object.keys(localStorage).find((k) => k.startsWith('wrack:v1:project:'));
     return key ? JSON.parse(localStorage.getItem(key)) : null;
   });
 const clipNamed = async (page, name) => Object.values((await savedDoc(page))?.clips ?? {}).find((c) => c.name === name);

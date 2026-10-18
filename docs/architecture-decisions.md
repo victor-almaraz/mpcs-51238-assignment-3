@@ -64,7 +64,7 @@ Context: `connect-src 'self'` forbids fetching from user-chosen origins; a stati
 Decision:
 - The user installs a plugin from a local ZIP or folder. The disk worker copies it to `opfs:/plugins/<id>/<version>/`.
 - The service worker serves installed plugins at `/plugins/<id>/<version>/...` as same-origin responses.
-- `script-src` includes `blob:` for the WAM SDK environment setup (`privacy-and-security.md`). W-Rack's own code never creates script `blob:` URLs.
+- `script-src` includes `blob:` for the WAM SDK environment setup (`privacy-and-security.md`). Wrack's own code never creates script `blob:` URLs.
 - The app never fetches plugins over the network.
 
 ## ADR-9: Media containers

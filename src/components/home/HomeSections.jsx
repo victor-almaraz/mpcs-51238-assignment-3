@@ -11,7 +11,7 @@ import RecentList from './RecentList';
 
 /**
  * Home sections in order: Recent (return visits with saved projects), Create,
- * Load, Examples. A first visit (no W-Rack keys) opens with a one-sentence
+ * Load, Examples. A first visit (no Wrack keys) opens with a one-sentence
  * description. Before hydration neither the description nor Recent renders.
  */
 export default function HomeSections() {
@@ -23,7 +23,7 @@ export default function HomeSections() {
     <>
       {returning === false ? (
         <p className="max-w-2xl text-lg">
-          W-Rack is a music sketchpad in your browser: play built-in instruments, arrange MIDI and audio clips, and
+          Wrack is a music sketchpad in your browser: play built-in instruments, arrange MIDI and audio clips, and
           export the result as a WAV file.
         </p>
       ) : null}

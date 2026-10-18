@@ -13,7 +13,7 @@ export const SAFETY_PROCESSOR = 'wrack-safety';
 /** Output channel count of both processors (stereo). */
 export const CHANNELS = 2;
 
-/** Ticks per quarter note. Every musical time in W-Rack is an integer tick count. */
+/** Ticks per quarter note. Every musical time in Wrack is an integer tick count. */
 export const PPQ = 960;
 
 /**

@@ -6,12 +6,12 @@ This document describes the full storage design: OPFS, journals, linked folders 
 ### Stores
 | Data | Store | Location |
 |---|---|---|
-| Project document | `localStorage` | `w-rack:v1:project:<id>` |
-| Working state of one project | `localStorage` | `w-rack:v1:view:<id>` |
-| Project summaries | `localStorage` | `w-rack:v1:index` |
-| Preset library | `localStorage` | `w-rack:v1:presets` |
-| Saved settings | `localStorage` | `w-rack:v1:settings` |
-| Original bytes of imported audio | IndexedDB | database `w-rack`, store `sources` |
+| Project document | `localStorage` | `wrack:v1:project:<id>` |
+| Working state of one project | `localStorage` | `wrack:v1:view:<id>` |
+| Project summaries | `localStorage` | `wrack:v1:index` |
+| Preset library | `localStorage` | `wrack:v1:presets` |
+| Saved settings | `localStorage` | `wrack:v1:settings` |
+| Original bytes of imported audio | IndexedDB | database `wrack`, store `sources` |
 
 - Only `src/lib/storage/storage.js` touches `localStorage`, and only `src/lib/storage/audio-store.js` touches IndexedDB.
 - Project and working-state saves are separate debounced writes, each 500 ms after the last change and flushed on `pagehide` (project limit). A view change never rewrites the project document.
@@ -61,7 +61,7 @@ The working state holds how the editor shows the project. It is never archived, 
 - Only the disk worker writes to OPFS, through `FileSystemSyncAccessHandle` with the default exclusive mode.
 
 ## IndexedDB
-Database `w-rack`, object stores: `settings`, `projectIndex`, `pluginIndex`, `fsaHandles` (Chromium linked folders). After a reload, a stored File System Access handle requires `requestPermission({ mode: 'readwrite' })` from a user action. Chromium offers an "Allow on every visit" choice in that prompt, which keeps the grant until the user revokes it.
+Database `wrack`, object stores: `settings`, `projectIndex`, `pluginIndex`, `fsaHandles` (Chromium linked folders). After a reload, a stored File System Access handle requires `requestPermission({ mode: 'readwrite' })` from a user action. Chromium offers an "Allow on every visit" choice in that prompt, which keeps the grant until the user revokes it.
 
 ## Persistence and quota
 | Engine | Quota | Eviction |
@@ -92,11 +92,11 @@ export interface StorageEstimateInfo { usageBytes: number; quotaBytes: number; p
 
 ## Multi-tab locking
 - Web Locks: Chrome 69+, Firefox 96+, Safari 15.4+.
-- Opening a project requests the Web Lock `w-rack:project:<projectId>` with `ifAvailable: true`.
+- Opening a project requests the Web Lock `wrack:project:<projectId>` with `ifAvailable: true`.
 - If the lock is held, the project opens read-only with an option to take control, which uses `steal: true` after confirmation.
 
 ## Unconfirmed
-- Whether the 7-day rule applies to W-Rack installed as a macOS web app (Add to Dock).
+- Whether the 7-day rule applies to Wrack installed as a macOS web app (Add to Dock).
 
 ## Sources
 - MDN Storage quotas and eviction criteria — https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria

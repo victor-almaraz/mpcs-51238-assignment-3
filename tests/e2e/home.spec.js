@@ -1,12 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-const DESCRIPTION = /W-Rack is a music sketchpad in your browser/;
+const DESCRIPTION = /Wrack is a music sketchpad in your browser/;
 
 const sectionHeadings = (page) => page.getByRole('main').getByRole('heading', { level: 2 });
 
 const wrackKeys = (page) =>
-  page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('w-rack:')));
+  page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('wrack:')));
 
 test('first visit: description, then Create, Load and Examples; no Recent', async ({ page }) => {
   await page.goto('/');
@@ -75,7 +75,7 @@ test('return visit: Recent comes first and Continue opens the project', async ({
 
 test('unreadable saved data shows the guarded message', async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('w-rack:v1:index', '{broken'));
+  await page.evaluate(() => localStorage.setItem('wrack:v1:index', '{broken'));
   await page.reload();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('A saved project could not be read.');
   await expect(sectionHeadings(page)).toHaveText(['Create', 'Load', 'Examples']);

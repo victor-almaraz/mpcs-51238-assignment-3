@@ -30,7 +30,7 @@ export default function SiteHeader() {
     <header className="h-12 overflow-x-auto border-b border-border-strong bg-surface">
       <div className="flex h-full items-center gap-x-6 px-4">
         <span className="shrink-0 font-display text-lg font-bold whitespace-nowrap uppercase">
-          W-Rack
+          Wrack
         </span>
         <nav aria-label="Main">
           <ul className="flex gap-2">

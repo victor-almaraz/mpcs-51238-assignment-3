@@ -9,7 +9,7 @@ async function createProject(page, name) {
   return new URL(page.url()).pathname.split('/').pop();
 }
 
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 const panel = (page) => page.getByRole('region', { name: 'Subtractive synth: Track 1' });
 
 /** Opens the Devices tab, where the instrument panel lives. */
@@ -79,7 +79,7 @@ test('the 201st preset is refused with the library message; /settings renames an
   await page.goto('/');
   await page.evaluate(() => {
     const presets = Array.from({ length: 200 }, (_, i) => ({ id: `pst_${i}`, name: `Preset ${i}`, kind: 'instrument', type: 'fm', params: {} }));
-    localStorage.setItem('w-rack:v1:presets', JSON.stringify({ schema: 1, presets }));
+    localStorage.setItem('wrack:v1:presets', JSON.stringify({ schema: 1, presets }));
   });
   await createProject(page, 'Full');
   await devices(page);

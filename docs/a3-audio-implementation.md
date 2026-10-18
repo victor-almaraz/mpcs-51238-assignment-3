@@ -599,7 +599,7 @@ LP = v2; BP = v1; HP = x − k·v1 − v2
 
 ## Safety stage
 ### Audio path
-Every sound W-Rack produces renders inside `EngineProcessor` and reaches `destination` only through `SafetyProcessor`. This includes instruments, audio clips, the metronome, note previews, drum-row auditions, preset auditions and sample-editor previews.
+Every sound Wrack produces renders inside `EngineProcessor` and reaches `destination` only through `SafetyProcessor`. This includes instruments, audio clips, the metronome, note previews, drum-row auditions, preset auditions and sample-editor previews.
 - No sound uses another `AudioContext`, an `<audio>` element, an `AudioBufferSourceNode` or any path around the safety stage.
 - Every voice, instance and grain counts toward voice caps and polyphony auto-gain.
 - Panic and all-notes-off stop every sound in the engine: sequenced notes, live notes, one-shot drum instances, trigger-mode sampler voices, previews and auditions. Effect buffers clear and the transport stops.

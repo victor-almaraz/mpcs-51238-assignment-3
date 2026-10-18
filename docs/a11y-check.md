@@ -1,6 +1,6 @@
 # Accessibility check
 
-This checklist records how W-Rack is checked against WCAG 2.2 AA and the Labeling and Accessibility sections of `assignment-3-scope.md`. Automated checks run in Chromium, Firefox and WebKit with `pnpm test:e2e`.
+This checklist records how Wrack is checked against WCAG 2.2 AA and the Labeling and Accessibility sections of `assignment-3-scope.md`. Automated checks run in Chromium, Firefox and WebKit with `pnpm test:e2e`.
 
 ## Automated checks
 | Check | Where | Result |

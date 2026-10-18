@@ -1,7 +1,7 @@
 # Onboarding research
 
 ## Scope
-This study compares how three tools close to W-Rack welcome a first-time user: BandLab Studio (web), Chrome Music Lab Song Maker (web) and Ableton Live 12 (desktop). For each tool it records the first screen, what the tool asks for, the steps to a first useful result, empty states, learning aids, level safety and what the tool remembers on return. Decisions for W-Rack follow from the findings. Step counts are counts of documented user actions, not timed tests.
+This study compares how three tools close to Wrack welcome a first-time user: BandLab Studio (web), Chrome Music Lab Song Maker (web) and Ableton Live 12 (desktop). For each tool it records the first screen, what the tool asks for, the steps to a first useful result, empty states, learning aids, level safety and what the tool remembers on return. Decisions for Wrack follow from the findings. Step counts are counts of documented user actions, not timed tests.
 
 ## Method
 - One research agent studied each tool independently, row by row, against official sources first and third-party sources second. Sources were checked on 2026-10-14.
@@ -77,7 +77,7 @@ Facts apply to Live 12.4 and later, where the Learn View replaces the Help View.
 | F10 | Permission requests | Microphone and MIDI when a device is used | Web MIDI requested on load; microphone on Mic | None in the browser | Permissions only on user action |
 | F11 | Unsaved work | Manual save; no autosave documented | Lost on leave unless saved; warning shown | Manual save; crash restore offered | Local autosave with visible status |
 
-## Decisions for W-Rack
+## Decisions for Wrack
 | ID | Decision | Findings | Target |
 |---|---|---|---|
 | D1 | No account, permission request or form before content | F1, F10 | Home |

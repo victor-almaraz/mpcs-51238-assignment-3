@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => mock.timers.reset());
 
-const projectJson = (id) => JSON.parse(localStorage.getItem(`w-rack:v1:project:${id}`));
+const projectJson = (id) => JSON.parse(localStorage.getItem(`wrack:v1:project:${id}`));
 
 test('edits save 500 ms after the last change', () => {
   const doc = store.createProject({ name: 'Song', tempo: 120, timeSignature: '4/4' }).value;
@@ -68,20 +68,20 @@ test('deleteProject removes the project, its working state and its index entry',
   const doc = store.createProject({ name: 'Gone', tempo: 120, timeSignature: '4/4' }).value;
   viewState.saveView(doc.id, viewState.defaultView(doc));
   viewState.flushView();
-  assert.ok(localStorage.getItem(`w-rack:v1:view:${doc.id}`));
+  assert.ok(localStorage.getItem(`wrack:v1:view:${doc.id}`));
   assert.deepEqual(store.deleteProject(doc.id), { ok: true });
-  assert.equal(localStorage.getItem(`w-rack:v1:project:${doc.id}`), null);
-  assert.equal(localStorage.getItem(`w-rack:v1:view:${doc.id}`), null);
+  assert.equal(localStorage.getItem(`wrack:v1:project:${doc.id}`), null);
+  assert.equal(localStorage.getItem(`wrack:v1:view:${doc.id}`), null);
   assert.deepEqual(store.listProjects().value, []);
 });
 
 test('working state saves separately and never rewrites the project', () => {
   const doc = store.createProject({ name: 'Song', tempo: 120, timeSignature: '4/4' }).value;
-  const before = localStorage.getItem(`w-rack:v1:project:${doc.id}`);
+  const before = localStorage.getItem(`wrack:v1:project:${doc.id}`);
   const trackId = doc.trackOrder[0];
   viewState.saveView(doc.id, { ...viewState.defaultView(doc), zoom: 4, selectedTrackId: trackId, playhead: 3840 });
   mock.timers.tick(500);
-  assert.equal(localStorage.getItem(`w-rack:v1:project:${doc.id}`), before);
+  assert.equal(localStorage.getItem(`wrack:v1:project:${doc.id}`), before);
   const restored = viewState.readView(doc);
   assert.equal(restored.zoom, 4);
   assert.equal(restored.selectedTrackId, trackId);
@@ -111,7 +111,7 @@ test('normalizeView drops invalid fields and references to deleted items', () =>
 
 test('unreadable working state falls back to the default view', () => {
   const doc = store.createProject({ name: 'Song', tempo: 120, timeSignature: '4/4' }).value;
-  localStorage.setItem(`w-rack:v1:view:${doc.id}`, '{broken');
+  localStorage.setItem(`wrack:v1:view:${doc.id}`, '{broken');
   assert.deepEqual(viewState.readView(doc), viewState.defaultView(doc));
 });
 
@@ -126,7 +126,7 @@ test('migrate applies steps in sequence and flags newer documents', () => {
 
 test('a project from a newer build opens read-only', () => {
   const doc = store.createProject({ name: 'Future', tempo: 120, timeSignature: '4/4' }).value;
-  localStorage.setItem(`w-rack:v1:project:${doc.id}`, JSON.stringify({ ...doc, schemaVersion: 99 }));
+  localStorage.setItem(`wrack:v1:project:${doc.id}`, JSON.stringify({ ...doc, schemaVersion: 99 }));
   const loaded = store.loadProject(doc.id);
   assert.equal(loaded.readOnly, true);
 });
@@ -134,20 +134,20 @@ test('a project from a newer build opens read-only', () => {
 test('settings: defaults, validation, and Remember settings off removes the key', () => {
   assert.equal(settings.getSettings().masterVolumeDb, -12);
   settings.updateSettings({ volumeNoticeDismissed: true, keyboardOctave: 99 });
-  const stored = JSON.parse(localStorage.getItem('w-rack:v1:settings'));
+  const stored = JSON.parse(localStorage.getItem('wrack:v1:settings'));
   assert.equal(stored.volumeNoticeDismissed, true);
   assert.equal(stored.keyboardOctave, 4, 'out-of-range values take the default');
   settings.setRemember(false);
-  assert.equal(localStorage.getItem('w-rack:v1:settings'), null);
+  assert.equal(localStorage.getItem('wrack:v1:settings'), null);
   assert.equal(settings.getSettings().volumeNoticeDismissed, false, 'turning it off restores the notice');
   settings.updateSettings({ metronome: true });
-  assert.equal(localStorage.getItem('w-rack:v1:settings'), null, 'nothing is written while off');
+  assert.equal(localStorage.getItem('wrack:v1:settings'), null, 'nothing is written while off');
   settings.setRemember(true);
-  assert.equal(JSON.parse(localStorage.getItem('w-rack:v1:settings')).metronome, true);
+  assert.equal(JSON.parse(localStorage.getItem('wrack:v1:settings')).metronome, true);
 });
 
-test('estimateUsage counts 2 bytes per code unit of W-Rack keys and values', () => {
-  localStorage.setItem('w-rack:v1:index', '[]');
+test('estimateUsage counts 2 bytes per code unit of Wrack keys and values', () => {
+  localStorage.setItem('wrack:v1:index', '[]');
   localStorage.setItem('other', 'ignored');
-  assert.equal(estimateUsage(), ('w-rack:v1:index'.length + 2) * 2);
+  assert.equal(estimateUsage(), ('wrack:v1:index'.length + 2) * 2);
 });

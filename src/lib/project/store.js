@@ -21,9 +21,9 @@ import { copyDocument, createId, createProject as buildProject } from './model.j
 
 export const PROJECT_UNREADABLE = 'A saved project could not be read.';
 export const STORAGE_FULL = "This device's browser storage is full. Save a .wrack file, then delete unused projects.";
-export const STORAGE_UNAVAILABLE = 'This browser does not allow W-Rack to store projects.';
+export const STORAGE_UNAVAILABLE = 'This browser does not allow Wrack to store projects.';
 export const PROJECT_NEWER =
-  'This project was saved by a newer version of W-Rack. It opens read-only, and changes are not saved.';
+  'This project was saved by a newer version of Wrack. It opens read-only, and changes are not saved.';
 
 /** Debounce for project saves, in ms (project limit). */
 export const SAVE_DELAY_MS = 500;

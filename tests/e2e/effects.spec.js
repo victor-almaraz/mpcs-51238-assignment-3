@@ -10,7 +10,7 @@ async function createProject(page, name = 'Effects') {
   return new URL(page.url()).pathname.split('/').pop();
 }
 
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 const chain = (page, name) => page.getByRole('region', { name });
 const chainTypes = async (page, id, which) => {
   const doc = await saved(page, id);

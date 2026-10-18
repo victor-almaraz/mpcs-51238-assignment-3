@@ -30,14 +30,14 @@ test('name rules: required, at most 40 characters, unique per type ignoring case
 
 test('the library holds 200 presets; the 201st is refused with the scope message', () => {
   const presets = Array.from({ length: 200 }, (_, i) => ({ id: `pst_${i}`, name: `P${i}`, kind: 'effect', type: 'eq3', params: {} }));
-  localStorage.setItem('w-rack:v1:presets', JSON.stringify({ schema: 1, presets }));
+  localStorage.setItem('wrack:v1:presets', JSON.stringify({ schema: 1, presets }));
   assert.equal(store.getPresets().length, 200);
   assert.deepEqual(save('One more').error, { message: 'The preset library is full. Delete a preset in Settings to save a new one.' });
 });
 
 test('stored values are clamped and invalid presets dropped on load', () => {
   localStorage.setItem(
-    'w-rack:v1:presets',
+    'wrack:v1:presets',
     JSON.stringify({
       schema: 1,
       presets: [

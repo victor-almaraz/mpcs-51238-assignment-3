@@ -1,6 +1,6 @@
 /*
  * The only module that touches IndexedDB (assignment-3-scope.md, Audio
- * persistence): database "w-rack" version 1, object store "sources" keyed by
+ * persistence): database "wrack" version 1, object store "sources" keyed by
  * sourceId. A record is { sourceId, name, mimeType, size, sha256, bytes } where
  * `bytes` is a Blob of the original file, never decoded PCM. Records are
  * written once after a successful import and are never evicted to make room.
@@ -8,7 +8,9 @@
  * with code 'unavailable', 'quota' or 'failed'.
  */
 
-export const DB_NAME = 'w-rack';
+import { LEGACY_DB_NAME } from './legacy-names.js';
+
+export const DB_NAME = 'wrack';
 export const DB_VERSION = 1;
 export const STORE = 'sources';
 
@@ -21,6 +23,61 @@ const fail = (code, cause) => ({ ok: false, error: { code, cause } });
 
 function isQuota(err) {
   return err?.name === 'QuotaExceededError' || err?.inner?.name === 'QuotaExceededError';
+}
+
+/**
+ * Opens the legacy database when it exists; resolves to it or null. The list
+ * of databases answers first: WebKit creates a database even when its first
+ * upgrade is aborted. Without the list, an upgrade from version 0 means the
+ * database does not exist, and that upgrade is aborted.
+ */
+async function openLegacy() {
+  if (typeof indexedDB.databases === 'function') {
+    try {
+      const names = (await indexedDB.databases()).map((d) => d.name);
+      if (!names.includes(LEGACY_DB_NAME)) return null;
+    } catch {
+      return null;
+    }
+  }
+  return new Promise((resolve) => {
+    const request = indexedDB.open(LEGACY_DB_NAME);
+    request.onupgradeneeded = () => request.transaction.abort();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+}
+
+/**
+ * Copies the records of the database saved under the former name into `db`,
+ * then deletes it (legacy-names.js). A record already in `db` is kept. A
+ * failed copy leaves the legacy database for the next page load.
+ */
+async function moveLegacyRecords(db) {
+  const legacy = await openLegacy();
+  if (!legacy) return;
+  try {
+    if (legacy.objectStoreNames.contains(STORE)) {
+      const records = await new Promise((resolve, reject) => {
+        const request = legacy.transaction(STORE, 'readonly').objectStore(STORE).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const store = tx.objectStore(STORE);
+        for (const record of records) store.add(record).onerror = (e) => e.preventDefault(); // keep existing records
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    }
+    legacy.close();
+    indexedDB.deleteDatabase(LEGACY_DB_NAME);
+  } catch (err) {
+    legacy.close();
+    console.error('Moving stored audio saved under the former name failed', err);
+  }
 }
 
 /** Opens (and on first use creates) the database. Resolves to the IDBDatabase or null. */
@@ -38,7 +95,7 @@ function open() {
         db.close();
         dbPromise = null;
       };
-      resolve(db);
+      moveLegacyRecords(db).finally(() => resolve(db));
     };
     request.onerror = () => {
       console.error('IndexedDB open failed', request.error);

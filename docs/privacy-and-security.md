@@ -3,7 +3,7 @@
 This document describes the full design. In the Assignment 3 build, the Network policy applies as written (`assignment-3-scope.md`, Main documents). The other sections describe the full design; the build differs as follows:
 - The deployment sets one custom response header, `Cache-Control: no-cache` for `/worklets/:path*` (`vercel.json`). The headers in Response headers, including COOP and COEP, are not set.
 - The build uses no `SharedArrayBuffer` and does not require cross-origin isolation.
-- Local data: `localStorage` holds projects, working state, the project index, presets and settings; IndexedDB database `w-rack` holds original audio bytes. There is no OPFS, Cache Storage, service worker, cookie or `sessionStorage` use (`storage.md`, Assignment 3 build). Settings provide "Clear all data", which removes every `w-rack:` `localStorage` key and the `w-rack` IndexedDB database.
+- Local data: `localStorage` holds projects, working state, the project index, presets and settings; IndexedDB database `wrack` holds original audio bytes. There is no OPFS, Cache Storage, service worker, cookie or `sessionStorage` use (`storage.md`, Assignment 3 build). Settings provide "Clear all data", which removes every `wrack:` `localStorage` key and the `wrack` IndexedDB database.
 - There are no plugins and no `pnpm scan` script. `blob:` URLs are created only by `src/lib/files/save-file.js`, for file downloads.
 
 ## Network policy
@@ -37,7 +37,7 @@ All production responses carry:
 
 ## Inline-code rules
 - Production build output contains no inline `<script>` or `<style>` and no `data:` URIs (`repo-structure.md`).
-- W-Rack code creates `blob:` URLs only for file downloads (`export.md`), never for script content.
+- Wrack code creates `blob:` URLs only for file downloads (`export.md`), never for script content.
 - Tailwind output ships as a stylesheet file.
 
 ## Cross-origin isolation
@@ -65,7 +65,7 @@ All production responses carry:
 - `navigator.sendBeacon`, or `fetch` / `XMLHttpRequest` with non-relative URLs;
 - `document.cookie`, `localStorage` or `sessionStorage`;
 - inline `<script>` or `on*=` attributes in HTML;
-- `URL.createObjectURL` in W-Rack-authored chunks other than the download module (`src/platform/download.ts`).
+- `URL.createObjectURL` in Wrack-authored chunks other than the download module (`src/platform/download.ts`).
 
 A Playwright test asserts zero non-same-origin requests during a scripted session.
 

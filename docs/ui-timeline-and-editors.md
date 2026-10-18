@@ -5,7 +5,7 @@ The editor (`/projects/[id]`, `src/components/studio/Studio.jsx`) fills one scre
 
 | Region | Contents |
 |---|---|
-| Site header | W-Rack wordmark, Home, Projects, New project and Settings links, `Commands` (`Mod+K`) and `Keyboard shortcuts` (`?`) buttons |
+| Site header | Wrack wordmark, Home, Projects, New project and Settings links, `Commands` (`Mod+K`) and `Keyboard shortcuts` (`?`) buttons |
 | Editor header | Project name as the page heading (text face, bold) with `Rename project`; tempo and time signature; save status ("Saved on this device", "Saving…", "Not saved — storage full", "Copy of example — saved on first edit"); `File` menu: Save .wrack file (`Mod+S`), Open .wrack file… (`Mod+O`), Export WAV… (`Mod+Shift+E`) |
 | Transport | `design-patterns.md` `TRN-01` to `TRN-03` |
 | Banners | Shown only when needed: read-only project, effects reset after non-finite output, save failures, and "Audio not loaded" with `Open .wrack file to restore audio` |
@@ -66,7 +66,7 @@ Icon controls use vendored Lucide icons (`src/components/ui/icons/`). Each has a
 ## React boundaries
 - Canvas views are components mounted once that draw in their own animation-frame loop from a ref holding the latest props.
 - Playheads, the transport position, meters and the limiter readout are written through refs and never pass through React state.
-- The working state (`src/lib/project/view-state.js`) holds view data per project: playhead, loop range and state, zoom, scroll, selection, open panel, dock tab and collapse, snap grid and toggle, and armed tracks. It saves to `w-rack:v1:view:<id>` 500 ms after a change. The document is separate and saves through `src/lib/project/store.js`.
+- The working state (`src/lib/project/view-state.js`) holds view data per project: playhead, loop range and state, zoom, scroll, selection, open panel, dock tab and collapse, snap grid and toggle, and armed tracks. It saves to `wrack:v1:view:<id>` 500 ms after a change. The document is separate and saves through `src/lib/project/store.js`.
 - Drags show a provisional result and commit one edit on release.
 - Undo and Redo (`Mod+Z`; `Mod+Shift+Z` or `Mod+Y`; the `Edit` menu) keep up to 200 whole documents. Edits within 600 ms of the previous one join its step, so a knob or fader drag undoes as one. Text fields keep their own undo.
 

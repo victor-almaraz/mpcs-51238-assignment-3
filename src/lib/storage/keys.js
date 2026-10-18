@@ -1,8 +1,8 @@
 /*
- * localStorage key names (assignment-3-scope.md, Persistence). Every W-Rack key
+ * localStorage key names (assignment-3-scope.md, Persistence). Every Wrack key
  * starts with KEY_PREFIX; "Clear all data" and first-visit detection rely on it.
  */
-export const KEY_PREFIX = 'w-rack:';
+export const KEY_PREFIX = 'wrack:';
 const V1 = `${KEY_PREFIX}v1:`;
 
 /** Project summaries: ID, name, last-edited date, last archive-save date. */

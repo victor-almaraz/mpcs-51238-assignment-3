@@ -10,7 +10,7 @@ import { getSource, getSourcesVersion, subscribeSources } from '@/lib/audio/deco
 import { safeFileName, saveFile } from '@/lib/files/save-file';
 import { archiveState, flushSaves, getIndexSnapshot, markArchiveSaved, subscribeProjects } from '@/lib/project/store';
 
-const WRACK_TYPE = { description: 'W-Rack project', accept: { 'application/zip': ['.wrack'] } };
+const WRACK_TYPE = { description: 'Wrack project', accept: { 'application/zip': ['.wrack'] } };
 
 /** "<name>.wrack" with characters file systems reject replaced. */
 export const archiveFileName = (name) => safeFileName(name, '.wrack');

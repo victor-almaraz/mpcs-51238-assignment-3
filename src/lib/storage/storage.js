@@ -5,17 +5,32 @@
  * localStorage.
  */
 import { isWrackKey } from './keys.js';
+import { migrateLegacyKeys } from './legacy-names.js';
 
 const listeners = new Set();
+let migrated = false;
 
-/** Returns window.localStorage, or null where it does not exist or is blocked. */
+/**
+ * Returns window.localStorage, or null where it does not exist or is blocked.
+ * The first call on a page moves keys saved under the former name (legacy-names.js).
+ */
 function getStorage() {
+  let storage;
   try {
-    return globalThis.localStorage ?? null;
+    storage = globalThis.localStorage ?? null;
   } catch (err) {
     if (err?.name === 'SecurityError') return null;
     throw err;
   }
+  if (storage && !migrated) {
+    migrated = true;
+    try {
+      migrateLegacyKeys(storage);
+    } catch (err) {
+      console.error('Moving data saved under the former name failed', err);
+    }
+  }
+  return storage;
 }
 
 function notify() {
@@ -79,7 +94,7 @@ export function removeKey(key) {
   notify();
 }
 
-/** True when any W-Rack key exists (a return visit). False when storage is unavailable. */
+/** True when any Wrack key exists (a return visit). False when storage is unavailable. */
 export function hasAnyWrackKey() {
   const storage = getStorage();
   if (!storage) return false;
@@ -102,7 +117,7 @@ export function subscribe(onChange) {
   };
 }
 
-/** Keys of every W-Rack entry, in storage order. Empty when storage is unavailable. */
+/** Keys of every Wrack entry, in storage order. Empty when storage is unavailable. */
 export function listWrackKeys() {
   const storage = getStorage();
   if (!storage) return [];
@@ -123,7 +138,7 @@ export const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
 /** Usage above which /settings warns, in bytes (4 MiB, project limit). */
 export const STORAGE_WARNING_BYTES = 4 * 1024 * 1024;
 
-/** Estimated bytes used by W-Rack keys and values. */
+/** Estimated bytes used by Wrack keys and values. */
 export function estimateUsage() {
   const storage = getStorage();
   if (!storage) return 0;

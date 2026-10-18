@@ -14,7 +14,7 @@ import { migrate } from '@/lib/storage/migrate';
 import { isProjectDoc } from '@/lib/storage/schema';
 import RestoreDialog from './RestoreDialog';
 
-export const NOT_A_PROJECT = 'project.json is not a W-Rack project.';
+export const NOT_A_PROJECT = 'project.json is not a Wrack project.';
 
 /**
  * "Open .wrack file" (assignment-3-scope.md, .wrack archive). A valid archive

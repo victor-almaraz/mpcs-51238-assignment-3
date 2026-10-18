@@ -1,6 +1,6 @@
 /*
  * Working state of one project (assignment-3-scope.md, Resume where you left
- * off), stored at w-rack:v1:view:<id>, separate from the project so view
+ * off), stored at wrack:v1:view:<id>, separate from the project so view
  * changes never rewrite project data. The transport is never part of it: a
  * project always opens stopped.
  */

@@ -28,9 +28,9 @@ test('listProjects is most recently edited first', () => {
 });
 
 test('unreadable JSON is reported, not thrown', () => {
-  localStorage.setItem('w-rack:v1:project:prj_x', '{not json');
+  localStorage.setItem('wrack:v1:project:prj_x', '{not json');
   assert.deepEqual(store.loadProject('prj_x'), { ok: false, error: store.PROJECT_UNREADABLE });
-  localStorage.setItem('w-rack:v1:index', '"not a list"');
+  localStorage.setItem('wrack:v1:index', '"not a list"');
   assert.deepEqual(store.listProjects(), { ok: false, error: store.PROJECT_UNREADABLE });
 });
 

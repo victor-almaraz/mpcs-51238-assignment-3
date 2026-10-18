@@ -15,7 +15,7 @@ async function createProject(page, name = 'Dynamics') {
   return new URL(page.url()).pathname.split('/').pop();
 }
 
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 const velocities = async (page, id) => Object.values((await saved(page, id)).clips).flatMap((c) => c.notes.map((n) => n.velocity));
 
 test('the lane edits the selected note by keyboard and several notes by a drag', async ({ page }) => {

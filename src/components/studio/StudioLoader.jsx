@@ -65,7 +65,7 @@ function resolve(location, shellId) {
 /** A project that cannot open: the site's page column, a short heading, the reason and the ways on. */
 function Problem({ title, detail }) {
   useEffect(() => {
-    document.title = `${title} · W-Rack`;
+    document.title = `${title} · Wrack`;
   }, [title]);
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 overflow-y-auto px-4 py-8">

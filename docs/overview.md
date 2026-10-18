@@ -1,7 +1,7 @@
 # Overview
 
 ## Product
-W-Rack (identifier `w-rack`) is a digital audio workstation that runs entirely in a web browser: an arrangement sketchpad with MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. It ships as a static site built with Next.js, React and Tailwind CSS. No server-side component processes, stores or observes user data. `assignment-3-scope.md` defines the build.
+Wrack (identifier `wrack`) is a digital audio workstation that runs entirely in a web browser: an arrangement sketchpad with MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. It ships as a static site built with Next.js, React and Tailwind CSS. No server-side component processes, stores or observes user data. `assignment-3-scope.md` defines the build.
 
 ## Principles
 | Principle | Requirement | Reference |
@@ -68,7 +68,7 @@ Narrow and mobile viewports are not checked. Web MIDI and the file picker are fe
 | System | Relevance |
 |---|---|
 | openDAW (André Michelle) | Open-source browser DAW built on AudioWorklets. |
-| Audiotool, BandLab, Soundtrap | Browser DAWs with server storage and accounts. W-Rack excludes this model. |
+| Audiotool, BandLab, Soundtrap | Browser DAWs with server storage and accounts. Wrack excludes this model. |
 | REAPER + OSARA | Screen-reader access to a DAW: edit-cursor reports by measure, beat and grid; keyboard context menus. |
 
 ## Sources

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 const ROUTES = [
-  { path: '/', heading: 'W-Rack', current: 'Home' },
+  { path: '/', heading: 'Wrack', current: 'Home' },
   { path: '/new', heading: 'New project', current: 'New project' },
   { path: '/projects', heading: 'Projects', current: 'Projects' },
   { path: '/settings', heading: 'Settings', current: 'Settings' },

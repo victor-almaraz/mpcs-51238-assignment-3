@@ -10,7 +10,7 @@ async function createProject(page, name = 'Roll') {
   return new URL(page.url()).pathname.split('/').pop();
 }
 
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 const allNotes = (doc) => Object.values(doc.clips).flatMap((c) => c.notes);
 const roll = (page, name) => page.getByRole('region', { name: `Piano roll: ${name}` }).getByRole('grid', { name: 'Notes' });
 const cursorCell = (grid) => grid.locator('[tabindex="0"]');
@@ -97,7 +97,7 @@ test('Quantize and the clip loop length edit the clip', async ({ page }) => {
 test('step input: computer-keyboard notes insert at the cursor and advance it', async ({ page }) => {
   const id = await createProject(page);
   await silence(page);
-  await page.evaluate(() => localStorage.setItem('w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
+  await page.evaluate(() => localStorage.setItem('wrack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
   await page.reload();
   await silence(page);
   // An empty clip opens in step input.
@@ -127,7 +127,7 @@ test('drum rows: GM labels, the choke group, and Show all notes', async ({ page 
 
 test('Space on a drum row header auditions the voice', async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
+  await page.evaluate(() => localStorage.setItem('wrack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
   await page.getByRole('button', { name: 'Open Beat' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Beat (copy)');
   const grid = roll(page, 'Drums');
@@ -162,7 +162,7 @@ test('Space on a drum row header auditions the voice', async ({ page }) => {
 
 test('clicking a row label previews without adding a note', async ({ page }) => {
   const id = await createProject(page);
-  await page.evaluate(() => localStorage.setItem('w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
+  await page.evaluate(() => localStorage.setItem('wrack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true })));
   await page.reload();
   const grid = roll(page, 'Track 1');
   await grid.getByRole('button', { name: 'C4', exact: true }).click();

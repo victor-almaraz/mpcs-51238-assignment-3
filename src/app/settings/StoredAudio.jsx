@@ -24,8 +24,8 @@ function isSafari() {
  * Stored audio in /settings (assignment-3-scope.md, Audio persistence):
  * origin usage from navigator.storage.estimate(), the stored sources with the
  * projects that use them and a Delete action each, the Safari 7-day note, and
- * "Clear all data", which removes every W-Rack localStorage key and the
- * w-rack IndexedDB database after confirmation.
+ * "Clear all data", which removes every Wrack localStorage key and the
+ * wrack IndexedDB database after confirmation.
  */
 export default function StoredAudio() {
   const [estimate, setEstimate] = useState(null);
@@ -46,7 +46,7 @@ export default function StoredAudio() {
       if (s.ok) setSources(s.value);
       else {
         setSources([]);
-        setError(s.error.code === 'unavailable' ? 'This browser does not allow W-Rack to store audio.' : 'Stored audio could not be read.');
+        setError(s.error.code === 'unavailable' ? 'This browser does not allow Wrack to store audio.' : 'Stored audio could not be read.');
       }
     });
     return () => {
@@ -66,7 +66,7 @@ export default function StoredAudio() {
     const result = await deleteDatabase();
     setConfirming(false);
     if (!result.ok) {
-      setError('Stored audio could not be deleted. Close other W-Rack tabs and try again.');
+      setError('Stored audio could not be deleted. Close other Wrack tabs and try again.');
       return;
     }
     // A full load also empties the in-memory audio sources.

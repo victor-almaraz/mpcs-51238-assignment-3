@@ -20,14 +20,14 @@ const trackToggle = (page) => trackRow(page, 'Track 1: Track 1, Subtractive synt
 
 test('working state is restored after a reload and through Continue; the transport stays stopped', async ({ page }) => {
   const id = await createProject(page, 'Return song');
-  const projectBefore = await read(page, `w-rack:v1:project:${id}`);
+  const projectBefore = await read(page, `wrack:v1:project:${id}`);
 
   await selectTrack(page, 'Track 1: Track 1, Subtractive synth');
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect(page.getByText('Zoom 400%')).toBeVisible();
-  await expect.poll(() => read(page, `w-rack:v1:view:${id}`)).toContain('"zoom":4');
-  expect(await read(page, `w-rack:v1:project:${id}`)).toBe(projectBefore);
+  await expect.poll(() => read(page, `wrack:v1:view:${id}`)).toContain('"zoom":4');
+  expect(await read(page, `wrack:v1:project:${id}`)).toBe(projectBefore);
 
   await page.reload();
   await expect(page.getByText('Zoom 400%')).toBeVisible();
@@ -45,13 +45,13 @@ test('pending working state is written when the page is hidden', async ({ page }
   const id = await createProject(page, 'Hide song');
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
-  expect(await read(page, `w-rack:v1:view:${id}`)).toContain('"zoom":2');
+  expect(await read(page, `wrack:v1:view:${id}`)).toContain('"zoom":2');
 });
 
 test('playhead, loop and open panel are restored from stored working state', async ({ page }) => {
   const id = await createProject(page, 'Seeded');
   const view = { playhead: 2 * 3840 + 960, loop: { start: 0, end: 7680 }, loopEnabled: true, zoom: 0.5, openPanel: 'pianoroll' };
-  await write(page, `w-rack:v1:view:${id}`, JSON.stringify(view));
+  await write(page, `wrack:v1:view:${id}`, JSON.stringify(view));
   await page.reload();
   await expect(page.getByTestId('position')).toHaveText('3.2.1');
   await expect(page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Loop' })).toHaveAttribute('aria-pressed', 'true');
@@ -63,7 +63,7 @@ test('playhead, loop and open panel are restored from stored working state', asy
 
 test('corrupted project JSON shows the guarded message', async ({ page }) => {
   const id = await createProject(page, 'Broken');
-  await write(page, `w-rack:v1:project:${id}`, '{"schemaVersion": 1, "id":');
+  await write(page, `wrack:v1:project:${id}`, '{"schemaVersion": 1, "id":');
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Project could not open');
   await expect(page.getByRole('main')).toContainText('A saved project could not be read.');
@@ -72,7 +72,7 @@ test('corrupted project JSON shows the guarded message', async ({ page }) => {
 
 test('corrupted working state opens the default view', async ({ page }) => {
   const id = await createProject(page, 'Odd view');
-  await write(page, `w-rack:v1:view:${id}`, '[[[');
+  await write(page, `wrack:v1:view:${id}`, '[[[');
   await page.reload();
   await expect(page.getByText('Zoom 100%')).toBeVisible();
   await expect(trackToggle(page)).toHaveAttribute('aria-selected', 'false');
@@ -80,7 +80,7 @@ test('corrupted working state opens the default view', async ({ page }) => {
 
 test('audio clips without loaded audio show "Audio not loaded" and the restore action', async ({ page }) => {
   const id = await createProject(page, 'With audio');
-  const doc = JSON.parse(await read(page, `w-rack:v1:project:${id}`));
+  const doc = JSON.parse(await read(page, `wrack:v1:project:${id}`));
   doc.trackOrder.push('trk_audio');
   doc.tracks.trk_audio = { ...doc.tracks[doc.trackOrder[0]], id: 'trk_audio', kind: 'audio', name: 'Vocals', deviceIds: [], clipIds: ['clp_voice'] };
   doc.clips.clp_voice = {
@@ -88,7 +88,7 @@ test('audio clips without loaded audio show "Audio not loaded" and the restore a
     sourceId: 'src_x', sourceOffset: 0, sourceLength: 48000, gainDb: 0,
     fadeIn: { length: 0, curve: 'linear' }, fadeOut: { length: 0, curve: 'linear' },
   };
-  await write(page, `w-rack:v1:project:${id}`, JSON.stringify(doc));
+  await write(page, `wrack:v1:project:${id}`, JSON.stringify(doc));
   await page.reload();
   await expect(page.getByRole('treegrid', { name: 'Tracks and clips' }).getByRole('row', { name: /^Clip: Verse take/ })).toHaveText(
     'Clip: Verse take, bar 1 to bar 1 beat 3, Audio not loaded',
@@ -109,7 +109,7 @@ test('a quota error while saving working state shows the storage message', async
 
 test('turning off "Remember settings on this device" removes the settings key', async ({ page }) => {
   await page.goto('/settings');
-  await write(page, 'w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true, metronome: true }));
+  await write(page, 'wrack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true, metronome: true }));
   await page.reload();
   const toggle = page.getByRole('button', { name: 'Remember settings on this device' });
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -117,19 +117,19 @@ test('turning off "Remember settings on this device" removes the settings key', 
   expect(results.violations).toEqual([]);
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  expect(await read(page, 'w-rack:v1:settings')).toBeNull();
+  expect(await read(page, 'wrack:v1:settings')).toBeNull();
   await expect(page.getByRole('button', { name: 'Show the volume notice again' })).toBeDisabled();
 });
 
 test('"Show the volume notice again" clears the stored dismissal', async ({ page }) => {
   await page.goto('/settings');
-  await write(page, 'w-rack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true }));
+  await write(page, 'wrack:v1:settings', JSON.stringify({ volumeNoticeDismissed: true }));
   await page.reload();
   const button = page.getByRole('button', { name: 'Show the volume notice again' });
   await expect(button).toBeEnabled();
   await button.click();
   await expect(button).toBeDisabled();
-  expect(JSON.parse(await read(page, 'w-rack:v1:settings')).volumeNoticeDismissed).toBe(false);
+  expect(JSON.parse(await read(page, 'wrack:v1:settings')).volumeNoticeDismissed).toBe(false);
   await expect(page.getByText(/use about \d+\.\d KB of 5 MB browser storage/)).toBeVisible();
 });
 
@@ -151,8 +151,8 @@ test('Projects lists saved projects and deletes one after confirmation', async (
 
   await expect(list.getByRole('listitem')).toHaveCount(1);
   await expect(list).toContainText('Keep me');
-  expect(await read(page, `w-rack:v1:project:${dropId}`)).toBeNull();
-  expect(await read(page, `w-rack:v1:project:${keepId}`)).not.toBeNull();
+  expect(await read(page, `wrack:v1:project:${dropId}`)).toBeNull();
+  expect(await read(page, `wrack:v1:project:${keepId}`)).not.toBeNull();
 });
 
 test('Escape closes the delete dialog and keeps the project', async ({ page }) => {

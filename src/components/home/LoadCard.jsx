@@ -9,7 +9,7 @@ export default function LoadCard() {
       <h2 id="home-load" className={sectionHeading}>
         Load
       </h2>
-      <p className="text-sm">A .wrack file holds a W-Rack project and its audio, saved from the editor with “Save .wrack file”.</p>
+      <p className="text-sm">A .wrack file holds a Wrack project and its audio, saved from the editor with “Save .wrack file”.</p>
       <OpenArchive size="lg" />
     </Card>
   );

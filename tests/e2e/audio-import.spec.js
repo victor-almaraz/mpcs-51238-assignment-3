@@ -63,14 +63,14 @@ async function createProject(page, name = 'Audio') {
 const tree = (page) => page.getByRole('treegrid', { name: 'Tracks and clips' });
 const clipRows = (page) => tree(page).locator('[role="row"][aria-level="2"]');
 const results = (page) => page.getByRole('status', { name: 'Import results' });
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 
 /** sourceIds stored in IndexedDB. */
 const storedIds = (page) =>
   page.evaluate(
     () =>
       new Promise((resolve, reject) => {
-        const open = indexedDB.open('w-rack', 1);
+        const open = indexedDB.open('wrack', 1);
         open.onupgradeneeded = () => open.result.createObjectStore('sources', { keyPath: 'sourceId' });
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
@@ -319,7 +319,7 @@ test('sampler: a missing source shows "Audio not loaded" and importing the same 
   device.sampler = { sourceId: sha, sourceName: 'tone-a.wav' };
   doc.audioRate = 48000;
   doc.sources[sha] = { id: sha, name: 'tone-a.wav', path: `audio/${sha}.wav`, sampleRate: 48000, channels: 1, frames: 96000, format: 'audio/wav', sha256: sha };
-  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [`w-rack:v1:project:${id}`, JSON.stringify(doc)]);
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [`wrack:v1:project:${id}`, JSON.stringify(doc)]);
   await page.reload();
   await expect(trackRow(page, 'Track 2: Track 2, Sampler')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Devices' })).toHaveAttribute('aria-selected', 'true');
@@ -340,6 +340,6 @@ test('settings list stored audio with its projects; Clear all data removes every
   await page.getByRole('button', { name: 'Clear all data' }).click();
   await page.getByRole('dialog', { name: 'Clear all data?' }).getByRole('button', { name: 'Clear all data' }).click();
   await expect(page).toHaveURL(/\/$/);
-  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('w-rack:')))).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('wrack:')))).toEqual([]);
   expect(await storedIds(page)).toEqual([]);
 });

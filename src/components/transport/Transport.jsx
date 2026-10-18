@@ -208,7 +208,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
             valueText={faderText(state.masterVolumeDb)}
             onChange={(db) => engine.setMasterVolume(db)}
             onReset={() => engine.setMasterVolume(MASTER_VOLUME.default)}
-            data-help="Master volume: the level of everything W-Rack plays, at most 0 dB."
+            data-help="Master volume: the level of everything Wrack plays, at most 0 dB."
           />
         </div>
         <Meter read={readMaster} className="h-8 w-4 shrink-0" />
@@ -230,7 +230,7 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
       <StatusRegion visuallyHidden>{announcement}</StatusRegion>
       {state.ducked ? (
         <div role="alert" className={cx(errorText, 'px-3 pb-1.5')}>
-          <span>The output was loud for a long time, so W-Rack lowered it by 6 dB.</span>{' '}
+          <span>The output was loud for a long time, so Wrack lowered it by 6 dB.</span>{' '}
           <Button size="sm" onClick={() => engine.ackDuck()}>
             Restore the level
           </Button>

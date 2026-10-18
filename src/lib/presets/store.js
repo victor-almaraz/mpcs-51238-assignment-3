@@ -1,5 +1,5 @@
 /*
- * The preset library (assignment-3-scope.md, Presets) at w-rack:v1:presets:
+ * The preset library (assignment-3-scope.md, Presets) at wrack:v1:presets:
  * { schema: 1, presets: [...] }, shared by every project and never stored in
  * project JSON. Reads normalize and clamp (validate.js). Writes return
  * { ok: true, ... } or { ok: false, error } with user-facing text.

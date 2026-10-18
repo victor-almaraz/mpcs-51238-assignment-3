@@ -6,7 +6,7 @@ In this build, `project.json` is the project document exactly as stored in `loca
 
 ## Archive layout (`.wrack`)
 ```
-manifest.json               # { "format": "w-rack.archive", "version": 1, "createdBy": "...", "projectFile": "project.json" }
+manifest.json               # { "format": "wrack.archive", "version": 1, "createdBy": "...", "projectFile": "project.json" }
 project.json                # ProjectDoc (project-model.md)
 sources/<sourceId>.<ext>    # original files, unmodified
 plugin-state/<deviceId>.bin # plugin state larger than 64 KiB (project limit)
@@ -50,7 +50,7 @@ export interface ImportReport {
 ```
 
 ## DAWproject mapping
-| DAWproject | W-Rack | Loss |
+| DAWproject | Wrack | Loss |
 |---|---|---|
 | Timeline `timeUnit` `beats` | Ticks: beats × 960, rounded | Sub-tick positions rounded |
 | Timeline `timeUnit` `seconds` | Ticks through the imported tempo map | Sub-tick positions rounded |
@@ -68,7 +68,7 @@ export interface ImportReport {
 | `metadata.xml` | `name`, `extensions` | Partial |
 
 - Export writes `project.xml` (`<Project version="1.0">`), `metadata.xml` and audio files.
-- W-Rack-only data is omitted, and the export report lists it.
+- Wrack-only data is omitted, and the export report lists it.
 
 ## Sources
 - DAWproject — https://github.com/bitwig/dawproject

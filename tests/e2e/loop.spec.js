@@ -14,7 +14,7 @@ const loopStart = (page) => page.getByRole('slider', { name: 'Loop start' });
 const loopEnd = (page) => page.getByRole('slider', { name: 'Loop end' });
 const savedView = (page) =>
   page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith('w-rack:v1:view:'));
+    const key = Object.keys(localStorage).find((k) => k.startsWith('wrack:v1:view:'));
     return key ? JSON.parse(localStorage.getItem(key)) : null;
   });
 

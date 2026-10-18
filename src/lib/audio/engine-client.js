@@ -21,7 +21,7 @@ import { paramChanges } from './param-changes.js';
 
 export const WORKLET_URL = '/worklets/worklet/main.js';
 
-export const AUDIO_START_FAILED = 'W-Rack could not start audio in this browser. Reload the page and try again.';
+export const AUDIO_START_FAILED = 'Wrack could not start audio in this browser. Reload the page and try again.';
 
 /** Sample rate used for tick ↔ frame conversion before a context exists. */
 const DEFAULT_FS = 48000;

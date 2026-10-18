@@ -175,7 +175,7 @@ export interface CommandError { code: 'invalid' | 'missing' | 'limit'; message: 
 - The piano roll has its own grid (`ui-timeline-and-editors.md`).
 
 ## Saving
-- Each edit saves the whole document as JSON to `localStorage` (`w-rack:v1:project:<id>`) 500 ms after the last edit, and at once on `pagehide` (project limit; `assignment-3-scope.md`, Persistence). `modifiedAt` is set on every edit.
+- Each edit saves the whole document as JSON to `localStorage` (`wrack:v1:project:<id>`) 500 ms after the last edit, and at once on `pagehide` (project limit; `assignment-3-scope.md`, Persistence). `modifiedAt` is set on every edit.
 - A failed save leaves the stored document unchanged. The editor header shows "Not saved" and a banner states the error.
 - An example copy is saved as a project on its first edit.
 

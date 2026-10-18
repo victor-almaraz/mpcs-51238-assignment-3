@@ -1,20 +1,20 @@
-# W-Rack
+# Wrack
 
-W-Rack is a digital audio workstation that runs in the browser. It combines MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. The site is static: all audio processing and storage happen on the user's device.
+Wrack is a digital audio workstation that runs in the browser. It combines MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. The site is static: all audio processing and storage happen on the user's device.
 
 ## User flows
 
 The diagrams in this section are maintained in [`flows.md`](flows.md).
 
-Each flowchart describes one W-Rack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy.
+Each flowchart describes one Wrack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy.
 
 ### First visit
 
-A first visit is a visit with no W-Rack keys in `localStorage`.
+A first visit is a visit with no Wrack keys in `localStorage`.
 
 ```mermaid
 flowchart TD
-  fv_start(["Open W-Rack with no W-Rack keys in localStorage"]) --> fv_home["Home (/)<br/>One-sentence description of W-Rack<br/>Create, Load, Examples"]
+  fv_start(["Open Wrack with no Wrack keys in localStorage"]) --> fv_home["Home (/)<br/>One-sentence description of Wrack<br/>Create, Load, Examples"]
   fv_home --> fv_pick{"Choose a starting point"}
   fv_pick -->|"Example card: Beat, Ambient or Pluck melody"| fv_copy["Create an unsaved copy of the example"]
   fv_pick -->|"“New project”"| fv_create[["Create project"]]
@@ -42,7 +42,7 @@ flowchart TD
   cp_edit -->|"Submit"| cp_check{"All fields valid?"}
   cp_check -->|"No"| cp_errs["Show each error below its field<br/>Keep the entered values<br/>Focus the first invalid field"]
   cp_errs --> cp_edit
-  cp_check -->|"Yes"| cp_store["Write w-rack:v1:project:#lt;id#gt; and w-rack:v1:index"]
+  cp_check -->|"Yes"| cp_store["Write wrack:v1:project:#lt;id#gt; and wrack:v1:index"]
   cp_store --> cp_quota{"Write succeeded?"}
   cp_quota -->|"No: QuotaExceededError"| cp_full["“This device's browser storage is full. Save a .wrack file, then delete unused projects.”<br/>Keep the entered values"]
   cp_full --> cp_edit
@@ -61,15 +61,15 @@ A return visit is a visit with at least one saved project.
 
 ```mermaid
 flowchart TD
-  rv_start(["Open W-Rack with at least one saved project"]) --> rv_home["Home (/)<br/>Recent, Create, Load, Examples"]
+  rv_start(["Open Wrack with at least one saved project"]) --> rv_home["Home (/)<br/>Recent, Create, Load, Examples"]
   rv_home -->|"“Continue” on a Recent project"| rv_route
   rv_home -->|"Projects in the header"| rv_list["Projects (/projects)<br/>Saved projects with last-edited dates,<br/>tempo, time signature and track count"]
   rv_list -->|"Select a project"| rv_route["Open /projects/[id]"]
-  rv_route --> rv_exists{"Project ID in w-rack:v1:index?"}
+  rv_route --> rv_exists{"Project ID in wrack:v1:index?"}
   rv_exists -->|"No"| rv_missing(["“Project not found”<br/>Links to Projects and New project"])
   rv_exists -->|"Yes"| rv_read{"Project JSON readable?"}
   rv_read -->|"No"| rv_bad(["“A saved project could not be read.”"])
-  rv_read -->|"Yes"| rv_view["Restore working state from w-rack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip,<br/>dock tab and collapse, snap and grid, armed tracks<br/>Transport stopped"]
+  rv_read -->|"Yes"| rv_view["Restore working state from wrack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip,<br/>dock tab and collapse, snap and grid, armed tracks<br/>Transport stopped"]
   rv_view --> rv_audio{"Project has audio clips or sampler zones?"}
   rv_audio -->|"No"| rv_ready(["Editor ready"])
   rv_audio -->|"Yes"| rv_decode["Load sources from IndexedDB and decode them"]
@@ -86,14 +86,14 @@ The first sound-producing action of a page session passes through this flow.
 
 ```mermaid
 flowchart TD
-  vn_start(["Sound-producing action: Play, a keyboard or MIDI note, or a preset audition"]) --> vn_stored{"Dismissal stored in w-rack:v1:settings?"}
+  vn_start(["Sound-producing action: Play, a keyboard or MIDI note, or a preset audition"]) --> vn_stored{"Dismissal stored in wrack:v1:settings?"}
   vn_stored -->|"Yes"| vn_ctx
   vn_stored -->|"No"| vn_session{"“Continue” chosen earlier in this page session?"}
   vn_session -->|"Yes"| vn_ctx
-  vn_session -->|"No"| vn_dialog["Volume notice dialog<br/>“Turn your device volume down. W-Rack is about to play sound.”<br/>Unchecked checkbox “Don't show this again on this device”"]
+  vn_session -->|"No"| vn_dialog["Volume notice dialog<br/>“Turn your device volume down. Wrack is about to play sound.”<br/>Unchecked checkbox “Don't show this again on this device”"]
   vn_dialog -->|"Cancel"| vn_cancel(["No action is performed"])
   vn_dialog -->|"Continue"| vn_box{"Checkbox checked?"}
-  vn_box -->|"Yes"| vn_persist["Store the dismissal in w-rack:v1:settings"]
+  vn_box -->|"Yes"| vn_persist["Store the dismissal in wrack:v1:settings"]
   vn_box -->|"No"| vn_flag["Set the in-memory session flag"]
   vn_persist --> vn_ctx
   vn_flag --> vn_ctx
@@ -113,12 +113,12 @@ flowchart TD
   sp_err --> sp_dialog
   sp_valid -->|"Yes"| sp_limit{"Library already holds 200 presets?"}
   sp_limit -->|"Yes"| sp_refuse(["“The preset library is full. Delete a preset in Settings to save a new one.”<br/>Keep the entered name"])
-  sp_limit -->|"No"| sp_write["Write w-rack:v1:presets"]
+  sp_limit -->|"No"| sp_write["Write wrack:v1:presets"]
   sp_write --> sp_quota{"Write succeeded?"}
   sp_quota -->|"No: QuotaExceededError"| sp_full(["“This device's browser storage is full. Save a .wrack file, then delete unused projects.”"])
   sp_quota -->|"Yes"| sp_done["Dialog closes<br/>The preset appears under “My presets” in every project's picker for its type"]
   sp_done --> sp_settings["Settings (/settings): preset list"]
-  sp_settings -->|"Rename or delete"| sp_manage(["Write w-rack:v1:presets"])
+  sp_settings -->|"Rename or delete"| sp_manage(["Write wrack:v1:presets"])
 ```
 
 | Field | Rule | Error text |
@@ -143,7 +143,7 @@ flowchart TD
   ia_known -->|"Yes"| ia_saved["Clip shows “Saved on this device”"]
   ia_known -->|"No"| ia_cap{"navigator.storage.estimate() leaves at least 10% of quota free?"}
   ia_cap -->|"No"| ia_session["“This browser could not store #lt;name#gt;. Save a .wrack file to keep this audio.”<br/>Clip shows “Session only”"]
-  ia_cap -->|"Yes"| ia_put["Store the original file bytes in IndexedDB w-rack, store sources"]
+  ia_cap -->|"Yes"| ia_put["Store the original file bytes in IndexedDB wrack, store sources"]
   ia_put --> ia_ok{"Write succeeded?"}
   ia_ok -->|"Yes"| ia_saved
   ia_ok -->|"No"| ia_session
@@ -160,7 +160,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ex_start(["Select File › “Export WAV…” or press Ctrl/Cmd+Shift+E"]) --> ex_dialog["Export dialog<br/>Range: Whole project or Loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float;<br/>the last format chosen is kept in w-rack:v1:settings<br/>Tail: 0–10 s, default 2 s"]
+  ex_start(["Select File › “Export WAV…” or press Ctrl/Cmd+Shift+E"]) --> ex_dialog["Export dialog<br/>Range: Whole project or Loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float;<br/>the last format chosen is kept in wrack:v1:settings<br/>Tail: 0–10 s, default 2 s"]
   ex_dialog --> ex_missing{"Clips without loaded audio?"}
   ex_missing -->|"Yes"| ex_list["List the clips; they render as silence"]
   ex_missing -->|"No"| ex_go
@@ -191,7 +191,7 @@ flowchart TD
   sw_fsa -->|"No"| sw_anchor["Download through #lt;a download#gt;"]
   sw_picker -->|"Cancel"| sw_cancel(["No file is written"])
   sw_picker -->|"Save"| sw_mark
-  sw_anchor --> sw_mark(["Record the archive-save date in w-rack:v1:index<br/>The header shows “Saved to file”"])
+  sw_anchor --> sw_mark(["Record the archive-save date in wrack:v1:index<br/>The header shows “Saved to file”"])
 
   sw_leave(["Leave the page"]) --> sw_newer{"Loaded audio newer than the last archive save?"}
   sw_newer -->|"Yes"| sw_prompt(["beforeunload prompt"])
@@ -306,7 +306,7 @@ The full results, the feedback and the items left open are in [`docs/first-run-c
 
 ## Features
 
-| Area | What W-Rack provides |
+| Area | What Wrack provides |
 |---|---|
 | Editor | One screen without page scrolling: project header with rename, save status and a File menu (Save .wrack file, Open .wrack file, Export WAV); an icon transport; a clip toolbar with Add and Edit menus, Snap and Grid, zoom, and split, join, duplicate and delete; the arrangement, whose ruler and track headers stay in view while it scrolls; a resizable dock with Editor, Devices and Mixer tabs that collapses to its tabs; tooltips with the name and shortcut on icon controls; an info strip that describes the control under the pointer or in focus and shows the live-input target |
 | Transport | Go to start (`Home`; `Shift+Home` for the loop start), Play/Pause (`Space`), Stop (returns to where playback started; a second Stop goes to bar 1, or to the loop start with the loop on), Loop, Metronome, Position, Tempo, Time signature (1–32 beats over a note value from 1 to 32), master volume and meter, Panic (`Escape`); a tempo change during playback keeps the musical position |
@@ -355,8 +355,8 @@ The end-to-end suite runs in Chromium, Firefox and WebKit.
 
 | Data | Where |
 |---|---|
-| Projects, working state, presets, settings | `localStorage`, keys starting with `w-rack:v1:` |
-| Imported audio (original file bytes) | IndexedDB database `w-rack`, store `sources` |
+| Projects, working state, presets, settings | `localStorage`, keys starting with `wrack:v1:` |
+| Imported audio (original file bytes) | IndexedDB database `wrack`, store `sources` |
 
 Nothing leaves the device. `/settings` shows storage use, lists stored audio with the projects that use it, and offers "Clear all data".
 
@@ -378,7 +378,7 @@ The full list is in [`docs/assignment-3-scope.md`](docs/assignment-3-scope.md) (
 
 ## Accessibility
 
-W-Rack targets WCAG 2.2 AA. Canvas views have DOM mirrors: the timeline is a `treegrid` named "Tracks and clips" and the piano roll a `grid` named "Notes". Every control has a role and a name that is unique within its landmark.
+Wrack targets WCAG 2.2 AA. Canvas views have DOM mirrors: the timeline is a `treegrid` named "Tracks and clips" and the piano roll a `grid` named "Notes". Every control has a role and a name that is unique within its landmark.
 
 | Pair | Contrast |
 |---|---|

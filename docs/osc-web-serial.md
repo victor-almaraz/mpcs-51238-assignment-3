@@ -18,14 +18,14 @@
 
 | Address | Arguments | Action |
 |---|---|---|
-| `/w-rack/transport/play` | — | Play |
-| `/w-rack/transport/stop` | — | Stop |
-| `/w-rack/transport/locate` | `f` beats | Locate |
-| `/w-rack/panic` | — | Panic |
-| `/w-rack/track/{index}/gain` | `f` dB | Set gain, clamped |
-| `/w-rack/track/{index}/pan` | `f` [−1, 1] | Set pan |
-| `/w-rack/track/{index}/mute` | `T`/`F` or `i` | Mute |
-| `/w-rack/note` | `i` pitch, `i` velocity | Note to the selected track; velocity 0 is note-off |
+| `/wrack/transport/play` | — | Play |
+| `/wrack/transport/stop` | — | Stop |
+| `/wrack/transport/locate` | `f` beats | Locate |
+| `/wrack/panic` | — | Panic |
+| `/wrack/track/{index}/gain` | `f` dB | Set gain, clamped |
+| `/wrack/track/{index}/pan` | `f` [−1, 1] | Set pan |
+| `/wrack/track/{index}/mute` | `T`/`F` or `i` | Mute |
+| `/wrack/note` | `i` pitch, `i` velocity | Note to the selected track; velocity 0 is note-off |
 
 - Parameter messages become undoable commands with `coalesceKey` equal to the address.
 - Outbound transport state is sent at most every 100 ms (project limit).

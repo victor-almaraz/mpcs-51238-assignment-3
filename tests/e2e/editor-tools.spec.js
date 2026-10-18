@@ -40,7 +40,7 @@ async function projectWithAudio(page, files = [{ name: 'tone.wav', mimeType: 'au
 }
 
 const clipRows = (page) => page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="2"]');
-const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
+const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
 const audioClip = async (page, id) => Object.values((await saved(page, id))?.clips ?? {}).find((c) => c.kind === 'audio');
 
 /** Canvas geometry, as in src/components/timeline/layout.js: ruler and track heights. */

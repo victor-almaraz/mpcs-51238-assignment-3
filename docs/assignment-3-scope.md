@@ -1,7 +1,7 @@
 # Assignment 3 scope
 
 ## Scope
-This document defines the W-Rack build for Assignment 3 (Patterns & Flows). Where it conflicts with another doc, this document takes precedence for this build. Implementation details are in `a3-audio-implementation.md`; build order, checks and prompts are in `a3-agent-plan.md`.
+This document defines the Wrack build for Assignment 3 (Patterns & Flows). Where it conflicts with another doc, this document takes precedence for this build. Implementation details are in `a3-audio-implementation.md`; build order, checks and prompts are in `a3-agent-plan.md`.
 
 ## Build rules
 - Coding agents write all code under user direction. The core/scaffolding boundary in `core-and-scaffolding.md` does not apply.
@@ -23,7 +23,7 @@ This document defines the W-Rack build for Assignment 3 (Patterns & Flows). Wher
 | Render quantum | Code reads the frame count of each `process()` call; no fixed 128 |
 
 ## Product
-W-Rack for Assignment 3 is an arrangement sketchpad: MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and project files.
+Wrack for Assignment 3 is an arrangement sketchpad: MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and project files.
 
 ### Required
 | Area | Requirement | Reference |
@@ -53,7 +53,7 @@ Recording, buses, sends, automation, plugins, OSC and Web Serial, DAWproject imp
 | `/new` | New project form |
 | `/projects` | Saved projects list |
 | `/projects/[id]` | Editor for one project (client-only) |
-| `/settings` | Audio and MIDI status, saved settings, preset library, storage and stored-audio usage, "Clear all data" (removes every W-Rack `localStorage` key and the `w-rack` IndexedDB database) |
+| `/settings` | Audio and MIDI status, saved settings, preset library, storage and stored-audio usage, "Clear all data" (removes every Wrack `localStorage` key and the `wrack` IndexedDB database) |
 
 - A shared header on every route shows the current location and links to Home, Projects and New project.
 - An unknown project ID shows "Project not found" with links to Projects and New project.
@@ -69,7 +69,7 @@ Home is the first screen on every visit. It never shows an empty workspace.
 | Examples | Three example project cards | Always |
 
 - The page loads silently. No `AudioContext` exists before the first sound-producing action.
-- On a first visit (no W-Rack keys in `localStorage`), the Examples section follows Create and Load, and a one-sentence description of W-Rack heads the page.
+- On a first visit (no Wrack keys in `localStorage`), the Examples section follows Create and Load, and a one-sentence description of Wrack heads the page.
 
 ## Examples
 | Example | Content |
@@ -84,11 +84,11 @@ Home is the first screen on every visit. It never shows an empty workspace.
 - Examples are MIDI-only, so they open complete on every visit.
 
 ## Volume notice
-- The first sound-producing action of a page session (Play, a keyboard or MIDI note, auditioning a preset) opens the volume notice: "Turn your device volume down. W-Rack is about to play sound."
+- The first sound-producing action of a page session (Play, a keyboard or MIDI note, auditioning a preset) opens the volume notice: "Turn your device volume down. Wrack is about to play sound."
 - The notice has `Continue`, `Cancel` and an unchecked checkbox "Don't show this again on this device".
 - `Continue` creates and resumes the `AudioContext`, loads the worklet and performs the action, with a 50 ms fade-in. `Cancel` performs nothing.
 - Without the checkbox, the notice shows once per page session; the flag is held in memory.
-- With the checkbox, the choice is stored in `w-rack:v1:settings` and the notice does not show again. `/settings` provides "Show the volume notice again". Turning off "Remember settings on this device" also restores the notice.
+- With the checkbox, the choice is stored in `wrack:v1:settings` and the notice does not show again. `/settings` provides "Show the volume notice again". Turning off "Remember settings on this device" also restores the notice.
 - The safety stage, the −12 dB master default and the no-sound-on-load rule apply whether or not the notice shows.
 - Example cards on Home do not preview sound.
 ## New project form
@@ -142,17 +142,17 @@ Save preset dialog (one column, visible labels):
 - Errors follow the New project form rules; the entered name remains on error.
 
 ### Saved settings
-- "Remember settings on this device" in `/settings` is on by default. When off, settings reset on each visit and `w-rack:v1:settings` is removed.
+- "Remember settings on this device" in `/settings` is on by default. When off, settings reset on each visit and `wrack:v1:settings` is removed.
 - Saved settings: master volume, keyboard octave, default export format, metronome on/off, volume-notice dismissal.
 
 ## Persistence
 | Key | Content |
 |---|---|
-| `w-rack:v1:index` | Project summaries: ID, name, last-edited date, last archive-save date |
-| `w-rack:v1:project:<id>` | Project JSON with `schemaVersion: 1`; clip and source metadata only |
-| `w-rack:v1:view:<id>` | Working state of one project (Resume where you left off) |
-| `w-rack:v1:presets` | Preset library: name, type, parameter values, created date |
-| `w-rack:v1:settings` | Saved settings (Saved settings) |
+| `wrack:v1:index` | Project summaries: ID, name, last-edited date, last archive-save date |
+| `wrack:v1:project:<id>` | Project JSON with `schemaVersion: 1`; clip and source metadata only |
+| `wrack:v1:view:<id>` | Working state of one project (Resume where you left off) |
+| `wrack:v1:presets` | Preset library: name, type, parameter values, created date |
+| `wrack:v1:settings` | Saved settings (Saved settings) |
 
 - Saves are debounced to 500 ms after the last edit (project limit) and flushed on `pagehide`. Working state saves separately from the project, so view changes do not rewrite project data.
 - Reads parse inside a guard. Unreadable data shows "A saved project could not be read." and never crashes the app.
@@ -165,7 +165,7 @@ Imported audio sources persist on the device in IndexedDB. Projects, working sta
 
 | Item | Specification |
 |---|---|
-| Database | `w-rack`, version 1 |
+| Database | `wrack`, version 1 |
 | Object store | `sources`, key path `sourceId` |
 | Record | `{ sourceId, name, mimeType, size, sha256, bytes }`, where `bytes` is a `Blob` of the original file bytes |
 | Write time | Once, after a successful import |

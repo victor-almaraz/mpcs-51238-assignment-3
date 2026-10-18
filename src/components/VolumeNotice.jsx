@@ -45,7 +45,7 @@ export default function VolumeNotice() {
         </>
       }
     >
-      <p>Turn your device volume down. W-Rack is about to play sound.</p>
+      <p>Turn your device volume down. Wrack is about to play sound.</p>
       <div className="flex items-center gap-2">
         <input
           id={checkboxId}

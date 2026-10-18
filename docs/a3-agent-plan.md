@@ -153,8 +153,8 @@ Do not start the next task.
      - Size estimate: 2 bytes per string code unit.
   2. Project store: 500 ms debounced save, flush on `pagehide`, index maintenance.
   3. Return experience: Recent list with "Continue"; clips without loaded audio show "Audio not loaded" and the toolbar action "Open .wrack file to restore audio".
-  4. Working state per project in `w-rack:v1:view:<id>`: playhead, loop, zoom, scroll, selection, open panel. Restored on open; transport always stopped.
-  5. Saved settings and the "Remember settings on this device" toggle; turning it off removes `w-rack:v1:settings`.
+  4. Working state per project in `wrack:v1:view:<id>`: playhead, loop, zoom, scroll, selection, open panel. Restored on open; transport always stopped.
+  5. Saved settings and the "Remember settings on this device" toggle; turning it off removes `wrack:v1:settings`.
   6. `schemaVersion: 1` and a `migrate()` registry.
 - **Acceptance:** e2e covers create, reload and continue with working state restored; corrupted JSON shows the guarded message; a quota error simulated by stubbing `Storage.prototype.setItem` shows the scope message; the settings toggle removes the settings key.
 - **Commit:** `feat: add localStorage persistence and return experience`
@@ -244,7 +244,7 @@ Do not start the next task.
 - **Context:** `assignment-3-scope.md` (Presets, Persistence).
 - **Files:** `src/lib/presets/{store,validate}.js`, `src/components/presets/{SavePresetDialog,PresetPicker,PresetList}.jsx`, `src/components/presets/labels.js`, `src/app/settings/SettingsPanel.jsx`, `tests/dsp/presets.test.js`, `tests/e2e/presets.spec.js`.
 - **Tasks:**
-  1. Preset store in `w-rack:v1:presets`: add, rename, delete; 200-preset limit; parameters clamped through `ParamDef` on load.
+  1. Preset store in `wrack:v1:presets`: add, rename, delete; 200-preset limit; parameters clamped through `ParamDef` on load.
   2. Save preset dialog: name field with the scope rules and error strings; entered name kept on error.
   3. Pickers on every instrument and effect with a "My presets" group above built-in settings.
   4. Preset list in `/settings` with rename and delete.
