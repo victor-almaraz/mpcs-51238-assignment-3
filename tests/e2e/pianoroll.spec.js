@@ -214,7 +214,7 @@ test('the grid changes the cells and snap, never the note scale; 1/32 needs a zo
     await grid.selectOption({ label });
     expect(await content()).toBe(width);
   }
-  await expect(grid.locator('option', { hasText: '1/32' })).toBeDisabled();
+  await expect(grid.locator('option', { hasText: /^1\/32 / })).toBeDisabled();
   await page.getByRole('button', { name: 'Piano roll zoom in' }).click();
   await expect.poll(content).toBeGreaterThan(width);
   await grid.selectOption({ label: '1/32' });
@@ -246,4 +246,51 @@ test('either end of a note stretches it: snapped to the grid, or finer with Alt'
   await page.mouse.up();
   await page.keyboard.up('Alt');
   await expect.poll(spans).toEqual([[120, 600]]);
+});
+
+test('triplet grids: 1/8T steps three to the beat; 1/4T names positions by the fraction of the beat', async ({ page }) => {
+  const id = await createProject(page);
+  await silence(page);
+  const grid = roll(page, 'Track 1');
+  const select = page.getByRole('region', { name: /^Piano roll: / }).getByLabel('Grid', { exact: true });
+  await select.selectOption({ label: '1/8T' });
+  await cursorCell(grid).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(cursorCell(grid)).toHaveAccessibleName('C4, bar 1 beat 1 step 2');
+  await page.keyboard.press('Enter');
+  await expect(cursorCell(grid)).toHaveAccessibleName('C4, bar 1 beat 1 step 2, length 1/3 beat, velocity 100');
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(cursorCell(grid)).toHaveAccessibleName('C4, bar 1 beat 1 step 2, length 2/3 beat, velocity 100');
+  await expect.poll(async () => allNotes(await saved(page, id)).map((n) => [n.tick, n.length])).toEqual([[320, 640]]);
+  await select.selectOption({ label: '1/4T' });
+  await expect(grid.getByRole('gridcell', { name: 'C4, bar 1 beat 2 and 1/3', exact: true })).toHaveCount(1);
+  await expect(select.locator('option', { hasText: '1/16T' })).toBeDisabled();
+});
+
+test('dragging a note in pitch: row by row, and past the view edge the grid scrolls with it', async ({ page }) => {
+  const id = await createProject(page);
+  await silence(page);
+  const grid = roll(page, 'Track 1');
+  await grid.getByRole('gridcell', { name: 'C4, bar 1 beat 1', exact: true }).click();
+  const pitches = async () => allNotes(await saved(page, id)).map((n) => n.pitch);
+  await expect.poll(pitches).toEqual([60]);
+  let box = await grid.locator('[data-note="start"]').boundingBox();
+  await page.mouse.move(box.x + 12, box.y + 12);
+  await page.mouse.down();
+  for (let i = 1; i <= 3; i++) await page.mouse.move(box.x + 12, box.y + 12 - 24 * i, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(pitches).toEqual([63]);
+
+  const scroller = grid.locator('xpath=ancestor::div[contains(@class, "overflow-auto")][1]');
+  const top = await scroller.evaluate((el) => el.scrollTop);
+  const view = await scroller.boundingBox();
+  box = await grid.locator('[data-note="start"]').boundingBox();
+  await page.mouse.move(box.x + 12, box.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 12, view.y + view.height + 30, { steps: 6 });
+  await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(top + 100);
+  await page.mouse.up();
+  // The note lands on the row under the pointer, which the scroll brought into view.
+  await expect.poll(async () => (await pitches())[0]).toBeLessThan(55);
+  await expect(grid.locator('[data-note="start"]')).toBeInViewport();
 });

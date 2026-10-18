@@ -2,20 +2,13 @@
 
 import { useRef, useState } from 'react';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { LABEL_W, rowLabel, rowShortLabel } from './layout';
+import { LABEL_W, barBeatText, rowLabel, rowShortLabel } from './layout';
 
 export const LANE_H = 48;
 const VELOCITY_MIN = 1;
 const VELOCITY_MAX = 127;
 const STEM_W = 4;
 const CHORD_STEP = 5; // px between stems of notes that start together
-
-/** "bar 2.3", or "bar 2.3.2" off the beat (the step of `grid` within the beat). */
-function barBeat(tick, meter, grid) {
-  const at = `${meter.barAt(tick) + 1}.${meter.beatAt(tick) + 1}`;
-  const inBeat = meter.tickInBeat(tick);
-  return inBeat === 0 ? `bar ${at}` : `bar ${at}.${Math.floor(inBeat / grid) + 1}`;
-}
 
 /** Notes in time order, then low to high, each with its stem's x in the lane. */
 function stems(notes, grid, cellW) {
@@ -45,7 +38,7 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
   const list = clip ? stems(clip.notes, grid, cellW) : [];
   const current = list.find((s) => s.note.id === selectedId) ?? list[0] ?? null;
   const shown = list.find((s) => s.note.id === hover) ?? (focused ? current : null);
-  const name = (note) => `Velocity ${rowLabel(note.pitch, isDrums)} ${barBeat(note.tick, meter, grid)}`;
+  const name = (note) => `Velocity ${rowLabel(note.pitch, isDrums)} ${barBeatText(note.tick, meter, grid)}`;
 
   function pointAt(e) {
     const rect = laneRef.current.getBoundingClientRect();
@@ -92,7 +85,7 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
       >
         <span className="uppercase tracking-[0.06em]">Velocity</span>
         <span aria-hidden="true" className="truncate tabular-nums text-muted">
-          {shown ? `${shown.note.velocity} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeat(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
+          {shown ? `${shown.note.velocity} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeatText(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
         </span>
       </div>
       <div

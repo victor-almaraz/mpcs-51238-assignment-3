@@ -15,7 +15,7 @@ import { MASTER_VOLUME } from '@/dsp/engine/engine';
 import { getEngine } from '@/lib/audio/engine-client';
 import { setTempo, setTimeSignature, ticksPerBar } from '@/lib/project/model';
 import LoopToggle from './LoopToggle';
-import MeterSelect from './MeterSelect';
+import TimeSignatureSelect from './TimeSignatureSelect';
 import MetronomeToggle from './MetronomeToggle';
 import Position from './Position';
 import TempoField from './TempoField';
@@ -186,7 +186,8 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
         <MetronomeToggle on={state.metronome} onChange={(on) => engine.setMetronome(on)} />
         <Position />
         <TempoField bpm={project.tempo[0].bpm} disabled={readOnly} onCommit={(bpm) => onEdit(setTempo(project, bpm))} />
-        <MeterSelect
+        <TimeSignatureSelect
+          id="transport-time-signature"
           value={signature}
           disabled={readOnly}
           onChange={(value) => onEdit(setTimeSignature(project, value))}

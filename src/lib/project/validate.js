@@ -2,7 +2,7 @@
  * New project form validation. Each validator returns null for a valid value or
  * the exact error text from docs/assignment-3-scope.md (New project form).
  */
-import { NAME_MAX, TEMPO_MAX, TEMPO_MIN, TIME_SIGNATURES } from './model.js';
+import { NAME_MAX, TEMPO_MAX, TEMPO_MIN, parseTimeSignature } from './model.js';
 
 export const NAME_EMPTY = 'Enter a project name.';
 export const NAME_TOO_LONG = `Use ${NAME_MAX} characters or fewer.`;
@@ -28,9 +28,9 @@ export function validateTempo(raw) {
   return bpm !== null && bpm >= TEMPO_MIN && bpm <= TEMPO_MAX ? null : TEMPO_INVALID;
 }
 
-/** Validates a time signature form value. Values outside the select are programming errors. */
+/** Validates a time signature form value. Values the selects cannot produce are programming errors. */
 export function validateTimeSignature(value) {
-  if (!TIME_SIGNATURES.some((s) => s.value === value)) throw new Error(`Unknown time signature: ${value}`);
+  if (!parseTimeSignature(value)) throw new Error(`Unknown time signature: ${value}`);
   return null;
 }
 

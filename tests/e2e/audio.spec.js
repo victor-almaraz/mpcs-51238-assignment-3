@@ -210,6 +210,23 @@ test('a tempo edit is the first edit: the example copy saves as a project', asyn
   await expect(page.getByRole('region', { name: 'Recent' })).toContainText('Beat (copy)');
 });
 
+test('the transport sets any time signature over a real note value; undo restores 4/4', async ({ page }) => {
+  await openExample(page);
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const transport = page.getByRole('toolbar', { name: 'Transport' });
+  await expect(transport.getByRole('group', { name: 'Time signature' })).toBeVisible();
+  await transport.getByRole('combobox', { name: 'Beats per bar' }).selectOption('7');
+  await transport.getByRole('combobox', { name: 'Note value' }).selectOption('16');
+  await expect(page.getByText(/ BPM · 7\/16$/)).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key))?.meter, `w-rack:v1:project:${id}`)).toEqual([{ tick: 0, numerator: 7, denominator: 16 }]);
+  await page.getByRole('heading', { level: 1 }).click();
+  // Edits within 600 ms join one undo step, so the two selects may undo together.
+  await expect(async () => {
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.getByText(/ BPM · 4\/4$/)).toBeVisible({ timeout: 500 });
+  }).toPass();
+});
+
 test('an invalid tempo shows the form error and changes nothing', async ({ page }) => {
   await openExample(page);
   const tempo = page.getByRole('textbox', { name: 'Tempo (BPM)' });

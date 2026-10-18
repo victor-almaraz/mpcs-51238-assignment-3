@@ -12,6 +12,7 @@ import { getEngine } from '@/lib/audio/engine-client';
 import { noteAt, notesStartingIn } from '@/lib/project/midi-commands';
 import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
+import { barText, spanText } from '@/components/timeline/layout';
 import { CELL_W, DEFAULT_GRID, GRIDS, LABEL_W, ROLL_ZOOMS, ROW_H, cellWidth, inChokeGroup, noteText, positionText, rowLabel, rowPitches, rowShortLabel } from './layout';
 import usePianoRollCommands from './usePianoRollCommands';
 import VelocityLane from './VelocityLane';
@@ -23,12 +24,8 @@ const VIEW_HEIGHT = 480;
 const PIANO_ROLL_HELP =
   'Arrow keys move. Enter adds or removes a note; Delete removes it. Alt+arrows move it; Shift+Left and Right change its length; Shift+Up and Down change its velocity. Q quantizes. With the pointer, drag either end of a note to stretch it (Alt for finer than the grid).';
 const GRID_OPTIONS = GRIDS.map((g) => ({ value: String(g.value), label: g.label }));
-const LOOP_OPTIONS = [
-  { value: 'off', label: 'Off' },
-  { value: '1', label: '1 bar' },
-  { value: '2', label: '2 bars' },
-  { value: '4', label: '4 bars' },
-];
+/** Clip loop choices in bars; a loop set in the timeline at another length is added as its own choice. */
+const LOOP_BARS = [1, 2, 4];
 /** Cursor tick that marks the row header. */
 const HEADER = -1;
 /** Smallest note-grid height: three rows and the border; below it the panel scrolls. */
@@ -36,6 +33,9 @@ const GRID_MIN_H = 3 * ROW_H + 2;
 /** Width of a note's resize zone at its end, px (the last third of a one-step note). */
 /** Stretch zone at each end of a note, px (a third of the note on short notes). */
 const EDGE_PX = 6;
+/** Autoscroll while dragging: within AUTOSCROLL_BAND px of a view edge, or past it, up to AUTOSCROLL_MAX px per frame. */
+const AUTOSCROLL_BAND = 8;
+const AUTOSCROLL_MAX = 20;
 /** Stretch resolution while Alt is held: a 1/64 note. */
 const FREE_STEP = PPQ / 16;
 
@@ -335,6 +335,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   }
 
   function endDrag() {
+    if (drag.current?.frame) cancelAnimationFrame(drag.current.frame);
     drag.current = null;
     setGhost(null);
   }
@@ -352,6 +353,36 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     moveCursor(r, c);
   }
 
+  /** Scroll speed, px per frame, for pointer coordinate `p` against the view's [lo, hi]: 0 inside, rising through the band and past the edge. */
+  const edgeSpeed = (p, lo, hi) => {
+    const into = p < lo + AUTOSCROLL_BAND ? p - (lo + AUTOSCROLL_BAND) : p > hi - AUTOSCROLL_BAND ? p - (hi - AUTOSCROLL_BAND) : 0;
+    return Math.max(-AUTOSCROLL_MAX, Math.min(AUTOSCROLL_MAX, Math.round(into / 3)));
+  };
+
+  /**
+   * While a drag holds the pointer near or past an edge of the view, scrolls the view each
+   * frame and replays the last pointer position, so the dragged note follows into new rows
+   * and bars. Vertical scrolling only for moves; the lanes do not scroll by pitch otherwise.
+   */
+  function autoscroll() {
+    const d = drag.current;
+    const el = scroller.current;
+    if (!d || !el || !d.last) return;
+    const r = el.getBoundingClientRect();
+    const dx = edgeSpeed(d.last.clientX, r.left + LABEL_W, r.right);
+    const dy = d.mode === 'move' ? edgeSpeed(d.last.clientY, r.top, r.bottom) : 0;
+    const before = [el.scrollLeft, el.scrollTop];
+    if (dx) el.scrollLeft += dx;
+    if (dy) el.scrollTop += dy;
+    if (el.scrollLeft === before[0] && el.scrollTop === before[1]) {
+      d.frame = null;
+      return;
+    }
+    setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
+    dragTo(d.last);
+    d.frame = requestAnimationFrame(autoscroll);
+  }
+
   function onPointerMove(e) {
     const d = drag.current;
     if (!d) {
@@ -361,31 +392,47 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       gridRef.current.style.cursor = !readOnly && c >= 0 && noteEdge(e, cellNote(r, c)) ? 'ew-resize' : '';
       return;
     }
+    if (!(e.buttons & 1)) {
+      endDrag();
+      return;
+    }
+    d.last = { clientX: e.clientX, clientY: e.clientY, altKey: e.altKey };
+    dragTo(d.last);
+    if (!d.frame) d.frame = requestAnimationFrame(autoscroll);
+  }
+
+  /**
+   * Updates the drag for a pointer at `at` ({ clientX, clientY, altKey }): the ghost, the cursor and,
+   * on a new pitch, an audition. A pointer outside the view drags to the edge row or column, which
+   * autoscroll keeps moving, so the dragged note never leaves the view.
+   */
+  function dragTo(at) {
+    const d = drag.current;
+    const view = scroller.current.getBoundingClientRect();
+    const p = {
+      ...at,
+      clientX: Math.max(view.left + LABEL_W, Math.min(view.left + scroller.current.clientWidth - 1, at.clientX)),
+      clientY: Math.max(view.top, Math.min(view.top + scroller.current.clientHeight - 1, at.clientY)),
+    };
     if (d.mode === 'resizeEnd' || d.mode === 'resizeStart') {
       // Stretching works in ticks, not cells: any length on the grid, or finer with Alt.
-      if (!(e.buttons & 1)) {
-        endDrag();
-        return;
-      }
-      const next = stretched(d, tickAtPointer(e), e.altKey);
+      const next = stretched(d, tickAtPointer(p), p.altKey);
       if (next.tick === (d.stretch ?? d.note).tick && next.length === (d.stretch ?? d.note).length) return;
       d.moved = true;
       d.stretch = next;
       setGhost(next);
       return;
     }
-    if (!(e.buttons & 1)) {
-      endDrag();
-      return;
-    }
     if (d.mode === 'add' && isDrums) return; // drum notes have one length
-    const { r, c } = cellFromPoint(e);
+    const { r, c } = cellFromPoint(p);
     if (r === d.r && c === d.c) return;
     d.moved = true;
+    const pitchBefore = rows[d.r];
     d.r = d.mode === 'move' ? r : d.originR;
     d.c = c;
     const next = dragResult(d);
     setGhost(next);
+    if (d.mode === 'move' && rows[d.r] !== pitchBefore) commands.audition(next);
     pointerCursor.current = true;
     setCursor({ pitch: next.pitch, tick: next.tick + (d.mode === 'move' ? 0 : next.length - grid) });
   }
@@ -398,7 +445,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     if (d.moved && d.note) {
       const next = dragResult(d);
       if (d.stretch) commands.span(d.note.id, next.tick, next.length);
-      else commands.move(d.note.id, next.tick - d.note.tick, next.pitch - d.note.pitch);
+      else commands.move(d.note.id, next.tick - d.note.tick, next.pitch - d.note.pitch, { sounds: false });
       setSelectedId(d.note.id);
       return;
     }
@@ -424,7 +471,13 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     if (note) commands.remove(note.id);
   }
 
-  const loopValue = clip?.loopLength ? String(clip.loopLength / barTicks) : 'off';
+  const loopValue = clip?.loopLength ? String(clip.loopLength) : 'off';
+  const loopOptions = [
+    { value: 'off', label: 'Off' },
+    ...[...new Set([...LOOP_BARS.map((b) => b * barTicks), ...(clip?.loopLength ? [clip.loopLength] : [])])]
+      .sort((a, b) => a - b)
+      .map((t) => ({ value: String(t), label: spanText(t, meter, clip?.start ?? 0) })),
+  ];
   const title = `Piano roll: ${track.name}`;
 
   return (
@@ -433,6 +486,12 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       <h2 id="pianoroll-heading" className={sectionHeading}>
         {title}
       </h2>
+      {/* Which clip the roll edits: copies of a clip share its name, so the bars tell them apart. */}
+      {clip ? (
+        <span className="text-sm text-muted">
+          {clip.name}, {barText(clip.start, meter)} to {barText(clip.start + clip.length, meter)}
+        </span>
+      ) : null}
       <Toolbar label="Piano roll tools" className="flex flex-wrap items-center gap-2">
         <Select
           id="pianoroll-grid"
@@ -466,8 +525,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           className="w-auto"
           value={loopValue}
           disabled={!clip || readOnly}
-          onChange={(v) => commands.setLoop(v === 'off' ? null : Number(v) * barTicks)}
-          options={LOOP_OPTIONS}
+          onChange={(v) => commands.setLoop(v === 'off' ? null : Number(v))}
+          options={loopOptions}
         />
         <IconToggle icon="footprints" label="Step input" pressed={stepInput} onClick={() => setStepInput(!stepInput)} data-help="Step input: each played note is added at the cursor, which then moves one grid step." />
         <IconToggle icon="volume-2" label="Preview notes" pressed={previewOn} onClick={() => setPreviewOn(!previewOn)} data-help="Preview notes: placing or moving a note plays it." />

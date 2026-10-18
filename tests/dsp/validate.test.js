@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createId, createProject, nextUntitledName, ticksPerBar } from '../../src/lib/project/model.js';
+import { createId, createProject, nextUntitledName, parseTimeSignature, ticksPerBar } from '../../src/lib/project/model.js';
 import {
   NAME_EMPTY,
   NAME_TOO_LONG,
@@ -42,7 +42,15 @@ test('validateNewProject returns trimmed values or field errors', () => {
     ok: false,
     errors: { name: NAME_EMPTY, tempo: TEMPO_INVALID },
   });
-  assert.throws(() => validateNewProject({ name: 'a', tempo: '120', timeSignature: '5/4' }));
+  assert.equal(validateNewProject({ name: 'a', tempo: '120', timeSignature: '7/8' }).ok, true);
+  assert.throws(() => validateNewProject({ name: 'a', tempo: '120', timeSignature: '5/3' }));
+});
+
+test('parseTimeSignature: 1–32 beats over a note value from 1 to 32', () => {
+  assert.deepEqual(parseTimeSignature('7/8'), { numerator: 7, denominator: 8 });
+  assert.deepEqual(parseTimeSignature('32/32'), { numerator: 32, denominator: 32 });
+  assert.deepEqual(parseTimeSignature('1/1'), { numerator: 1, denominator: 1 });
+  for (const bad of ['0/4', '33/4', '4/3', '4/64', '4/0', '4', '4/4/4', ' 4/4', '', null]) assert.equal(parseTimeSignature(bad), null, String(bad));
 });
 
 test('nextUntitledName picks the lowest unused number', () => {

@@ -6,7 +6,8 @@ import { getSource } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { faderText } from '@/components/mixer/TrackStrip';
-import { audioTempo, clipEndTick, envelopeGainAt } from '@/lib/project/clip-commands';
+import { audioTempo, clipEndTick, envelopeGainAt, isLooping } from '@/lib/project/clip-commands';
+import { expandClipNotes } from '@/lib/project/midi-commands';
 import { HEADER_W, RULER_H, TRACK_H, clipRect, envelopeY, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
 
 function cssVar(name, fallback) {
@@ -275,17 +276,30 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
               ctx.stroke();
             }
           } else {
-            const pitches = clip.notes.map((n) => n.pitch);
+            // The notes as they play, loop repeats included.
+            const notes = expandClipNotes(clip);
+            const pitches = notes.map((n) => n.pitch);
             const lo = Math.min(...pitches);
             const span = Math.max(12, Math.max(...pitches) - lo + 1);
             ctx.fillStyle = clip.muted ? colors.line : colors.muted;
-            const repeat = clip.loopLength > 0 ? clip.loopLength : clip.length;
-            for (let base = 0; base < clip.length; base += repeat) {
-              for (const n of clip.notes) {
-                if (base + n.tick >= clip.length) continue;
-                const nx = (clip.start + base + n.tick) * k - sx;
-                const ny = top + 14 + (ch - 18) * (1 - (n.pitch - lo + 1) / span);
-                ctx.fillRect(nx, ny, Math.max(2, Math.min(n.length, clip.length - base - n.tick) * k), 2);
+            for (const n of notes) {
+              const nx = (clip.start + n.tick) * k - sx;
+              const ny = top + 14 + (ch - 18) * (1 - (n.pitch - lo + 1) / span);
+              ctx.fillRect(nx, ny, Math.max(2, n.length * k), 2);
+            }
+            // Each loop pass after the first starts at a notch in the top band and a faint line.
+            if (isLooping(clip)) {
+              ctx.fillStyle = colors.fg;
+              for (let t = clip.loopLength; t < clip.length; t += clip.loopLength) {
+                const lx = Math.round((clip.start + t) * k - sx);
+                ctx.globalAlpha = 0.25;
+                ctx.fillRect(lx, top, 1, ch);
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.moveTo(lx - 4, top);
+                ctx.lineTo(lx + 4, top);
+                ctx.lineTo(lx, top + 6);
+                ctx.fill();
               }
             }
           }

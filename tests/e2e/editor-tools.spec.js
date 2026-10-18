@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { menuItem } from '../support/editor.js';
 
 /*
  * Command palette, clip context menu, timeline marquee and the on-canvas
@@ -155,4 +156,101 @@ test('fade, gain and envelope handles on a selected audio clip edit it by pointe
   expect(point.gain).toBeLessThan(1.1);
   await page.mouse.dblclick(at.x, at.y);
   await expect.poll(async () => (await audioClip(page, id))?.envelope.length).toBe(0);
+});
+
+test('the top of a MIDI clip right edge loops the clip; the lower part and the Clip menu still work', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Loops');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Loops');
+  const id = new URL(page.url()).pathname.split('/').pop();
+  await page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Preview notes' }).click();
+  // The first note makes a four-bar clip on row 0 (x 0 to 512 at 128 px per bar).
+  const cell = page.getByRole('grid', { name: 'Notes' }).locator('[tabindex="0"]');
+  await cell.focus();
+  await page.keyboard.press('Enter');
+  const midi = async () => Object.values((await saved(page, id))?.clips ?? {}).find((c) => c.kind === 'midi');
+  await expect.poll(async () => (await midi())?.length).toBe(4 * 3840);
+
+  const from = await canvasPoint(page, 510, 0, 8);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 128, from.y, { steps: 4 });
+  await page.mouse.move(from.x + 256, from.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength]).toEqual([6 * 3840, 4 * 3840]);
+  await expect(clipRows(page).first()).toHaveAccessibleName(/loops every 4 bars/);
+
+  await clipRows(page).first().press('ContextMenu');
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Stop looping clip' }).click();
+  await expect.poll(async () => [(await midi()).loopLength, (await midi()).notes.length]).toEqual([undefined, 2]);
+  // The lower part of the edge lengthens without repeating: the clip is now six bars (x 768).
+  const low = await canvasPoint(page, 766, 0, 40);
+  await page.mouse.move(low.x, low.y);
+  await page.mouse.down();
+  await page.mouse.move(low.x + 64, low.y, { steps: 4 });
+  await page.mouse.move(low.x + 128, low.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength, (await midi()).notes.length]).toEqual([7 * 3840, undefined, 2]);
+  await clipRows(page).first().press('ContextMenu');
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Loop clip' })).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
+test('a duplicated MIDI clip is edited on its own: selecting the copy opens it in the piano roll', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Copies');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Copies');
+  const id = new URL(page.url()).pathname.split('/').pop();
+  await page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Preview notes' }).click();
+  const grid = page.getByRole('grid', { name: 'Notes' });
+  await grid.locator('[tabindex="0"]').focus();
+  await page.keyboard.press('Enter');
+  const midi = async () => Object.values((await saved(page, id))?.clips ?? {}).filter((c) => c.kind === 'midi').sort((a, b) => a.start - b.start);
+  await expect.poll(async () => (await midi()).length).toBe(1);
+  await clipRows(page).first().click();
+  await page.keyboard.press('ControlOrMeta+d');
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 5 to bar 9', { exact: true })).toBeVisible();
+  // The copy is selected, so the piano roll edits it and the original keeps one note.
+  await grid.locator('[tabindex="0"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await midi()).map((c) => c.notes.length)).toEqual([1, 2]);
+  await clipRows(page).first().click();
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 1 to bar 5', { exact: true })).toBeVisible();
+});
+
+test('adding clips: double-click an empty lane, the Add menu at the edit cursor, or drop audio files', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Adding');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Adding');
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const clips = async () => Object.values((await saved(page, id))?.clips ?? {}).map((c) => [c.kind, c.start, c.kind === 'midi' ? c.length : c.sourceLength]).sort((a, b) => a[1] - b[1]);
+  const roll = page.getByRole('region', { name: 'Piano roll: Track 1' });
+
+  // Bar 3 starts at x = 256 (128 px per bar); the double-click snaps to the 1/4 grid.
+  const at = await canvasPoint(page, 260, 0, 20);
+  await page.mouse.dblclick(at.x, at.y);
+  await expect.poll(clips).toEqual([['midi', 7680, 3840]]);
+  await expect(roll.getByText('Track 1, bar 3 to bar 4', { exact: true })).toBeVisible();
+
+  // The Add menu adds at the edit cursor, moved to bar 1 by a click in the ruler.
+  const ruler = await page.locator('section[aria-labelledby="studio-timeline"] canvas').boundingBox();
+  await page.mouse.click(ruler.x + 1, ruler.y + RULER_H / 2);
+  await (await menuItem(page, 'Add', 'MIDI clip on Track 1 at edit cursor')).click();
+  await expect.poll(clips).toEqual([['midi', 0, 3840], ['midi', 7680, 3840]]);
+
+  // Audio files dropped on the lanes go to a new audio track at the drop point (bar 2, x = 128).
+  const drop = await canvasPoint(page, 128, 1, 20);
+  const data = await page.evaluateHandle((bytes) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(bytes)], 'drop.wav', { type: 'audio/wav' }));
+    return dt;
+  }, [...wav(1)]);
+  const lanes = page.locator('section[aria-labelledby="studio-timeline"] canvas');
+  await lanes.dispatchEvent('dragover', { dataTransfer: data, clientX: drop.x, clientY: drop.y });
+  await lanes.dispatchEvent('drop', { dataTransfer: data, clientX: drop.x, clientY: drop.y });
+  await expect.poll(clips).toEqual([['midi', 0, 3840], ['audio', 3840, 48000], ['midi', 7680, 3840]]);
 });

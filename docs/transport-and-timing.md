@@ -15,7 +15,7 @@ Seconds at tick x within a segment starting at tick x₀, second s₀, tempo b�
 - Event frame = floor(s·fs), computed in float64 (a3-audio-implementation.md, Tempo map).
 - `CompiledTempoMap` stores per-segment s₀ and coefficients; lookup is O(log n).
 - Time signature: `MeterPoint { tick, numerator, denominator }`, placed at bar boundaries only.
-- The transport edits the first tempo point (an integer 40–240 BPM, as in the New project form) and the meter from bar 1 (2/4, 3/4, 4/4 or 6/8). Both are project edits and can be undone (`project-model.md`, Commands and undo).
+- The transport edits the first tempo point (an integer 40–240 BPM, as in the New project form) and the meter from bar 1: 1–32 beats per bar over a note value of 1, 2, 4, 8, 16 or 32, the meter map's limits. Both are project edits and can be undone (`project-model.md`, Commands and undo).
 
 ```ts
 export interface TempoPoint { tick: Tick; bpm: number; shape: 'step' | 'linear' }

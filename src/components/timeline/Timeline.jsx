@@ -28,6 +28,7 @@ import {
   addEnvelopePoint,
   addInstrumentTrack,
   clipEndTick,
+  isLooping,
   removeEnvelopePoint,
   removeTrack,
   setClipGain,
@@ -72,6 +73,20 @@ const gainDb = (g) => (g <= 0 ? -Infinity : gainToDb(g));
 const ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.oga';
 /** Time an import's success lines stay shown, ms. */
 const RESULTS_CLEAR_MS = 10000;
+
+/** Pointer over the loop handle (the top half of a MIDI clip's right edge): the repeat icon, outlined for contrast. */
+const REPEAT_CURSOR = (() => {
+  const paths = '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="white" stroke-width="5">${paths}</g><g stroke="black" stroke-width="2">${paths}</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, copy`;
+})();
+
+/** Which part of clip box `rect` content point x, y grabs: trim handles at the edges, the loop handle at the top of a MIDI clip's right edge, else the body. */
+function clipPart(clip, rect, x, y) {
+  if (x - rect.x0 <= EDGE_PX) return 'trimStart';
+  if (rect.x1 - x > EDGE_PX) return 'move';
+  return clip.kind === 'midi' && y - rect.top < rect.height / 2 ? 'repeatEnd' : 'trimEnd';
+}
 
 /** The keyboard handles on the loop band's edges. */
 const LOOP_EDGES = [
@@ -126,16 +141,20 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const loop = loopRange(project, view);
   const loopMin = Math.max(1, stepTicks); // shortest loop: one grid step
   const fileRef = useRef(null);
+  /** Where the file picker's audio goes, when it opened from a double-click on an audio lane. */
+  const pickTarget = useRef(null);
   const scrollRef = useRef(null);
   const contentRef = useRef(null);
   const canvasRef = useRef(null);
   const scrollSave = useRef(0);
   const drag = useRef(null);
 
-  // Selecting clips also selects the last one's track, so the dock shows that clip.
+  // Selecting clips also selects the last one's track and makes it the piano roll's clip, so edits land on the selected copy.
   const setSelection = (ids) => {
-    const last = project.clips[ids[ids.length - 1]];
-    onViewChange(last ? { selectedClipIds: ids, selectedTrackId: last.trackId } : { selectedClipIds: ids });
+    // The commands ref holds edits not yet rendered (a duplicate selects its new copies at once).
+    const last = commands.docRef.current.clips[ids[ids.length - 1]];
+    if (!last) onViewChange({ selectedClipIds: ids });
+    else onViewChange({ selectedClipIds: ids, selectedTrackId: last.trackId, ...(last.kind === 'midi' ? { panelClipId: last.id } : {}) });
   };
   const commands = useTimelineCommands({
     project,
@@ -157,12 +176,20 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const editable = () => !readOnly;
   useCommands([
     { id: 'timeline.add-audio', group: 'Timeline', label: 'Add audio file…', run: () => fileRef.current?.click(), enabled: () => editable() && !importing },
+    { id: 'timeline.add-midi-clip', group: 'Timeline', label: 'Add MIDI clip at edit cursor', run: () => addMidiClip(midiTarget()?.id, editCursor), enabled: () => editable() && Boolean(midiTarget()) },
     { id: 'timeline.add-audio-track', group: 'Timeline', label: 'Add audio track', run: () => addTrack(null), enabled: editable },
     ...INSTRUMENT_TYPES.map((type) => ({ id: `timeline.add-${type}`, group: 'Timeline', label: `Add ${INSTRUMENT_LABELS[type]} track`, run: () => addTrack(type), enabled: editable })),
     { id: 'timeline.split', group: 'Clip', label: 'Split at edit cursor', keys: 'Mod+E', global: true, run: () => commands.split(view.selectedTrackId), enabled: () => editable() && hasClips },
     { id: 'timeline.join', group: 'Clip', label: 'Join clips', keys: 'Mod+J', global: true, run: () => commands.join(), enabled: () => editable() && hasClips },
     { id: 'timeline.duplicate', group: 'Clip', label: 'Duplicate clip', keys: 'Mod+D', global: true, run: () => commands.duplicate(), enabled: () => editable() && selection.length > 0 },
     { id: 'timeline.delete', group: 'Clip', label: 'Delete clip', keys: 'Delete', run: () => commands.remove(), enabled: () => editable() && selection.length > 0 },
+    {
+      id: 'timeline.loop-clip',
+      group: 'Clip',
+      label: project.clips[selection[selection.length - 1]] && isLooping(project.clips[selection[selection.length - 1]]) ? 'Stop looping clip' : 'Loop clip',
+      run: () => commands.setLooping(!isLooping(project.clips[selection[selection.length - 1]])),
+      enabled: () => editable() && project.clips[selection[selection.length - 1]]?.kind === 'midi',
+    },
     { id: 'timeline.select-all', group: 'Clip', label: 'Select all clips', keys: 'Mod+A', run: () => setSelection(Object.keys(project.clips)), enabled: () => hasClips },
     { id: 'timeline.focus', group: 'Go to', label: 'Tracks and clips', run: focusTree },
     {
@@ -196,13 +223,17 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     setCursor(Math.round(editCursor / step) * step + sign * step);
   }
 
-  async function importAudio(files) {
+  /**
+   * Imports audio `files` as clips, one after another from `at.tick` on audio track
+   * `at.trackId`; by default from the edit cursor on the selected audio track, or a new one.
+   */
+  async function importAudio(files, at = {}) {
     if (files.length === 0) return;
     setImporting(true);
     const lines = [];
-    const selected = project.tracks[view.selectedTrackId];
+    const selected = project.tracks[at.trackId ?? view.selectedTrackId];
     let trackId = selected?.kind === 'audio' ? selected.id : null;
-    let tick = editCursor;
+    let tick = at.tick ?? editCursor;
     let lastClipId = null;
     clearTimeout(resultsTimer.current);
     try {
@@ -282,11 +313,37 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     setTimeout(() => (nextId ? focusTree() : document.querySelector('section[aria-label="No tracks"] button')?.focus()), 50);
   }
 
+  /**
+   * Adds an empty MIDI clip on instrument track `trackId` at `tick`: one bar, or up to the
+   * next clip when that is nearer. Selects it and opens it in the piano roll.
+   */
+  function addMidiClip(trackId, tick) {
+    const doc = commands.docRef.current;
+    const track = doc.tracks[trackId];
+    if (readOnly || track?.kind !== 'instrument') return;
+    if (trackClips(doc, track).some((c) => c.start <= tick && tick < clipEndTick(doc, c))) return announce('A clip is already there.');
+    const next = trackClips(doc, track).find((c) => c.start > tick);
+    const made = createClip(doc, trackId, { start: tick, length: Math.min(barTicks, next ? next.start - tick : barTicks) });
+    if (!made.ok) return announce(made.error.message);
+    commands.commit(made.doc, `MIDI clip added at ${barText(tick, meter)}, open in piano roll`);
+    onViewChange({ selectedTrackId: trackId, selectedClipIds: [made.clipId], panelClipId: made.clipId, openPanel: 'pianoroll', dock: 'editor', dockCollapsed: false });
+  }
+
+  /** The instrument track a keyboard "MIDI clip" command adds to: the selected one, else the first. */
+  const midiTarget = () => {
+    const doc = commands.docRef.current;
+    const selected = doc.tracks[view.selectedTrackId];
+    return selected?.kind === 'instrument' ? selected : rowIds.map((id) => doc.tracks[id]).find((t) => t?.kind === 'instrument');
+  };
+
   /** "Add" menu items: an instrument track of each type, an audio track, audio files. */
   function addItems({ audio = true } = {}) {
     const instruments = INSTRUMENT_TYPES.map((type) => ({ label: `${INSTRUMENT_LABELS[type]} track`, icon: 'piano', disabled: readOnly, run: () => addTrack(type) }));
     if (!audio) return instruments;
+    const target = midiTarget();
     return [
+      { label: target ? `MIDI clip on ${target.name} at edit cursor` : 'MIDI clip at edit cursor', icon: 'plus', disabled: readOnly || !target, run: () => addMidiClip(target.id, editCursor) },
+      { separator: true },
       ...instruments,
       { separator: true },
       { label: 'Audio track', icon: 'audio-lines', disabled: readOnly, run: () => addTrack(null) },
@@ -316,6 +373,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { separator: true },
       { label: 'Select all clips', keys: 'Mod+A', disabled: !hasClips, run: () => setSelection(Object.keys(project.clips)) },
       { label: last?.muted ? 'Unmute clip' : 'Mute clip', disabled: readOnly || !last, run: toggleMute },
+      { label: last && isLooping(last) ? 'Stop looping clip' : 'Loop clip', disabled: readOnly || last?.kind !== 'midi', run: () => commands.setLooping(!isLooping(last)) },
       { label: 'Rename clip…', keys: 'F2', disabled: readOnly || !last, run: () => startRename(last) },
       { label: track ? `Rename track ${track.name}…` : 'Rename track…', disabled: readOnly || !track, run: () => startRenameTrack(track) },
       { separator: true },
@@ -343,6 +401,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { label: 'Join clips', note: join.reason, run: () => commands.join() },
       { label: `Duplicate ${what}`, run: () => commands.duplicate() },
       { label: `${clip.muted ? 'Unmute' : 'Mute'} ${what}`, run: toggleMute },
+      ...(clip.kind === 'midi' ? [{ label: `${isLooping(clip) ? 'Stop looping' : 'Loop'} ${what}`, run: () => commands.setLooping(!isLooping(clip)) }] : []),
       { label: 'Rename clip…', run: () => startRename(clip) },
       { label: `Delete ${what}`, run: () => commands.remove(ids) },
     ];
@@ -541,8 +600,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         return;
       }
     }
-    const { x0: left, x1: right } = hit.rect;
-    const mode = x - left <= EDGE_PX ? 'trimStart' : right - x <= EDGE_PX ? 'trimEnd' : 'move';
+    const mode = clipPart(clip, hit.rect, x, y);
     let next = selection;
     if (mod) next = selection.includes(clip.id) ? selection.filter((id) => id !== clip.id) : [...selection, clip.id];
     else if (e.shiftKey && selection.length > 0 && project.clips[selection[0]]?.trackId === clip.trackId) {
@@ -559,11 +617,17 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   function onPointerMove(e) {
     const d = drag.current;
     if (!d) {
-      // Resize and move cursors over the loop band.
+      // Resize and move cursors over the loop band; trim and loop cursors over clip edges.
       if (!onTimeline(e)) return;
       const p = pointerPosition(e);
-      const part = p.inRuler ? loopPartAt(p.x) : null;
-      e.currentTarget.style.cursor = part === 'loopMove' ? 'grab' : part ? 'ew-resize' : '';
+      if (p.inRuler) {
+        const part = loopPartAt(p.x);
+        e.currentTarget.style.cursor = part === 'loopMove' ? 'grab' : part ? 'ew-resize' : '';
+        return;
+      }
+      const hit = readOnly ? null : hitAt(p);
+      const part = hit ? clipPart(hit.clip, hit.rect, p.x, p.y) : 'move';
+      e.currentTarget.style.cursor = part === 'repeatEnd' ? REPEAT_CURSOR : part === 'move' ? '' : 'ew-resize';
       return;
     }
     const { x, y, row } = pointerPosition(e);
@@ -653,6 +717,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     }
     if (!g) return;
     const doc = commands.docRef.current;
+    if (d.mode === 'repeatEnd') {
+      if (g.dTick !== 0) commands.repeat(g.dTick);
+      return;
+    }
     if (d.mode === 'move' || d.mode === 'trimStart' || d.mode === 'trimEnd') {
       // Moves and trims act on d.clipIds (the selection), so they carry no single clipId.
       if (g.dTick === 0 && g.dRow === 0) return;
@@ -681,6 +749,17 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     if (readOnly || !onTimeline(e)) return;
     const pos = pointerPosition(e);
     const hit = hitAt(pos);
+    if (!hit && !pos.inRuler) {
+      // Empty lane space: a MIDI clip on an instrument track, or the file picker for an audio track, at the snapped tick.
+      const track = project.tracks[rowIds[pos.row]];
+      const tick = Math.max(0, snapTick(xToTick(pos.x, view.zoom), e.altKey));
+      if (track?.kind === 'instrument') addMidiClip(track.id, tick);
+      else if (track?.kind === 'audio' && !importing) {
+        pickTarget.current = { trackId: track.id, tick };
+        fileRef.current?.click();
+      }
+      return;
+    }
     if (!hit || hit.clip.kind !== 'audio' || !selection.includes(hit.clip.id)) return;
     const doc = commands.docRef.current;
     const point = envelopePointAt(doc, hit.clip, hit.rect, pos.x, pos.y, view.zoom);
@@ -692,6 +771,15 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     const gain = gainAtY(hit.rect, pos.y);
     const result = addEnvelopePoint(doc, hit.clip.id, frameAtX(doc, hit.clip, pos.x, view.zoom), gain);
     if (result.ok) commands.commit(result.doc, `Envelope point added at ${faderText(gainDb(gain))}`);
+  }
+
+  /** Audio files dropped on the lanes import at the drop point: on that audio track, or on a new one. */
+  function onDrop(e) {
+    const files = [...e.dataTransfer.files];
+    if (readOnly || files.length === 0) return;
+    e.preventDefault();
+    const pos = pointerPosition(e);
+    importAudio(files, { trackId: rowIds[pos.row] ?? null, tick: Math.max(0, snapTick(xToTick(pos.x, view.zoom), e.altKey)) });
   }
 
   const width = tickToX(Math.max(contentEnd(project), editCursor) + TAIL_BARS * barTicks, view.zoom);
@@ -767,7 +855,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         onChange={(e) => {
           const files = [...e.target.files];
           e.target.value = '';
-          importAudio(files);
+          importAudio(files, pickTarget.current ?? {});
+          pickTarget.current = null;
         }}
       />
       <StatusRegion aria-label="Import results" className="px-3 text-xs">
@@ -784,9 +873,14 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         ref={scrollRef}
         className="relative min-h-0 flex-1 overflow-auto bg-surface select-none"
         style={{ touchAction: 'pan-y' }}
+        data-help="Arrangement: double-click an empty lane to add a clip there (MIDI on instrument tracks, an audio file on audio tracks), or drop audio files on it. Drag a clip's edges to trim it; the top of a MIDI clip's right edge loops it."
         onScroll={onScroll}
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}
+        onDragOver={(e) => {
+          if (!readOnly && e.dataTransfer.types.includes('Files')) e.preventDefault();
+        }}
+        onDrop={onDrop}
         onContextMenu={onContextMenu}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

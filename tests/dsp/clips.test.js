@@ -17,17 +17,20 @@ import {
   duplicateClip,
   joinBlocker,
   joinClips,
+  loopEnd,
   moveClip,
   removeTrack,
   renameClip,
   setClipColor,
   setClipGain,
+  setClipLooping,
   setFade,
   splitClip,
   trimEnd,
   trimStart,
 } from '../../src/lib/project/clip-commands.js';
 import { createProject, setTempo, setTrack } from '../../src/lib/project/model.js';
+import { addNote, createClip, expandClipNotes } from '../../src/lib/project/midi-commands.js';
 import { peak } from '../support/signal.js';
 
 const FS = 48000;
@@ -369,4 +372,44 @@ test('setInstrumentType swaps the instrument in place and keeps clips, effects a
   assert.equal(setInstrumentType(result.doc, trackId, 'fm').doc, result.doc);
   assert.equal(setInstrumentType(result.doc, result.doc.masterTrackId, 'fm').ok, false);
   assert.equal(setInstrumentType(result.doc, trackId, 'theremin').ok, false);
+});
+
+/** A one-bar MIDI clip on the project's instrument track with notes at beats 1 and 3. */
+function riff() {
+  const makeId = ids();
+  let doc = createProject({ name: 'Loop', tempo: 120, timeSignature: '4/4', now: 0, makeId });
+  const made = createClip(doc, doc.trackOrder[0], { start: 3840, length: 3840 }, makeId);
+  doc = made.doc;
+  for (const tick of [0, 1920]) doc = addNote(doc, made.clipId, { tick, pitch: 60, length: 480 }, makeId).doc;
+  return { doc, clipId: made.clipId, makeId };
+}
+const played = (clip) => expandClipNotes(clip).map((n) => n.tick);
+
+test('loopEnd lengthens a MIDI clip as a loop of its current length', () => {
+  const { doc, clipId } = riff();
+  const looped = loopEnd(doc, clipId, 2 * 3840 + 1920).doc.clips[clipId];
+  assert.equal(looped.loopLength, 3840);
+  assert.equal(looped.length, 3 * 3840 + 1920);
+  assert.deepEqual(played(looped), [0, 1920, 3840, 5760, 7680, 9600, 11520]);
+  assert.equal(looped.notes.length, 2, 'repeats are not stored as notes');
+  // A plain trim end of a clip that is not looping adds empty time.
+  assert.deepEqual(played(trimEnd(doc, clipId, 3840).doc.clips[clipId]), [0, 1920]);
+});
+
+test('stopping a loop, splitting or trimming its start keeps every note it played', () => {
+  const { doc, clipId, makeId } = riff();
+  const looping = loopEnd(doc, clipId, 3840).doc;
+  const stopped = setClipLooping(looping, clipId, false, makeId).doc.clips[clipId];
+  assert.equal(stopped.loopLength, undefined);
+  assert.deepEqual(played(stopped), [0, 1920, 3840, 5760]);
+  assert.equal(new Set(stopped.notes.map((n) => n.id)).size, 4);
+
+  const split = splitClip(looping, clipId, 3840 + 4800, makeId);
+  assert.ok(split.ok);
+  assert.deepEqual(played(split.doc.clips[split.leftId]), [0, 1920, 3840]);
+  assert.deepEqual(played(split.doc.clips[split.rightId]), [960]);
+
+  const trimmed = trimStart(looping, clipId, 1920).doc.clips[clipId];
+  assert.deepEqual(played(trimmed), [0, 1920, 3840]);
+  assert.equal(trimmed.loopLength, undefined);
 });

@@ -30,6 +30,8 @@ const EDITOR_KEYS = [
       ['Shift+F10, Menu', 'Open the clip menu'],
       ['F2', 'Rename the focused track or clip'],
       ['Delete', 'Delete the selected clips'],
+      ['Double-click an empty lane', 'Add a MIDI clip, or an audio file on an audio track'],
+      ['Drag the top of a MIDI clip end', 'Loop the clip; the lower part lengthens it'],
     ],
   },
   {

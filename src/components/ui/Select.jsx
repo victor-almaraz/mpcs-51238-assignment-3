@@ -5,6 +5,7 @@ import { cx, fieldLabel, fieldLabelStacked, focusRing } from '@/design-systems/i
  * or of groups { group, options } rendered as <optgroup>.
  * onChange receives the string value. `className` goes on the row, other props
  * on the <select>. `layout`: inline (label beside, default) or stacked (label above).
+ * `labelHidden` keeps the label for assistive technology only.
  */
 export default function Select({
   id,
@@ -13,6 +14,7 @@ export default function Select({
   onChange,
   options,
   layout = 'inline',
+  labelHidden = false,
   labelClassName,
   className,
   ref,
@@ -21,7 +23,7 @@ export default function Select({
   const stacked = layout === 'stacked';
   return (
     <div className={cx('flex min-w-0', stacked ? 'flex-col gap-1' : 'items-center gap-2', className)}>
-      <label htmlFor={id} className={cx(stacked ? fieldLabelStacked : fieldLabel, labelClassName)}>
+      <label htmlFor={id} className={labelHidden ? 'sr-only' : cx(stacked ? fieldLabelStacked : fieldLabel, labelClassName)}>
         {label}
       </label>
       <select

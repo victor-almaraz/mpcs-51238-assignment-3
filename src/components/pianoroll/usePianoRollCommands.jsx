@@ -5,6 +5,7 @@ import { getEngine } from '@/lib/audio/engine-client';
 import {
   addNote, createClip, deleteNote, moveNote, noteAt, quantize, resizeNote, setLoopLength, setNoteSpan, setVelocity,
 } from '@/lib/project/midi-commands';
+import { setClipLooping } from '@/lib/project/clip-commands';
 import { noteText } from './layout';
 
 /**
@@ -103,14 +104,22 @@ export default function usePianoRollCommands({
       commit(deleteNote(docRef.current, clip.id, noteId), `Removed ${describe(note)}`);
     },
 
-    /** Moves a note by `dTick` ticks and `dPitch` semitones; previews a transposed note. Returns the moved note. */
-    move(noteId, dTick, dPitch) {
+    /**
+     * Moves a note by `dTick` ticks and `dPitch` semitones; previews a transposed note
+     * unless `sounds` is false (a pointer drag auditions each pitch as it passes). Returns the moved note.
+     */
+    move(noteId, dTick, dPitch, { sounds = true } = {}) {
       const clip = currentClip();
       if (readOnly || !clip) return null;
       const result = moveNote(docRef.current, clip.id, noteId, dTick, dPitch);
       if (!commit(result, result.ok ? `Moved to ${describe(result.note)}` : undefined)) return null;
-      if (dPitch !== 0) sound(result.note);
+      if (dPitch !== 0 && sounds) sound(result.note);
       return result.note;
+    },
+
+    /** Plays `note` with preview on, without editing (a drag reaching a new pitch). */
+    audition(note) {
+      sound(note);
     },
 
     resize(noteId, dTicks) {
@@ -155,11 +164,12 @@ export default function usePianoRollCommands({
       commit(quantize(docRef.current, clip.id, grid), `Quantized ${clip.notes.length} notes to the grid`);
     },
 
-    /** Sets the clip's loop length in ticks, or turns looping off with null. */
+    /** Sets the clip's loop length in ticks, or with null ends the loop, keeping its repeats as notes. */
     setLoop(ticks) {
       const clip = currentClip();
       if (readOnly || !clip) return;
-      commit(setLoopLength(docRef.current, clip.id, ticks), ticks ? 'Clip loop on' : 'Clip loop off');
+      const result = ticks ? setLoopLength(docRef.current, clip.id, ticks) : setClipLooping(docRef.current, clip.id, false);
+      commit(result, ticks ? 'Clip loop on' : 'Clip loop off; repeats kept as notes');
     },
 
     /** Selecting a note previews and names it. */

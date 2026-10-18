@@ -3,6 +3,7 @@
  * No storage or browser access; IDs take their randomness from an injectable source.
  */
 import { PPQ } from '../../dsp/core/constants.js';
+import { DENOMINATORS, NUMERATOR_MAX } from '../../dsp/timing/meter-map.js';
 
 /** Version of the project JSON written by this build. */
 export const SCHEMA_VERSION = 1;
@@ -15,14 +16,23 @@ export const TEMPO_MIN = 40;
 export const TEMPO_MAX = 240;
 export const DEFAULT_TEMPO = 120;
 
-/** Time signatures offered for new projects. `value` is the form value. */
-export const TIME_SIGNATURES = [
-  { value: '2/4', numerator: 2, denominator: 4 },
-  { value: '3/4', numerator: 3, denominator: 4 },
-  { value: '4/4', numerator: 4, denominator: 4 },
-  { value: '6/8', numerator: 6, denominator: 8 },
-];
+/**
+ * Time signatures are "n/d": 1 to BEATS_PER_BAR_MAX beats per bar over a note value
+ * in NOTE_VALUES (whole note 1 to thirty-second note 32), the engine's meter limits.
+ */
+export const BEATS_PER_BAR_MAX = NUMERATOR_MAX;
+export const NOTE_VALUES = DENOMINATORS;
 export const DEFAULT_TIME_SIGNATURE = '4/4';
+
+/** "7/8" → { numerator: 7, denominator: 8 }; null for anything outside the limits above. */
+export function parseTimeSignature(value) {
+  const m = /^(\d+)\/(\d+)$/.exec(String(value ?? ''));
+  if (!m) return null;
+  const numerator = Number(m[1]);
+  const denominator = Number(m[2]);
+  if (numerator < 1 || numerator > BEATS_PER_BAR_MAX || !NOTE_VALUES.includes(denominator)) return null;
+  return { numerator, denominator };
+}
 
 /** Master volume default, in dB (assignment-3-scope.md, Mixer). */
 export const MASTER_GAIN_DB = -12;
@@ -86,10 +96,10 @@ export function createDevice({ id, type, params = {} }) {
 
 /**
  * Returns an empty document shell with a master bus.
- * `now` is an ISO 8601 timestamp; `tempo` in BPM; `timeSignature` a TIME_SIGNATURES value.
+ * `now` is an ISO 8601 timestamp; `tempo` in BPM; `timeSignature` an "n/d" value (parseTimeSignature).
  */
 export function createDocument({ id, name, tempo, timeSignature, now, masterTrackId, masterDevices = [] }) {
-  const sig = TIME_SIGNATURES.find((s) => s.value === timeSignature);
+  const sig = parseTimeSignature(timeSignature);
   if (!sig) throw new Error(`Unknown time signature: ${timeSignature}`);
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -180,9 +190,9 @@ export function setTempo(doc, bpm) {
   return { ...doc, tempo: [{ ...doc.tempo[0], bpm }, ...doc.tempo.slice(1)] };
 }
 
-/** Returns `doc` with time signature `value` (a TIME_SIGNATURES value) from bar 1. */
+/** Returns `doc` with time signature `value` ("n/d", parseTimeSignature) from bar 1. */
 export function setTimeSignature(doc, value) {
-  const sig = TIME_SIGNATURES.find((s) => s.value === value);
+  const sig = parseTimeSignature(value);
   if (!sig) throw new Error(`Unknown time signature: ${value}`);
   return { ...doc, meter: [{ tick: 0, numerator: sig.numerator, denominator: sig.denominator }] };
 }

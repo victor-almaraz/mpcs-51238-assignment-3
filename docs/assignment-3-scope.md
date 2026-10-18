@@ -98,7 +98,7 @@ One column; every field has a visible label.
 |---|---|---|---|
 | Name | Text input | 1–60 characters after trimming; prefilled "Untitled project N", where N is the lowest unused number | "Enter a project name." / "Use 60 characters or fewer." |
 | Tempo | Number input | Integer 40–240; default 120 | "Enter a tempo between 40 and 240." |
-| Time signature | Select: 2/4, 3/4, 4/4, 6/8 | Default 4/4 | — |
+| Time signature | Two selects: beats per bar (1–32) over a note value (1, 2, 4, 8, 16 or 32) | Default 4/4 | — |
 
 - Validation runs on submit and on blur of an edited field.
 - Each error appears below its field, linked with `aria-describedby`, and the field gets `aria-invalid="true"`. On submit, focus moves to the first invalid field.

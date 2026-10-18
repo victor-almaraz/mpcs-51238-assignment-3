@@ -7,6 +7,7 @@
  */
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { INSTRUMENT_LABELS, createId, createDevice, createTrack } from './model.js';
+import { expandClipNotes } from './midi-commands.js';
 
 export const MAX_TRACKS = 16;
 /** Shortest audio clip after a trim, in frames (project limit). */
@@ -397,8 +398,8 @@ export function deleteClip(doc, clipId) {
  */
 export function splitClip(doc, clipId, tick, makeId = createId) {
   requireInt(tick, 'tick');
-  const clip = getClip(doc, clipId);
-  if (!clip) return fail('missing', 'No such clip.');
+  if (!getClip(doc, clipId)) return fail('missing', 'No such clip.');
+  const clip = unrollLoop(getClip(doc, clipId), makeId);
   if (tick <= clip.start || tick >= clipEndTick(doc, clip)) return fail('invalid', 'The split point is outside the clip.');
   const rightId = makeId('clp');
   let left;
@@ -487,8 +488,8 @@ function joinEnvelopes(a, b, makeId) {
 export function joinClips(doc, aId, bId, makeId = createId) {
   const blocker = joinBlocker(doc, aId, bId);
   if (blocker) return fail('invalid', blocker);
-  const a = doc.clips[aId];
-  const b = doc.clips[bId];
+  const a = unrollLoop(doc.clips[aId], makeId);
+  const b = unrollLoop(doc.clips[bId], makeId);
   const joined =
     a.kind === 'audio'
       ? {
@@ -505,7 +506,8 @@ export function joinClips(doc, aId, bId, makeId = createId) {
 /**
  * Trims an audio clip's start by `deltaFrames` (positive shortens): srcStart
  * += Δ, srcLength −= Δ, start = tickAt(frameAt(start) + Δ); srcStart ≥ 0 and
- * srcLength ≥ 64 hold. MIDI clips trim by `deltaFrames` read as ticks.
+ * srcLength ≥ 64 hold. MIDI clips trim by `deltaFrames` read as ticks, with
+ * any loop written out first (unrollLoop).
  */
 export function trimStart(doc, clipId, delta) {
   requireInt(delta, 'delta');
@@ -513,13 +515,14 @@ export function trimStart(doc, clipId, delta) {
   if (!clip) return fail('missing', 'No such clip.');
   if (clip.kind === 'midi') {
     const d = clamp(delta, -clip.start, clip.length - 1);
+    const flat = unrollLoop(clip);
     return {
       ok: true,
       doc: setClip(doc, {
-        ...clip,
+        ...flat,
         start: clip.start + d,
         length: clip.length - d,
-        notes: clip.notes.filter((n) => n.tick - d >= 0).map((n) => ({ ...n, tick: n.tick - d })),
+        notes: flat.notes.filter((n) => n.tick - d >= 0).map((n) => ({ ...n, tick: n.tick - d })),
       }),
     };
   }
@@ -537,6 +540,40 @@ export function trimStart(doc, clipId, delta) {
       envelope: shiftEnvelope(envelopeWindow(clip.envelope, d, clip.sourceLength), d),
     }),
   };
+}
+
+/**
+ * `clip` with a MIDI loop written out: the notes it plays (expandClipNotes) with
+ * new IDs, and no loopLength. Other clips come back unchanged. Edits that cut
+ * into a loop (split, start trims, joins, Stop looping) start from this.
+ */
+export function unrollLoop(clip, makeId = createId) {
+  if (clip.kind !== 'midi' || !clip.loopLength) return clip;
+  const { loopLength: _loop, ...rest } = clip;
+  if (clip.loopLength >= clip.length) return rest;
+  return { ...rest, notes: expandClipNotes(clip).map((n) => ({ ...n, id: makeId('nte') })) };
+}
+
+/** True when MIDI clip `clip` repeats its first loopLength ticks to fill its length. */
+export function isLooping(clip) {
+  return clip.kind === 'midi' && clip.loopLength > 0;
+}
+
+/**
+ * Turns looping on for MIDI clip `clipId` (its current length repeats when it is
+ * lengthened) or off (the repeats become notes, so the clip sounds the same).
+ */
+export function setClipLooping(doc, clipId, on, makeId = createId) {
+  const clip = getClip(doc, clipId);
+  if (!clip || clip.kind !== 'midi') return fail('missing', 'No MIDI clip.');
+  if (on) return { ok: true, doc: isLooping(clip) ? doc : setClip(doc, { ...clip, loopLength: clip.length }) };
+  return { ok: true, doc: setClip(doc, unrollLoop(clip, makeId)) };
+}
+
+/** Lengthens or shortens MIDI clip `clipId` by `delta` ticks as a loop: looping turns on first, at its current length. */
+export function loopEnd(doc, clipId, delta) {
+  const looped = setClipLooping(doc, clipId, true);
+  return looped.ok ? trimEnd(looped.doc, clipId, delta) : looped;
 }
 
 /** Trims an audio clip's end to `sourceLength + delta` frames within [64, sourceFrames − srcStart]; MIDI clips by ticks. */

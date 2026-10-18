@@ -101,11 +101,15 @@ Each header shows the track colour, position and name, the kind ("Subtractive sy
 ### Clip editing by pointer
 - Click selects a clip; Shift+click selects the range from the first selected clip on the same track; Ctrl or Cmd+click toggles a clip. Dragging empty space draws a marquee; a click there clears the selection and moves the edit cursor.
 - Dragging a clip moves the selection, across tracks of the same kind; dragging within 6 px of an edge trims it. Moves and trims snap while snap is on; Alt bypasses snap.
+- The top half of a MIDI clip's right edge is its loop handle (the repeat cursor): dragging it turns looping on at the clip's current length and lengthens the clip with repeats. The lower half lengthens it with empty time. Each repeat after the first starts at a notch in the clip's top band, and the clip row's name adds "loops every 4 bars". `Loop clip` and `Stop looping clip` in the clip menu, the `Edit` menu and the command palette do the same for the keyboard; with looping on, the end trim keys lengthen the loop.
+- Stop looping, Split, a start trim and Join write a loop's repeats out as notes first, so the clip sounds the same. The piano roll's Clip loop Off does the same.
+- Double-clicking empty lane space adds a clip at the snapped tick: on an instrument track, an empty MIDI clip one bar long (or up to the next clip), selected and open in the piano roll; on an audio track, the file picker, whose files import there. Audio files dropped on the lanes import at the drop point, on that audio track or a new one.
 - A selected audio clip at least 72 px wide shows fade-in, fade-out and gain handles, each with a 24 px hit target; the gain drag shows its dB value. Double-click on a selected audio clip adds an envelope point; double-click on a point removes it; points drag.
-- The clip menu opens by right-click on a clip, or Shift+F10 or the ContextMenu key on a focused clip row. A clip outside the selection becomes the selection first. Items act on the selection and count it: "Split 3 clips at edit cursor", "Join clips", "Duplicate 3 clips", "Mute 3 clips", "Rename clip…", "Delete 3 clips". Split and Join state why they will not work.
+- The clip menu opens by right-click on a clip, or Shift+F10 or the ContextMenu key on a focused clip row. A clip outside the selection becomes the selection first. Items act on the selection and count it: "Split 3 clips at edit cursor", "Join clips", "Duplicate 3 clips", "Mute 3 clips", "Loop clip" (MIDI), "Rename clip…", "Delete 3 clips". Split and Join state why they will not work.
+- Selecting a MIDI clip opens it in the piano roll, which names the clip it edits ("Track 1, bar 5 to bar 9"). A duplicate is a separate clip: the copy is selected after Duplicate, and edits to it leave the original as it was.
 
 ### Tracks
-- `Add` creates an instrument track of the chosen type with a four-bar MIDI clip, opens it in the piano roll and focuses its first cell; or an audio track; or imports audio files at the edit cursor onto the selected audio track or a new one.
+- `Add` offers `MIDI clip on <track> at edit cursor` (the selected instrument track, else the first; also "Add MIDI clip at edit cursor" in the command palette), then creates an instrument track of the chosen type with a four-bar MIDI clip, opens it in the piano roll and focuses its first cell; or an audio track; or imports audio files at the edit cursor onto the selected audio track or a new one.
 - Rename: the `Rename` dialog (track or clip name, validated with the error under the field) opens from F2 on a focused row, a double-click on a track header, or the `Edit` menu.
 - Delete track: Delete on a focused track row, the `Edit` menu or the command palette. A track with clips asks first ("Delete Bass?", initial focus on `Cancel`). Undo restores the track, its clips and its devices. Focus moves to the next track, or to the empty timeline's `Add instrument track`.
 - Arm for live input: the arm button or R on a focused instrument track row (`midi.md`, Live input routing).
@@ -120,7 +124,7 @@ The piano roll (`src/components/pianoroll/PianoRollGrid.jsx`) is a canvas (`Pian
 |---|---|
 | Rows | Pitches 127 to 0, top to bottom; on drum machine tracks the 21 mapped General MIDI notes, low to high, or 0–127 with `Show all notes` |
 | Cells | One grid step wide and 24 px tall. The time scale is fixed: a 1/16 step is 24 px at zoom 1×, so a grid change never resizes notes |
-| Toolbar | Grid (1/4, 1/8, 1/16, 1/32; default 1/16), Piano roll zoom out and zoom in (0.5×, 1×, 2×, 4×; a grid whose cells would be narrower than 24 px is disabled until a zoom in), Clip loop (Off, 1, 2 or 4 bars), Step input, Preview notes, Quantize (`Q`), and `Show all notes` on drum tracks |
+| Toolbar | Grid (1/4, 1/8, 1/16, 1/32 and the triplets 1/4T, 1/8T, 1/16T, 1/32T; default 1/16), Piano roll zoom out and zoom in (0.5×, 1×, 2×, 4×; a grid whose cells would be narrower than 24 px is disabled until a zoom in), Clip loop (Off, 1, 2 or 4 bars), Step input, Preview notes, Quantize (`Q`), and `Show all notes` on drum tracks |
 | Notes | Drawn in the track colour; drum notes draw as fixed-width markers whose opacity follows velocity |
 | Empty clip | "Press a key or click the grid to add a note. Drag to draw a longer one." with the keyboard map; step input starts on |
 
@@ -130,6 +134,8 @@ The piano roll (`src/components/pianoroll/PianoRollGrid.jsx`) is a canvas (`Pian
 - A click on a note selects and previews it; a double-click removes it.
 - Drum notes keep their length under the pointer.
 - A row header previews its pitch, or auditions its drum voice.
+- A note dragged in pitch plays each new pitch with Preview notes on. Near or past an edge of the view (8 px), the grid scrolls with the drag, faster the further out the pointer is, and the note stays on the edge row or column, in view.
+- Positions off the beat read as the grid step ("bar 1 beat 1 step 2") when the grid divides the beat, else as the fraction of the beat ("bar 1 beat 2 and 1/3" on 1/4T); triplet lengths read as fractions ("length 1/3 beat").
 
 ### Keyboard
 Arrows move the cursor; Left from the first column reaches the row header. Enter adds or removes a note; Delete removes it; Alt+arrows move it; Shift+Left and Shift+Right change its length; Shift+Up and Shift+Down change its velocity by 8; `Q` quantizes the clip. With step input on, each computer-keyboard or MIDI note is added at the cursor, which advances one grid step.

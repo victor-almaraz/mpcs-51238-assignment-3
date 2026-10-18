@@ -23,12 +23,16 @@ export const cellWidth = (grid, zoom) => grid * TICK_W * zoom;
 export const ROW_H = 24;
 export const LABEL_W = 208;
 
-/** Grid choices, in ticks. */
+/** Grid choices, in ticks: straight values and triplets (T, three in the time of two). */
 export const GRIDS = [
   { value: PPQ, label: '1/4' },
+  { value: (PPQ * 2) / 3, label: '1/4T' },
   { value: PPQ / 2, label: '1/8' },
+  { value: PPQ / 3, label: '1/8T' },
   { value: PPQ / 4, label: '1/16' },
+  { value: PPQ / 6, label: '1/16T' },
   { value: PPQ / 8, label: '1/32' },
+  { value: PPQ / 12, label: '1/32T' },
 ];
 export const DEFAULT_GRID = PPQ / 4;
 
@@ -59,19 +63,52 @@ export function inChokeGroup(pitch) {
 const isBlackKey = (pitch) => [1, 3, 6, 8, 10].includes(pitch % 12);
 export { isBlackKey };
 
-/** "bar 2 beat 1" for tick `t` in `meter` (MeterMap), with "step n" for positions between beats. */
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+
+/**
+ * `ticks` in beats of `beatTicks`: a decimal ("0.25", "1.5") when it ends within three
+ * places, else a fraction ("1/3", "1 2/3"), as triplet values give.
+ */
+export function beatsText(ticks, beatTicks) {
+  const g = gcd(ticks, beatTicks);
+  const num = ticks / g;
+  const den = beatTicks / g;
+  if (1000 % den === 0) return String(num / den);
+  const whole = Math.floor(num / den);
+  return `${whole ? `${whole} ` : ''}${num % den}/${den}`;
+}
+
+/** Where tick `inBeat` lies in a beat of `beatTicks`: the grid step when the grid divides the beat, else the fraction. */
+function inBeatText(inBeat, beatTicks, grid) {
+  return beatTicks % grid === 0 ? { step: Math.floor(inBeat / grid) + 1 } : { fraction: beatsText(inBeat, beatTicks) };
+}
+
+/**
+ * "bar 2 beat 1" for tick `t` in `meter` (MeterMap); between beats, "step n" on a grid
+ * that divides the beat, else the fraction of the beat ("bar 1 beat 1 and 2/3" on 1/4T).
+ */
 export function positionText(t, meter, grid) {
   const bar = meter.barAt(t) + 1;
   const beat = meter.beatAt(t) + 1;
   const inBeat = meter.tickInBeat(t);
   if (inBeat === 0) return `bar ${bar} beat ${beat}`;
-  return `bar ${bar} beat ${beat} step ${Math.floor(inBeat / grid) + 1}`;
+  const { step, fraction } = inBeatText(inBeat, meter.beatTicksAt(t), grid);
+  return `bar ${bar} beat ${beat} ${step ? `step ${step}` : `and ${fraction}`}`;
 }
 
-/** "length 1 beat", "length 0.5 beats". */
+/** "bar 2.3", or off the beat "bar 2.3.2" (the grid step) or "bar 2.3+1/3" (the fraction of the beat). */
+export function barBeatText(t, meter, grid) {
+  const at = `bar ${meter.barAt(t) + 1}.${meter.beatAt(t) + 1}`;
+  const inBeat = meter.tickInBeat(t);
+  if (inBeat === 0) return at;
+  const { step, fraction } = inBeatText(inBeat, meter.beatTicksAt(t), grid);
+  return step ? `${at}.${step}` : `${at}+${fraction}`;
+}
+
+/** "length 1 beat", "length 0.5 beats", "length 1/3 beat". */
 export function lengthText(ticks, meter, at) {
-  const beats = Math.round((ticks / meter.beatTicksAt(at)) * 1000) / 1000;
-  return `length ${beats} ${beats === 1 ? 'beat' : 'beats'}`;
+  const beats = beatsText(ticks, meter.beatTicksAt(at));
+  return `length ${beats} ${beats === '1' || /^\d+\/\d+$/.test(beats) ? 'beat' : 'beats'}`;
 }
 
 /** Accessible note name: "C4, bar 2 beat 1, length 1 beat, velocity 100". */

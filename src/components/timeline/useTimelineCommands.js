@@ -9,7 +9,9 @@ import {
   duplicateClip,
   joinBlocker,
   joinClips,
+  loopEnd,
   moveClip,
+  setClipLooping,
   splitClip,
   trimEnd,
   trimStart,
@@ -110,6 +112,27 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     if (clips.length === 0) return;
     const c = doc.clips[clips[0].id];
     commit(doc, `${c.name}: ${barText(c.start, meter)} to ${barText(clipEndTick(doc, c), meter)}`);
+  }
+
+  /** Lengthens the selected MIDI clips by `dTick` ticks as loops, turning looping on at their current length. */
+  function repeat(dTick) {
+    if (readOnly) return;
+    let doc = docRef.current;
+    const clips = selectedClips(doc).filter((c) => c.kind === 'midi');
+    for (const clip of clips) doc = loopEnd(doc, clip.id, dTick).doc;
+    if (clips.length === 0) return;
+    const c = doc.clips[clips[0].id];
+    commit(doc, `${c.name}: loops to ${barText(clipEndTick(doc, c), meter)}`);
+  }
+
+  /** Turns looping on or off for the selected MIDI clips. */
+  function setLooping(on) {
+    if (readOnly) return;
+    let doc = docRef.current;
+    const clips = selectedClips(doc).filter((c) => c.kind === 'midi');
+    for (const clip of clips) doc = setClipLooping(doc, clip.id, on).doc;
+    if (clips.length === 0) return;
+    commit(doc, `${clips.length === 1 ? clips[0].name : `${clips.length} clips`} ${on ? 'looping' : 'no longer looping; repeats kept as notes'}`);
   }
 
   /** Splits the selected clips (or the clips under the cursor on `trackId`) at the edit cursor. */
@@ -216,5 +239,5 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     commit({ ...doc, trackOrder: order }, `${doc.tracks[trackId].name} moved to position ${to + 1}`);
   }
 
-  return { docRef, commit, clipEnd, snapStep, moveTrack, move, moveToRow, trim, split, join, joinPair, duplicate, remove };
+  return { docRef, commit, clipEnd, snapStep, moveTrack, move, moveToRow, trim, repeat, setLooping, split, join, joinPair, duplicate, remove };
 }

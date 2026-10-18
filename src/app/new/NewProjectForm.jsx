@@ -4,15 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Field from '@/components/ui/Field';
-import Select from '@/components/ui/Select';
+import TimeSignatureSelect from '@/components/transport/TimeSignatureSelect';
 import useHydrated from '@/components/ui/useHydrated';
 import { errorText } from '@/design-systems/industrial/classes';
-import { DEFAULT_TEMPO, DEFAULT_TIME_SIGNATURE, TIME_SIGNATURES, nextUntitledName } from '@/lib/project/model';
+import { DEFAULT_TEMPO, DEFAULT_TIME_SIGNATURE, nextUntitledName } from '@/lib/project/model';
 import { createProject, getIndexSnapshot, listProjects, subscribeProjects } from '@/lib/project/store';
 import { validateProjectName, validateNewProject, validateTempo } from '@/lib/project/validate';
 
 const VALIDATORS = { name: validateProjectName, tempo: validateTempo };
-const SIGNATURE_OPTIONS = TIME_SIGNATURES.map((s) => ({ value: s.value, label: s.value }));
 
 /**
  * New project form (assignment-3-scope.md, New project form). Validates on
@@ -110,15 +109,7 @@ export default function NewProjectForm() {
         onBlur={handleBlur}
         error={errors.tempo}
       />
-      <Select
-        id="project-time-signature"
-        name="timeSignature"
-        label="Time signature"
-        layout="stacked"
-        value={timeSignature}
-        onChange={setTimeSignature}
-        options={SIGNATURE_OPTIONS}
-      />
+      <TimeSignatureSelect id="project-time-signature" layout="stacked" value={timeSignature} onChange={setTimeSignature} />
       {submitError ? (
         <p role="alert" className={errorText}>
           <span aria-hidden="true">▲</span>

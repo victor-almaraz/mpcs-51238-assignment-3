@@ -92,12 +92,15 @@ export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, gr
         ctx.fillRect(0, (r + 1) * ROW_H - sy - 0.5, w, 0.5);
       }
       const length = p.clip ? p.clip.length : 0;
-      for (let t = 0; t <= length; t += p.grid) {
+      // Grid steps, then beats and bars over them: a triplet grid does not land on every beat.
+      const line = (t, width) => {
         const x = t * tickW - sx;
-        if (x < -1 || x > w + 1) continue;
+        if (x < -1 || x > w + 1) return;
         ctx.fillStyle = t % p.barTicks === 0 ? colors.bar : colors.line;
-        ctx.fillRect(x, 0, t % p.beatTicks === 0 ? 1 : 0.5, h);
-      }
+        ctx.fillRect(x, 0, width, h);
+      };
+      for (let t = 0; t <= length; t += p.grid) if (t % p.beatTicks !== 0) line(t, 0.5);
+      for (let t = 0; t <= length; t += p.beatTicks) line(t, 1);
       if (p.clip) {
         const rowOf = new Map(p.rows.map((pitch, i) => [pitch, i]));
         for (const n of p.clip.notes) {

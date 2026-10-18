@@ -128,7 +128,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Solution:** Three fields: Name (prefilled "Untitled project N"), Tempo (default 120), Time signature (default 4/4). No sample rate or bit depth. Primary button `Create project`.
 - **Prior art:** Logic Pro hides tempo, key and time signature behind a Details disclosure and defaults to 120 bpm. Studio One's New Song dialog asks sample rate, bit depth, tempo and time signature.
 - **W-Rack application:** `/new` → `/projects/[id]`. Field rules are in `assignment-3-scope.md`.
-- **Accessibility:** Visible `<label>`s; tempo uses `inputmode="numeric"`; time signature is a native `<select>`.
+- **Accessibility:** Visible `<label>`s; tempo uses `inputmode="numeric"`; time signature is a group of two native `<select>`s, beats per bar and note value.
 - **Anti-patterns:** Required technical settings; an empty required name.
 
 ### `NEW-02` Inline validation that keeps input

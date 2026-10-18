@@ -46,12 +46,21 @@ export function sourceStatus(sourceId, getSource, loading) {
   return loading.has(sourceId) ? 'Loading audio…' : 'Audio not loaded';
 }
 
-/** "Clip: Verse riff, bar 5 to bar 9", plus the storage status for audio clips and "muted". */
+/** "Clip: Verse riff, bar 5 to bar 9", plus "loops every 1 bar" on looping clips, "muted", and the storage status of audio clips. */
 export function clipText(doc, clip, meter, status) {
   const parts = [`Clip: ${clip.name}, ${barText(clip.start, meter)} to ${barText(clipEndTick(doc, clip), meter)}`];
+  if (clip.kind === 'midi' && clip.loopLength > 0 && clip.loopLength < clip.length) parts.push(`loops every ${spanText(clip.loopLength, meter, clip.start)}`);
   if (clip.muted) parts.push('muted');
   if (clip.kind === 'audio') parts.push(status);
   return parts.join(', ');
+}
+
+/** A duration in bars when it is whole bars ("1 bar", "2 bars"), else in beats ("3 beats", "1.5 beats"). */
+export function spanText(ticks, meter, at) {
+  const bar = meter.barTicksAt(at);
+  if (ticks % bar === 0) return ticks === bar ? '1 bar' : `${ticks / bar} bars`;
+  const beats = Math.round((ticks / meter.beatTicksAt(at)) * 1000) / 1000;
+  return beats === 1 ? '1 beat' : `${beats} beats`;
 }
 
 /** Clips of `track` in time order. */

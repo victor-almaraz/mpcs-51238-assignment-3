@@ -13,7 +13,9 @@ async function form(page) {
   return {
     name,
     tempo: page.getByRole('textbox', { name: 'Tempo (BPM)' }),
-    signature: page.getByRole('combobox', { name: 'Time signature' }),
+    signature: page.getByRole('group', { name: 'Time signature' }),
+    beats: page.getByRole('combobox', { name: 'Beats per bar' }),
+    note: page.getByRole('combobox', { name: 'Note value' }),
     submit: page.getByRole('button', { name: 'Create project' }),
   };
 }
@@ -27,11 +29,14 @@ async function expectError(page, field, message) {
   await expect(field).toHaveAttribute('aria-describedby', new RegExp(`\\b${errorId}\\b`));
 }
 
-test('defaults: prefilled name, tempo 120, 4/4', async ({ page }) => {
+test('defaults: prefilled name, tempo 120, 4/4; any 1–32 beats over a whole to a thirty-second note', async ({ page }) => {
   const f = await form(page);
   await expect(f.tempo).toHaveValue('120');
-  await expect(f.signature).toHaveValue('4/4');
-  await expect(f.signature.locator('option')).toHaveText(['2/4', '3/4', '4/4', '6/8']);
+  await expect(f.signature).toBeVisible();
+  await expect(f.beats).toHaveValue('4');
+  await expect(f.note).toHaveValue('4');
+  await expect(f.beats.locator('option')).toHaveCount(32);
+  await expect(f.note.locator('option')).toHaveText(['1', '2', '4', '8', '16', '32']);
 });
 
 test('an empty name shows its error, keeps values and focuses the field', async ({ page }) => {
@@ -85,10 +90,10 @@ test('an edited field validates on blur; an untouched field does not', async ({ 
   await f.tempo.focus();
   await expect(f.name).not.toHaveAttribute('aria-invalid', 'true');
   await f.tempo.fill('300');
-  await f.signature.focus();
+  await f.beats.focus();
   await expectError(page, f.tempo, TEMPO_INVALID);
   await f.tempo.fill('100');
-  await f.signature.focus();
+  await f.beats.focus();
   await expect(page.getByText(TEMPO_INVALID)).toHaveCount(0);
   await expect(f.tempo).not.toHaveAttribute('aria-invalid', 'true');
 });
@@ -97,11 +102,12 @@ test('a valid submit saves the project and opens it with one empty instrument tr
   const f = await form(page);
   await f.name.fill('  First song  ');
   await f.tempo.fill('96');
-  await f.signature.selectOption('3/4');
+  await f.beats.selectOption('7');
+  await f.note.selectOption('8');
   await f.submit.click();
   await expect(page).toHaveURL(/\/projects\/prj_[A-Za-z0-9_-]{21}$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('First song');
-  await expect(page.getByText('96 BPM · 3/4')).toBeVisible();
+  await expect(page.getByText('96 BPM · 7/8')).toBeVisible();
   const tracks = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]');
   await expect(tracks).toHaveCount(1);
   await expect(tracks.first()).toHaveAccessibleName(/^Track 1: Track 1, Subtractive synth/);
