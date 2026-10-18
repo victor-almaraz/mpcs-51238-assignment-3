@@ -1,9 +1,15 @@
 # Privacy and security
 
+This document describes the full design. In the Assignment 3 build, the Network policy applies as written (`assignment-3-scope.md`, Main documents). The other sections describe the full design; the build differs as follows:
+- The deployment sets one custom response header, `Cache-Control: no-cache` for `/worklets/:path*` (`vercel.json`). The headers in Response headers, including COOP and COEP, are not set.
+- The build uses no `SharedArrayBuffer` and does not require cross-origin isolation.
+- Local data: `localStorage` holds projects, working state, the project index, presets and settings; IndexedDB database `w-rack` holds original audio bytes. There is no OPFS, Cache Storage, service worker, cookie or `sessionStorage` use (`storage.md`, Assignment 3 build). Settings provide "Clear all data", which removes every `w-rack:` `localStorage` key and the `w-rack` IndexedDB database.
+- There are no plugins and no `pnpm scan` script. `blob:` URLs are created only by `src/lib/files/save-file.js`, for file downloads.
+
 ## Network policy
 - After the initial load, the app requests only same-origin assets.
 - No analytics, telemetry, crash or error reporting, fingerprinting or advertising.
-- No CDNs, external scripts or remote fonts. Fonts are self-hosted in `public/fonts/`.
+- No CDNs, external scripts or remote fonts. Fonts are self-hosted: the font files live in `src/design-systems/industrial/fonts/` and load through `next/font/local`, which serves them from the app's own origin.
 - Plugins load from same-origin installed copies only (ADR-8).
 - Host analytics products are disabled. The host's request logs are outside app control and contain only static-asset requests.
 

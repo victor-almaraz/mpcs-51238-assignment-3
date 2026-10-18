@@ -9,21 +9,25 @@ This checklist records how W-Rack is checked against WCAG 2.2 AA and the Labelin
 | axe-core in dialog states | Volume notice, File menu, Export, Save preset with an error, Rename preset, Rename project, Clear all data, Delete project, Keyboard shortcuts, collapsed panels (`tests/e2e/a11y.spec.js`, `project-list.spec.js`, `workspace.spec.js`) | No violations |
 | Unique role and name per landmark | Every route and the editor; radios are scoped to their group (`tests/e2e/a11y.spec.js`, `duplicateNames`) | No duplicates |
 | Primary controls queryable by role and name | Home, transport, Panic, the File, Add and Edit menus and their items, clip commands, timeline treegrid, master volume, master effects (`tests/e2e/a11y.spec.js`) | All found |
-| axe-core per route, panels and features | `routes.spec.js`, `audio.spec.js`, `pianoroll.spec.js`, `velocity.spec.js`, `effects.spec.js`, `audio-import.spec.js`, `persistence.spec.js`, `new-project.spec.js`, `home.spec.js`, `workspace.spec.js`, `smoke.spec.js` | No violations |
+| axe-core per route, panels and features | `routes.spec.js`, `home.spec.js`, `new-project.spec.js`, `persistence.spec.js`, `project-list.spec.js`, `audio.spec.js`, `audio-import.spec.js`, `editor-tools.spec.js`, `effects.spec.js`, `loop.spec.js`, `pianoroll.spec.js`, `velocity.spec.js`, `workspace.spec.js`, `smoke.spec.js` | No violations |
 
 ## Contrast
 Values come from the industrial tokens (`src/design-systems/industrial/tokens.css`).
 
 | Pair | Ratio | Requirement |
 |---|---|---|
-| Text on background, surface | 13.6:1, 16.5:1 | 4.5:1 |
+| Text on background, surface, active surface | 13.6:1, 16.5:1, 11.4:1 | 4.5:1 |
 | Muted text on background, hover and active surfaces | 5.7:1, 5.4:1, 4.8:1 | 4.5:1 |
-| Control boundaries (`border-strong`) on background and surface | 3.6:1, 4.4:1 | 3:1 |
+| Control boundaries (`border-strong`) on background, surface and hover surface | 3.6:1, 4.4:1, 3.5:1 | 3:1 |
 | Focus ring on background and surface | 4.8:1, 5.9:1 | 3:1 |
-| Primary button text on signal orange | 5.6:1 | 4.5:1 |
+| Primary button text (ink) on signal orange, on its hover colour | 5.6:1, 7.2:1 | 4.5:1 |
 | Panic text on red | 5.8:1 | 4.5:1 |
+| Panic boundary (1 px ink edge) on background | 12.4:1 | 3:1 |
+| Danger, warning and success text on their backgrounds | 5.2:1, 5.3:1, 5.7:1 | 4.5:1 |
 | Lit lamp on a pressed control, in a readout window | 9.7:1, 10.3:1 | 3:1 |
-| Track colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) on the lanes | 3.6:1 or more | 3:1 |
+| Track colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) on the lanes | 3.5:1 or more | 3:1 |
+
+The `border` token (1.6:1) is a divider only and never a control boundary. The primary button is outlined in ink, since signal orange alone has low contrast on the background.
 
 Status never depends on color alone: pressed toggles expose `aria-pressed` and a lamp, bypassed effects show "Bypassed", and clip storage states are words.
 
@@ -46,21 +50,23 @@ Status never depends on color alone: pressed toggles expose `aria-pressed` and a
 | Notes | Piano roll grid: arrows, Enter, Delete, Alt+arrows, Shift+arrows, Q | `pianoroll.spec.js` |
 | Velocity | Velocity lane slider on the selected note: arrows, Page Up/Down, Home/End; Shift+Left/Right pick another note | `velocity.spec.js` |
 | Loop range | "Loop start" and "Loop end" handles in the ruler: arrows (grid steps), Page Up/Down (bars), Home/End | `loop.spec.js` |
-| Tracks | Track rows in the treegrid: M and S mute and solo; Delete deletes the track, after a confirmation when it has clips | `workspace.spec.js` |
-| Audio clips | Timeline treegrid: arrows, Shift+arrows, Mod+E, Mod+J, Mod+D, Delete, Alt+arrows, comma and period | `audio-import.spec.js` |
-| Global shortcuts | L loop, C metronome, N snap, + and − grid, Mod+S, Mod+O, Mod+Shift+E, Mod+, (design-patterns.md, Keyboard shortcuts); none acts in text fields; no shortcut uses a note letter (A W S E D F T G Y H U J K, Z, X) | `workspace.spec.js` |
+| Tracks | Track rows in the treegrid: M and S mute and solo; R arms an instrument track for live input; F2 renames the track; Delete deletes it, after a confirmation when it has clips | `workspace.spec.js`, `ux-fixes.spec.js` |
+| Audio clips | Timeline treegrid: arrows, Shift+arrows, Space and Enter select, Enter on a selected clip opens its properties, Mod+A, Mod+E, Mod+J, Mod+D, Delete, Alt+arrows, comma and period (Shift for bars), F2 renames | `audio-import.spec.js`, `ux-fixes.spec.js` |
+| Global shortcuts | L loop, C metronome, N snap, + and − grid, ?, Mod+E, Mod+J, Mod+D, Mod+S, Mod+O, Mod+Shift+E, Mod+, (design-patterns.md, Keyboard shortcuts); single-key shortcuts do not act in text fields, menus or lists, or while a dialog is open; no page-wide letter shortcut uses a note letter (A W S E D F T G Y H U J K, Z, X) | `workspace.spec.js` |
+| Undo and redo | Mod+Z, Mod+Shift+Z or Mod+Y, and the Edit menu; edits within 600 ms form one step; a focused text field keeps its own undo | `ux-fixes.spec.js` |
+| Zoom | Alt+= and Alt+− outside text fields; the Zoom in and Zoom out buttons | `editor-tools.spec.js` (palette) |
 | Sampler | Marker sliders (1 ms, 1 frame, 100 ms, Home/End, Z), root-note spin button | `audio-import.spec.js` |
 | Presets | Preset combobox: type to filter, Up/Down move without applying, Enter applies; Preview auditions the highlighted preset; Save preset dialog by keyboard; rename and delete in Settings | `a11y.spec.js`, `presets.spec.js` |
 | Effects | Add, bypass, move and remove by icon buttons; knobs by arrows, Page Up/Down, Home/End and Delete | `effects.spec.js` |
 | Device parameters | Knobs (visually hidden range inputs): arrows, Page Up/Down, Home/End, Delete resets, Enter opens the value field | `audio.spec.js`, `presets.spec.js` |
-| Mixer | Vertical faders and pan knobs by arrows and Page Up/Down; M and S buttons named "Mute Bass" and "Solo Bass" | `audio.spec.js` |
+| Mixer | Vertical faders and pan knobs by arrows and Page Up/Down, Delete resets; M and S buttons named "Mute Bass" and "Solo Bass" | `audio.spec.js`, `workspace.spec.js` |
 | Save and open `.wrack` | Buttons; the native file picker | `archive.spec.js` |
 | Export | Export dialog fields and Export WAV; Cancel during the render; focus moves to Download when the file is ready | `export.spec.js` |
 | Projects | Rename, Duplicate and Delete on `/projects`, each named with the project | `project-list.spec.js`, `persistence.spec.js` |
 | Commands | Ctrl+K or Ctrl+Shift+P (Cmd on macOS), or the header's Commands button; type to filter, Up/Down, Enter | `editor-tools.spec.js` |
 | Shortcut overlay | `?` or the header's Keyboard shortcuts button opens "Keyboard shortcuts"; Escape closes it and returns focus | `workspace.spec.js` |
 | Menus | File, Add and Edit menu buttons (WAI-ARIA APG menu button): Enter, Space or Down opens on the first item, Up on the last; Up/Down and Home/End move; Escape or Tab closes and returns focus to the button | `a11y.spec.js`, `workspace.spec.js` |
-| Panels | The Panels button (`aria-expanded`) collapses the dock to its tabs and expands it; a click on the open tab collapses it, on another tab expands it; the state is saved with the working state | `workspace.spec.js` |
+| Panels | Editor, Devices and Mixer tabs: Left/Right and Home/End move between tabs and open them; the Panels button (`aria-expanded`) collapses the dock to its tabs and expands it; a click on the open tab collapses it, on another tab expands it; the "Resize the panels" separator takes Up/Down and Home/End; the tab and collapse state are saved with the working state | `workspace.spec.js` |
 | Clip menu | ContextMenu key or Shift+F10 on a clip row; Up/Down, Enter, Escape returns focus to the row | `editor-tools.spec.js` |
 
 Firefox reserves Ctrl+Shift+P for a private window; Ctrl+K and the Commands button open the palette there. WebKit on macOS moves Tab focus only between form controls unless Alt is held or "Press Tab to highlight each item" is on; the tests use Alt+Tab there.

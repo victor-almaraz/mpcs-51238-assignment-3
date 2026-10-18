@@ -2,6 +2,8 @@
 
 This document describes the full archive design. The `.wrack` files this build writes and reads follow the STORE-only subset in `assignment-3-scope.md` (`.wrack` archive): `project.json` and `audio/<sourceId>.<ext>`, no compression, manifest or ZIP64, and the limits listed there.
 
+In this build, `project.json` is the project document exactly as stored in `localStorage` (`project-model.md`), and `audio/<sourceId>.<ext>` holds the original bytes of each source the document references, at the path in its `SourceRef`. The archive carries no working state (playhead, loop range and loop on/off, zoom, scroll, selection, open panel, dock, snap, armed tracks), no settings and no presets (`storage.md`, Assignment 3 build). Opening checks that each audio entry's SHA-256 equals its `sourceId`.
+
 ## Archive layout (`.wrack`)
 ```
 manifest.json               # { "format": "w-rack.archive", "version": 1, "createdBy": "...", "projectFile": "project.json" }

@@ -264,7 +264,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     setTimeout(() => document.querySelector('[role="grid"][aria-label="Notes"] [tabindex="0"]')?.focus(), 50);
   }
 
-  /** Deletes track `trackId`; one with clips asks first, since deletion cannot be undone. */
+  /** Deletes track `trackId`; one with clips asks first, since its clips and devices go with it (Undo restores them). */
   function deleteTrack(trackId, confirmed = false) {
     const track = commands.docRef.current.tracks[trackId];
     if (!track) return;
@@ -910,7 +910,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         }
       >
         <p>
-          The track, its {project.tracks[doomedTrackId]?.clipIds.length === 1 ? 'clip' : `${project.tracks[doomedTrackId]?.clipIds.length ?? 0} clips`} and its devices are removed. This cannot be undone.
+          The track, its {project.tracks[doomedTrackId]?.clipIds.length === 1 ? 'clip' : `${project.tracks[doomedTrackId]?.clipIds.length ?? 0} clips`} and its devices are removed. Undo (Ctrl/Cmd+Z) restores them.
         </p>
       </Dialog>
       <Dialog

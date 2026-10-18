@@ -1,10 +1,10 @@
 /*
  * Amplitude envelopes for a bank of voices, struct-of-arrays
- * (a3-audio-implementation.md, Shared rules): linear attack to 1, sustain at 1,
- * exponential release to −80 dB over the release time with
+ * (a3-audio-implementation.md, Shared rules): linear attack to 1, then
+ * (EnvelopeBank) a hold at 1, or (AdsrBank) a decay toward a sustain level shared
+ * by every voice; exponential release to −80 dB over the release time with
  * r = 10^(−4/(release·fs)) computed at note-off; the voice frees below 1e-4.
- * A stolen voice fades out linearly over STEAL_FADE_FRAMES. AdsrBank adds a
- * decay toward a sustain level shared by every voice.
+ * A stolen voice fades out linearly over STEAL_FADE_FRAMES.
  */
 import { STEAL_FADE_FRAMES } from '../core/constants.js';
 

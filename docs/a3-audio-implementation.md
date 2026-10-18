@@ -24,7 +24,7 @@ AudioWorkletNode "wrack-engine" (EngineProcessor: 0 inputs, 1 output, 2 channels
   → destination
 ```
 - One worklet module, `/worklets/worklet/main.js`, registers both processors.
-- `EngineProcessor` contains the sequencer, the five instrument kernels, the clip player, per-track effect chains, the mixer, master effects, master volume and the metronome.
+- `EngineProcessor` contains the sequencer, the seven instrument kernels, the clip player, per-track effect chains, the mixer, master effects, master volume and the metronome.
 - `SafetyProcessor` contains the non-finite guard, DC blocker, sustained-level duck, start and resume fades and the look-ahead limiter. It is always the last node.
 - The only native nodes are the two worklet nodes and `destination`. Instruments and effects never use native nodes.
 - The engine declares no `AudioParam`s. Parameters arrive as messages and are smoothed inside kernels.
@@ -34,15 +34,15 @@ Every kernel class provides:
 
 | Method | Behaviour |
 |---|---|
-| `constructor(fs, limits)` | Allocates every buffer. Sizes derive from `fs` and limits. |
+| `constructor(fs)` | Allocates every buffer. Sizes derive from `fs` and project limits. Instrument kernels also receive the engine's shared global voice budget: `constructor(fs, global)`. |
 | `reset()` | Zeroes all state. |
 | `setParam(id, value)` | Clamps through `ParamDef` and sets the smoother target. |
-| `process(bufL, bufR, start, end)` | Processes frames `[start, end)` in place or additively, as documented per kernel. |
+| `process(bufL, bufR, start, end)` | Processes frames `[start, end)` in place or additively, as documented per kernel. Instrument kernels instead provide `noteOn`, `noteOff`, `releaseSequenced`, `allNotesOff` and `render` (`instruments.md`, Kernel interface). |
 
 - Hot state is struct-of-arrays: `Float32Array` and `Float64Array` fields indexed by voice or grain. Arrays of objects are not used in hot paths.
 - `EngineProcessor` is a thin wrapper around `Engine` (`src/dsp/engine/engine.js`), which is itself a kernel. Node tests run `Engine` directly.
 - The engine reuses kernels by device ID across models. A kernel created for a model snaps its smoothers to the model's parameter values, so the first sound starts at those values.
-- Instrument kernels render mono, except the drum machine, which renders stereo for its per-voice pan.
+- Instrument kernels render mono, except the drum machine (per-voice pan) and the sampler (pan and stereo sources), which render stereo.
 
 ### Node splitting
 The design uses one engine node. Browsers render all AudioWorklet nodes of a context on one audio thread, so splitting adds graph overhead without parallelism. A split is justified only by a measured profile that shows one quantum over budget.
@@ -52,19 +52,19 @@ The design uses one engine node. Browsers render all AudioWorklet nodes of a con
 src/dsp/                     environment-independent JavaScript modules
   core/        constants.js params.js smoother.js prng.js tables.js math.js ring.js interp.js halfband.js
   timing/      tempo-map.js meter-map.js
-  engine/      engine.js model.js sequencer.js metronome.js live-input.js reporter.js
-  instruments/ voice-pool.js envelope.js polyblep.js subtractive.js fm.js additive.js pluck.js granular.js
-               drums.js drum-map.js drum-voices/{kick,snare,sidestick,clap,metal,tom,cowbell,claves}.js sampler.js sampler-zones.js
+  engine/      engine.js model.js sequencer.js metronome.js live-input.js
+  instruments/ registry.js voice-pool.js envelope.js poly-kernel.js polyblep.js subtractive.js fm.js additive.js pluck.js granular.js
+               drums.js drum-map.js drum-voices/{shared,kick,snare,sidestick,clap,metal,tom,cowbell,claves}.js sampler.js sampler-zones.js
   clips/       clip-player.js fades.js gain-envelope.js
-  effects/     biquad.js svf.js eq3.js filter.js compressor.js saturation.js delay.js reverb.js chain.js
+  effects/     registry.js biquad.js svf.js eq3.js filter.js compressor.js saturation.js distortion.js delay.js reverb.js chain.js
   mixer/       mixer.js pan.js meter.js
   safety/      safety.js limiter.js dc-blocker.js guard.js duck.js fade.js
   protocol.js                message types and validators shared by main thread and worklet
 src/worklet/main.js          registerProcessor('wrack-engine'), registerProcessor('wrack-safety')
 src/workers/peaks.js         waveform peak and sampler mip-level worker (module worker)
-src/lib/audio/               engine-client.js compile-model.js decode.js peaks-client.js midi-input.js keyboard-input.js
+src/lib/audio/               engine-client.js compile-model.js param-changes.js decode.js peaks-client.js source-cleanup.js midi-input.js keyboard-input.js
 src/lib/export/              render-offline.js wav-writer.js dither.js
-src/lib/archive/             crc32.js zip-writer.js zip-reader.js validate.js
+src/lib/archive/             archive.js crc32.js zip-writer.js zip-reader.js paths.js validate.js
 scripts/copy-worklets.mjs    copies src/dsp, src/worklet, src/workers into public/worklets/
 tests/dsp/*.test.js          node:test suites importing src/dsp directly
 tests/e2e/*.spec.js          Playwright suites
@@ -119,16 +119,16 @@ export function ensureModule(ctx) {
 ### Main to engine
 | `t` | Payload | Rule |
 |---|---|---|
-| `init` | `fs`, `seed`, `limits` | Once, after node creation |
+| `init` | `seed` (the project seed, 1) | Once, after node creation |
 | `model` | `rev`, EngineModel (typed arrays) | Full snapshot on structural edits; at most one per animation frame |
 | `params` | `rev`, `Float64Array` of triples `[target, paramId, value]` | At most one per animation frame; one message per slider event is not allowed. `target` is a model track index, or −1 for the master. `paramId` 0–3 are gain (dB), pan, mute and solo; 100 + i is parameter i of the track instrument's ParamDefs; 1000 + 100·s + k is parameter k of insert slot s, and 1000 + 100·s + 99 is that slot's bypass (tracks and the master). The main thread sends `params` instead of `model` when an edit changes only these values |
 | `transport` | `op` (`play`, `stop`, `locate`, `loop`), `frame`, `loopStart`, `loopEnd`, `loopOn` | Applied at the next quantum boundary |
-| `live` | `Uint8Array` of `[status, data1, data2]` triples | Keyboard and Web MIDI notes; applied at offset 0 of the next quantum |
+| `live` | `track` (model track index), `events` (`Uint8Array` of `[status, data1, data2]` triples) | Keyboard and Web MIDI notes and note previews; applied at offset 0 of the next quantum |
 | `source-add` | `sourceId`, `channels` (array of `Float32Array`) | Transfer list: each channel's `buffer` |
 | `source-remove` | `sourceId` | References released at the next quantum |
 | `source-mips` | `sourceId`, `levels` (array of `{ level, channels }`) | Transfer list: each channel's `buffer` |
 | `sampler-zones` | `deviceId`, `selection` (0), `zones` (at most one `{ sourceId, sourceName }`; empty unbinds) | No sample data; sent whole on change. Markers and the other zone settings are instrument params |
-| `panic` | — | Every voice, drum instance, preview and audition fades over 5 ms (project limit), effect state clears at once and again when the fades end, transport stops |
+| `panic` | — | Every voice, drum instance, preview and audition fades over 64 frames (project limit), the metronome click stops, effect state clears at once and again when the fades end, transport stops |
 | `metronome` | `on`, `gainDb` | — |
 | `master` | `volumeDb` | Clamped to the master volume ParamDef (−60 to 0 dB, default −12) and smoothed |
 
@@ -168,7 +168,7 @@ export function ensureModule(ctx) {
 6. `process()` returns `true` in both processors.
 7. Every parameter passes through `ParamDef { min, max, default, scale, smoothMs }`. `clampParam` runs on both threads.
 8. Smoothing is one-pole: `y += a·(x − y)`, `a = 1 − exp(−1/(τ·fs))`, `τ = 12 ms` (project limit, inside the required 10–15 ms). `a` is computed once.
-9. Randomness comes only from `mulberry32(seed)`. Seeds are `hash32(projectSeed, trackIndex, eventIndex)`.
+9. Randomness comes only from `mulberry32(seed)`. Each instrument kernel's seed is `hash32(projectSeed, trackIndex, 0)`; a note seeds its PRNG with `hash32(kernelSeed, eventIndex, salt)`, where `eventIndex` is the note's index in the track's expanded note list and `salt` is fixed per instrument.
 10. No kernel reads wall-clock time. State depends only on samples processed and messages applied.
 
 ```js
@@ -210,7 +210,7 @@ process(outputs):
   return true
 
 renderBlock(off, n):
-  if playing and loopOn and playFrame + n > loopEnd:
+  if playing and loopOn and playFrame < loopEnd and playFrame + n >= loopEnd:
     a = loopEnd − playFrame
     renderSpan(off, a)
     releaseSequencerVoices(off + a); playFrame = loopStart; reseekCursors()
@@ -221,17 +221,21 @@ renderBlock(off, n):
 `renderSpan` collects events whose start or end frame lies in the span into a preallocated queue, sorted by offset, then note-off before note-on, then pitch. Instruments render from event to event.
 
 ### Loop wrap and locate
+- A wrap happens only on a pass that reaches `loopEnd` from before it. Playback that starts at or after `loopEnd`, or passes it while the loop is off, continues without wrapping. The main thread's position estimate applies the same rule.
 - At a wrap, every voice the sequencer started receives note-off at the wrap offset. Live-input voices continue.
 - `reseekCursors()` binary-searches each track's notes for the first `startFrame ≥ loopStart`. Locate does the same at the target frame.
 - Clip playback is a pure function of `playFrame` and needs no wrap state.
+- A model swap keeps the engine's `playFrame`. When an edit during playback changes the frame of the playing tick (a tempo edit), the main thread sends `locate` to that tick's frame under the new tempo map right after the `model` message, so playback continues from the same tick. Position reports from before the locate are ignored until one lies within 0.5 s of the expected position, or 1 s has passed.
+- Transport `stop` serves both Pause and Stop. The main thread keeps the play start (the tick where playback last started from a stop): Pause keeps the playhead in place, and Stop locates to the play start (`transport-and-timing.md`, Transport).
 
 ### Metronome
 - Clicks occur at each beat frame: 1500 Hz sine on the downbeat, 1000 Hz on other beats, 30 ms exponential decay, −12 dB relative to master (project limits).
 - The click mixes after the master chain and before master volume, so it passes through the safety stage. Export excludes it.
 
 ### Live input
-- Computer keyboard: `KeyA`–`KeyK` map to C–C of the current octave; `KeyZ`/`KeyX` change the octave within 1–7 (project limit). Keys are ignored while focus is in a text field.
+- Computer keyboard: `KeyA`–`KeyK` map to C–C of the current octave; `KeyZ`/`KeyX` change the base octave within 0–7, where octave `o` starts at MIDI note `12·(o + 1)` (octave 4 = C4 = 60; project limit). The octave is a saved setting. Keys are ignored while focus is in a text field.
 - Web MIDI and keyboard notes travel as `live` messages and apply at offset 0 of the next quantum. Latency is message delay + one quantum + `baseLatency` + `outputLatency`.
+- Live notes play on every instrument track armed for live input (working state `armedTrackIds`), or on the selected instrument track when none is armed. Note previews always play on the selected instrument track, on MIDI channel 16, and never during playback. A track that stops receiving live input gets all-notes-off.
 - Flood limit: a token bucket of 200 note-ons/s on the main thread, re-checked in the engine. Excess note-ons are dropped and counted; note-offs always pass.
 
 ## Clip playback
@@ -273,7 +277,7 @@ renderBlock(off, n):
 | Voice caps | 16 per instrument, 64 global |
 | Stealing | The released voice with the lowest envelope; otherwise the oldest voice. A stolen voice fades over 64 frames (project limit). |
 | Polyphony auto-gain | `min(1, 2/√activeVoices)`, smoothed |
-| Envelope | Linear attack to 1; sustain 1; exponential release to −80 dB over the release time, `r = 10^(−4/(release·fs))` computed at note-off; voice frees below 1e-4 |
+| Envelope | Linear attack to 1; decay toward the sustain level, `e = S + (e − S)·d`, `d = 10^(−4/(decay·fs))`, then hold at sustain (instruments without decay and sustain parameters hold at 1); exponential release to −80 dB over the release time, `r = 10^(−4/(release·fs))` computed at note-off; a voice frees below 1e-4, and also during decay when sustain is 0 |
 
 ### Subtractive
 - Waveforms:
@@ -321,7 +325,7 @@ renderBlock(off, n):
 - Grain pool: 64 grains as struct-of-arrays (`pos`, `inc`, `age`, `len`, `amp`, `active`); 4 voices.
 - Scheduling per voice: a countdown per sample; at zero a free grain starts and the countdown resets to `round(fs/density)`.
   - Length `size·fs`, size 0.01–0.25 s; density 2–60 grains/s.
-  - Increment `f/261.63` (noise: 1), times `2^(u·pitchSpread/1200)` with `u` uniform in [−1, 1] while pitch spread is on; reads use linear interpolation.
+  - Increment `f/261.63` (noise: 1), times `2^(u·pitchSpread/1200)` with `u` uniform in [−1, 1] while pitch spread is on and the source is not noise; reads use linear interpolation.
   - Start `position·(L − c) + spray·(rand − 0.5)·L`, clamped to `[0, L − c]`, where `c = len·inc` is the frames the grain covers; spray 0–1.
   - With no free grain, the start is skipped and counted.
 - Grain amplitude: velocity gain × `1/√(density·size)`, clamped to ≤ 1 (project limit).
@@ -363,7 +367,7 @@ Tune offsets are project limits.
 - Sine: 4097-entry table with linear interpolation.
 - Exponential decay: `e *= g`, `g = 10^(−3/(T60·fs))`, computed at note-on.
 - Pitch envelope: `p *= gp`, `gp = exp(−1/(τp·fs))`, computed at note-on; `inc = inc0·(1 + A·p)`.
-- Noise: one `mulberry32` per instance, seeded at note-on with `hash32(projectSeed, trackIndex, eventIndex)`.
+- Noise: one `mulberry32` per instance, seeded at note-on with `hash32(kernelSeed, eventIndex, 2)` (rule 9).
 - Filters: TPT SVF (Filter) with coefficients computed at note-on.
 - Squares: PolyBLEP, 50% duty, as in Subtractive. Naive squares are not used: their folded harmonics fall in the 3–12 kHz band the hat filters pass.
 - Tune, decay and tone latch at note-on. Level and pan are smoothed per voice.
@@ -656,13 +660,15 @@ Session rules:
 - Peaks: module worker `/worklets/workers/peaks.js`, created with `new Worker(url, { type: 'module' })` from a plain string. It receives transferred channel copies and returns min/max pairs: level 0 at 256 frames per bucket, each level 4× coarser, up to at least 65 536 frames (project limit). Peaks are cached in memory by `sourceId`.
 
 ## UI timing and drawing
-- Timeline, piano roll and waveforms draw on Canvas 2D in a `requestAnimationFrame` loop that reads refs. React renders structure and the accessible mirror only.
-- The playhead is positioned with `style.transform` in the rAF loop; it is never React state:
+- Timeline, piano roll and waveforms draw on Canvas 2D from a `requestAnimationFrame` loop that reads refs. A canvas repaints only when what it shows changes (document, view, scroll, size or play state), and otherwise at most every 250 ms, so waveform peaks that arrive later appear. React renders structure and the accessible mirror only.
+- The playhead is a separate element positioned with `style.transform` in the rAF loop, so playback repaints no canvas; it is never React state:
   ```
   ts = ctx.getOutputTimestamp()
   audible = ts.contextTime·fs + (performance.now() − ts.performanceTime)/1000·fs
-  playhead = last.playFrame + (audible − last.ctxFrame)   // wrapped into the loop when loopOn
+  playhead = last.playFrame + (audible − last.ctxFrame)   // wrapped into the loop by the wrap rule when loopOn
   ```
+- Where `getOutputTimestamp()` is unavailable or reports `contextTime` 0, `audible = (currentTime − baseLatency − outputLatency)·fs`.
+- Meters move their bars and peak-hold marks with `style.transform` only, so they cause no layout.
 - Only visible clips and notes are drawn; ranges come from binary search on sorted starts.
 - Canvases scale by `devicePixelRatio` and redraw on `ResizeObserver`.
 - Canvas views have a DOM mirror (`treegrid` for tracks and clips, `grid` for notes) with roving `tabindex` (`accessibility.md`). Pointer and keyboard edits call the same command functions.

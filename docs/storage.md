@@ -1,5 +1,51 @@
 # Storage
 
+This document describes the full storage design: OPFS, journals, linked folders and multi-tab locking. The Assignment 3 build implements none of these; it stores data as described in Assignment 3 build, and `assignment-3-scope.md` (Persistence, Audio persistence) takes precedence for it.
+
+## Assignment 3 build
+### Stores
+| Data | Store | Location |
+|---|---|---|
+| Project document | `localStorage` | `w-rack:v1:project:<id>` |
+| Working state of one project | `localStorage` | `w-rack:v1:view:<id>` |
+| Project summaries | `localStorage` | `w-rack:v1:index` |
+| Preset library | `localStorage` | `w-rack:v1:presets` |
+| Saved settings | `localStorage` | `w-rack:v1:settings` |
+| Original bytes of imported audio | IndexedDB | database `w-rack`, store `sources` |
+
+- Only `src/lib/storage/storage.js` touches `localStorage`, and only `src/lib/storage/audio-store.js` touches IndexedDB.
+- Project and working-state saves are separate debounced writes, each 500 ms after the last change and flushed on `pagehide` (project limit). A view change never rewrites the project document.
+- Deleting a project removes its project document, working state and index entry.
+
+### Project document and working state
+The project document (`project-model.md`) holds the music and its settings: name, tempo, meter, tracks with names, colours, mixer settings and devices, clips and notes, source metadata and `audioRate`. It is the content of `project.json` in a `.wrack` archive, and editor edits to it are undoable (`project-model.md`, Commands and undo).
+
+The working state holds how the editor shows the project. It is never archived, never part of undo history, and never includes the transport: a project always opens stopped. Master volume, keyboard octave and metronome on/off are saved settings, not part of either.
+
+### Working-state fields
+`normalizeView` in `src/lib/project/view-state.js` reads the stored value. A stored value that is not an object yields the defaults. Each field that is missing, outside its accepted values, or refers to a track or clip absent from the document takes its default; the other fields keep their stored values.
+
+| Field | Accepted values | Default |
+|---|---|---|
+| `playhead` | Integer tick ≥ 0 | `0` |
+| `loop` | `null`, or `{ start, end }` with integer ticks ≥ 0 and `end > start` | The document's `loop`, else `null` |
+| `loopEnabled` | `true` only while `loop` is not `null`; any other value reads as `false` | `false` |
+| `zoom` | Number from 0.25 to 8 (1 = 100 %; the UI steps by factors of 2) | `1` |
+| `scrollX`, `scrollY` | Finite number ≥ 0, in CSS pixels | `0` |
+| `selectedTrackId` | ID of a track in the document | `null` |
+| `selectedClipIds` | Array; IDs of clips absent from the document are dropped | `[]` |
+| `openPanel` | `'pianoroll'` or `'clip'` | `null` |
+| `panelClipId` | ID of a clip in the document; read only when `openPanel` is valid | `null` |
+| `dock` | `'editor'`, `'devices'` or `'mixer'` | `'editor'` |
+| `dockCollapsed` | Boolean | `false` |
+| `snap` | `'bar'`, `'1'`, `'0.5'` or `'0.25'` (quarter notes) | `'1'` |
+| `snapOn` | Boolean | `true` |
+| `armedTrackIds` | Array; IDs that are not instrument tracks in the document are dropped | `[]` |
+
+- With `loop` `null`, the editor uses the first four bars as the loop range until a range is set.
+- Unreadable stored working state falls back to the defaults and is replaced on the next view change.
+- A `.wrack` file imported as a new project opens with the default working state. "Replace project" keeps the stored working state, normalized against the replacement document.
+
 ## OPFS layout
 ```
 /projects/<projectId>/project.json

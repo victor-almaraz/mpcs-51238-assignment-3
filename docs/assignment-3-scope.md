@@ -74,7 +74,7 @@ Home is the first screen on every visit. It never shows an empty workspace.
 ## Examples
 | Example | Content |
 |---|---|
-| Beat | Drum machine (GM notes 36, 38, 42, 46, 49), Subtractive bass, FM lead stab; compressor on the drums, saturation on the bass |
+| Beat | Drum machine (GM notes 36, 38, 42, 46, 49), Subtractive bass, FM lead stab; compressor on the drums, saturation on the bass, distortion on the lead stab |
 | Ambient | Granular texture, Additive pad; filter and reverb on the texture, delay on the pad |
 | Pluck melody | Pluck lead with delay, Subtractive bass, EQ on the master |
 
@@ -285,7 +285,7 @@ The safety stage is the last processor, live and offline (`audio-safety.md`).
 | MIDI flood limit | 200 note-ons/s |
 
 ## Export
-- "Export" opens a dialog with range (whole project or loop), format and tail (0–10 s, default 2 s).
+- "Export WAV…" in the File menu opens a dialog with range (whole project or loop), format and tail (0–10 s, default 2 s).
 - Formats: WAV 16-bit with TPDF dither (default), 24-bit (`WAVE_FORMAT_EXTENSIBLE`), 32-bit float (format 3 with a `fact` chunk).
 - Rendering uses an `OfflineAudioContext` running the same worklet graph, safety stage included. Project data and audio sources pass through `processorOptions`.
 - Export length is at most 10 minutes plus tail; longer ranges show "Export ranges are limited to 10 minutes."
@@ -297,7 +297,7 @@ The safety stage is the last processor, live and offline (`audio-safety.md`).
 - Format: STORE-only ZIP with CRC-32. Contents: `project.json` and `audio/<sourceId>.<ext>` holding original file bytes.
 - Assembly: in memory as `Blob` parts; at most 500 MB (project limit). Larger saves show "This project is too large to save as one file."
 - Save: `showSaveFilePicker` in Chromium; `<a download>` elsewhere.
-- An indicator next to Save shows "Not saved to file" while loaded audio or edits are newer than the last archive save. `beforeunload` prompts while loaded audio is newer than the last archive save.
+- An indicator next to the File menu shows "Not saved to file" while loaded audio or edits are newer than the last archive save. `beforeunload` prompts while an edit is not yet saved on the device, or while session-only audio (not stored on the device) is missing from the last archive save.
 - Open:
 
 | Archive project ID | Action |
@@ -388,8 +388,10 @@ Steps 1–6 meet the flow, form and return requirements before audio work starts
 | `project-model.md`, `project-file-format.md` | Apply to data shapes and validation; storage is `localStorage` and the archive is STORE-only |
 | `export.md` | WAV header sections apply |
 | `architecture-decisions.md` ADR-1, ADR-3, ADR-5, ADR-8 to ADR-12 | Overridden by this document |
-| `storage.md`, `audio-streaming.md`, `recording.md`, `plugins-wam.md`, `osc-web-serial.md` | Do not apply |
-| `core-and-scaffolding.md`, `repo-structure.md` | Do not apply; layout is in `a3-audio-implementation.md` |
+| `storage.md` | Assignment 3 build section applies; the rest does not |
+| `audio-streaming.md`, `recording.md`, `plugins-wam.md`, `osc-web-serial.md` | Do not apply |
+| `repo-structure.md` | Applies; describes the source layout |
+| `core-and-scaffolding.md` | Does not apply |
 | `privacy-and-security.md` | Network policy applies; COOP and COEP headers do not |
 
 ## Sources

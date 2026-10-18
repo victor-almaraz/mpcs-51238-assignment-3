@@ -45,7 +45,7 @@ test('an empty timeline offers its next steps; Add instrument track opens a four
   await row.focus();
   await page.keyboard.press('Delete');
   const confirm = page.getByRole('dialog', { name: /^Delete .+\?$/ });
-  await expect(confirm).toContainText('This cannot be undone.');
+  await expect(confirm).toContainText('Undo (Ctrl/Cmd+Z) restores them.');
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(confirm).toBeHidden();

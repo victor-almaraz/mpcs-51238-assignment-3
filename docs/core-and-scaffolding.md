@@ -1,5 +1,7 @@
 # Core and scaffolding
 
+This document defines the core/scaffolding split of the full design. It does not apply to the Assignment 3 build (`assignment-3-scope.md`, Build rules): coding agents write all code under user direction, the code is JavaScript, and none of the paths, seams or stubs below exist. The build's layout is in `repo-structure.md` and `a3-audio-implementation.md` (File layout).
+
 ## Definitions
 - **Core:** modules the developer writes by hand. Agents do not implement core logic.
 - **Scaffolding:** modules coding agents generate.

@@ -1,9 +1,10 @@
 # Audio safety
 
 ## Position
-- `SafetyProcessor` is the last processor before `destination` in real time, in `OfflineAudioContext` renders, and as the last kernel in export-worker renders.
+- `SafetyProcessor` is the last processor before `destination` in real time and in `OfflineAudioContext` export renders.
 - Plugins cannot follow or bypass it.
-- Stage order: non-finite guard, DC blocker, master gain, sustained-level guard, limiter, output fades.
+- Master volume and master pan apply in `EngineProcessor`, after the master chain and the metronome click.
+- Stage order inside `SafetyProcessor`: non-finite guard, DC blocker, sustained-level duck, limiter, output fade, final clamp to the ceiling (`a3-audio-implementation.md`, Stage order).
 
 ## Audio path
 - Every sound renders in the engine and reaches `destination` only through `SafetyProcessor`: instruments, audio clips, the metronome, note previews, auditions and editor previews.
@@ -17,7 +18,7 @@
 | Limiter ceiling | −1 dBFS sample peak (0.8913) (project limit) |
 | Limiter look-ahead | 1.5 ms (project limit) |
 | Attack | Moving-minimum gain over the look-ahead window, smoothed by a boxcar of the same length |
-| Release | 100 ms (project limit) |
+| Release | One-pole, time constant 50 ms (project limit) |
 | Non-finite trigger | NaN, ±Infinity, or \|x\| > 1e4 |
 | Non-finite response | Mute 250 ms, reset state, fade in over 50 ms, reset affected kernels (project limits) |
 | DC blocker | One-pole high-pass, ≈10 Hz corner (project limit) |
@@ -25,19 +26,19 @@
 | Master gain | Default −12 dB; maximum 0 dB (project limits) |
 | Start, resume and suspend fades | 50 ms (project limit) |
 | Parameter smoothing | One-pole, τ 10–15 ms, for gain and filter parameters (project limit) |
-| Voices | 16 per instrument, 64 global; oldest released voice stolen first, then oldest held (project limits) |
+| Voices | 16 per instrument, 64 global; the quietest released voice is stolen first, then the oldest held voice; a stolen voice fades over 64 frames (project limits) |
 | Polyphony auto-gain | min(1, 2/√voices) (project limit) |
 | MIDI flood limit | 200 note-ons/s per input source; excess dropped and reported (project limit) |
 | Monitoring gain | Default −12 dB; maximum 0 dB (project limits) |
 
 ## Behaviour
 - No sound on page load. The `AudioContext` is created on the first user gesture that requests audio.
-- On the first engine start of each session, a notice asks the user to lower device volume.
+- On the first sound-producing action of each page session, a notice asks the user to lower device volume, unless the user dismissed it on this device (`assignment-3-scope.md`, Volume notice).
 - Project load ramps master from silence over 50 ms after the first rendered quantum.
 - Every parameter value passes through one `ParamDef` table and is clamped to its range before use.
-- Each track and device output is checked for non-finite samples. A failing track or device is muted on its own; the mix continues.
+- Each effect slot checks the energy of its output every block. A non-finite or excessive block (energy above 1e12) resets the slot's kernel and bypasses the slot on its own, and the mix continues. A block that is already non-finite when it enters a slot is silenced there. Any non-finite sample that reaches `SafetyProcessor` trips the non-finite guard.
 - The master meter shows the post-limiter signal. A limit indicator shows while gain reduction exceeds 0.5 dB. Indicators hold for 1 s and never flash.
-- Panic is a button, and `Escape` when no menu or dialog is open. It stops the transport, releases all voices, clears scheduled events, sends all-notes-off to plugins and ramps master to 0 in 20 ms (project limit).
+- Panic is a button, and `Escape` when no menu or dialog is open and focus is outside text fields. It stops the transport, fades every voice, drum instance, preview and audition over 64 frames, silences the metronome click, clears effect state, and restarts the safety stage's 50 ms fade-in from silence (project limits).
 - Monitoring feedback protection is specified in `recording.md`.
 
 ## Types

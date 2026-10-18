@@ -6,7 +6,7 @@ W-Rack is a digital audio workstation that runs in the browser. It combines MIDI
 
 The diagrams in this section are maintained in [`flows.md`](flows.md).
 
-Each flowchart describes one W-Rack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy from `docs/assignment-3-scope.md`.
+Each flowchart describes one W-Rack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy.
 
 ### First visit
 
@@ -46,7 +46,7 @@ flowchart TD
   cp_store --> cp_quota{"Write succeeded?"}
   cp_quota -->|"No: QuotaExceededError"| cp_full["“This device's browser storage is full. Save a .wrack file, then delete unused projects.”<br/>Keep the entered values"]
   cp_full --> cp_edit
-  cp_quota -->|"Yes"| cp_editor(["Editor (/projects/[id]) with one empty instrument track<br/>“Press a key or click the grid to add a note”<br/>“Add audio file” and the keyboard map"])
+  cp_quota -->|"Yes"| cp_editor(["Editor (/projects/[id]) with one empty instrument track<br/>Piano roll with step input on<br/>“Press a key or click the grid to add a note” and the keyboard map<br/>Add › “Audio file…” in the clip toolbar"])
 ```
 
 | Field | Rule | Error text |
@@ -63,19 +63,19 @@ A return visit is a visit with at least one saved project.
 flowchart TD
   rv_start(["Open W-Rack with at least one saved project"]) --> rv_home["Home (/)<br/>Recent, Create, Load, Examples"]
   rv_home -->|"“Continue” on a Recent project"| rv_route
-  rv_home -->|"Projects in the header"| rv_list["Projects (/projects)<br/>Saved projects with last-edited dates"]
+  rv_home -->|"Projects in the header"| rv_list["Projects (/projects)<br/>Saved projects with last-edited dates,<br/>tempo, time signature and track count"]
   rv_list -->|"Select a project"| rv_route["Open /projects/[id]"]
   rv_route --> rv_exists{"Project ID in w-rack:v1:index?"}
   rv_exists -->|"No"| rv_missing(["“Project not found”<br/>Links to Projects and New project"])
   rv_exists -->|"Yes"| rv_read{"Project JSON readable?"}
   rv_read -->|"No"| rv_bad(["“A saved project could not be read.”"])
-  rv_read -->|"Yes"| rv_view["Restore working state from w-rack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip<br/>Transport stopped"]
+  rv_read -->|"Yes"| rv_view["Restore working state from w-rack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip,<br/>dock tab and collapse, snap and grid, armed tracks<br/>Transport stopped"]
   rv_view --> rv_audio{"Project has audio clips or sampler zones?"}
   rv_audio -->|"No"| rv_ready(["Editor ready"])
   rv_audio -->|"Yes"| rv_decode["Load sources from IndexedDB and decode them"]
   rv_decode --> rv_all{"Every source available?"}
   rv_all -->|"Yes"| rv_ready
-  rv_all -->|"No"| rv_notloaded["Clips without a source show “Audio not loaded”<br/>Toolbar shows “Open .wrack file to restore audio”"]
+  rv_all -->|"No"| rv_notloaded["Clips without a source show “Audio not loaded”<br/>A banner below the transport shows “Open .wrack file to restore audio”"]
   rv_notloaded --> rv_ready
   rv_notloaded -.->|"“Open .wrack file to restore audio”"| rv_open[["Open a .wrack file"]]
 ```
@@ -106,7 +106,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  sp_start(["Select “Save preset” on an instrument or effect in the editor"]) --> sp_dialog["Save preset dialog<br/>Name field"]
+  sp_start(["Select “Save preset” on an instrument or effect in the Devices tab"]) --> sp_dialog["Save preset dialog<br/>Name field"]
   sp_dialog -->|"Escape"| sp_close(["Dialog closes; focus returns to “Save preset”"])
   sp_dialog -->|"Submit"| sp_valid{"Name valid?"}
   sp_valid -->|"No"| sp_err["Show the error below the field<br/>Keep the entered name<br/>Focus the field"]
@@ -129,7 +129,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ia_start(["Select “Add audio file” in the editor"]) --> ia_pick["Choose one or more files"]
+  ia_start(["Select Add › “Audio file…” in the clip toolbar,<br/>“Add audio file” in an empty timeline,<br/>or the “Add audio file…” command"]) --> ia_pick["Choose one or more files"]
   ia_pick --> ia_first{"First audio import on this device?"}
   ia_first -->|"Yes"| ia_persist["Request navigator.storage.persist()"]
   ia_first -->|"No"| ia_each
@@ -160,7 +160,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ex_start(["Select “Export” in the editor"]) --> ex_dialog["Export dialog<br/>Range: whole project or loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float<br/>Tail: 0–10 s, default 2 s"]
+  ex_start(["Select File › “Export WAV…” or press Ctrl/Cmd+Shift+E"]) --> ex_dialog["Export dialog<br/>Range: Whole project or Loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float;<br/>the last format chosen is kept in w-rack:v1:settings<br/>Tail: 0–10 s, default 2 s"]
   ex_dialog --> ex_missing{"Clips without loaded audio?"}
   ex_missing -->|"Yes"| ex_list["List the clips; they render as silence"]
   ex_missing -->|"No"| ex_go
@@ -168,20 +168,22 @@ flowchart TD
   ex_go --> ex_len{"Range within 10 minutes?"}
   ex_len -->|"No"| ex_lerr["“Export ranges are limited to 10 minutes.”"]
   ex_lerr --> ex_dialog
-  ex_len -->|"Yes"| ex_render["Disable the export control<br/>Render in an OfflineAudioContext with the same worklet graph and the safety stage"]
+  ex_len -->|"Yes"| ex_render["Stop the transport<br/>Render in an OfflineAudioContext with the same worklet graph and the safety stage<br/>Focus moves to Cancel"]
   ex_render --> ex_msgs{"Engine progress messages arriving?"}
-  ex_msgs -->|"Yes"| ex_det["Determinate progress"]
+  ex_msgs -->|"Yes"| ex_det["Determinate progress with percentage and elapsed time"]
   ex_msgs -->|"No"| ex_indet["Indeterminate progress"]
   ex_det --> ex_wav
   ex_indet --> ex_wav
-  ex_wav["Write the WAV file"] --> ex_done(["Download the WAV file<br/>Re-enable the export control"])
+  ex_render -->|"Cancel"| ex_cancel(["Discard the render; nothing downloads"])
+  ex_wav["Write the WAV file"] --> ex_ready["“Download (#lt;size#gt;)” receives focus<br/>Nothing downloads by itself"]
+  ex_ready -->|"Download"| ex_done(["Save the WAV file: save picker in Chromium, download elsewhere"])
 ```
 
 ### Save a .wrack file
 
 ```mermaid
 flowchart TD
-  sw_start(["Select “Save” in the editor"]) --> sw_size{"Archive within 500 MB?"}
+  sw_start(["Select File › “Save .wrack file” or press Ctrl/Cmd+S"]) --> sw_size{"Archive within 500 MB?"}
   sw_size -->|"No"| sw_big(["“This project is too large to save as one file.”"])
   sw_size -->|"Yes"| sw_build["Assemble project.json and audio/#lt;sourceId#gt;.#lt;ext#gt;<br/>as STORE-only ZIP Blob parts"]
   sw_build --> sw_fsa{"showSaveFilePicker available?"}
@@ -189,7 +191,7 @@ flowchart TD
   sw_fsa -->|"No"| sw_anchor["Download through #lt;a download#gt;"]
   sw_picker -->|"Cancel"| sw_cancel(["No file is written"])
   sw_picker -->|"Save"| sw_mark
-  sw_anchor --> sw_mark(["Record the archive-save date in w-rack:v1:index<br/>Clear “Not saved to file”"])
+  sw_anchor --> sw_mark(["Record the archive-save date in w-rack:v1:index<br/>The header shows “Saved to file”"])
 
   sw_leave(["Leave the page"]) --> sw_newer{"Loaded audio newer than the last archive save?"}
   sw_newer -->|"Yes"| sw_prompt(["beforeunload prompt"])
@@ -200,7 +202,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ow_start(["Select “Open .wrack file” on Home,<br/>or “Open .wrack file to restore audio” in the editor toolbar"]) --> ow_choose["Choose a .wrack file"]
+  ow_start(["Select “Open .wrack file” on Home, File › “Open .wrack file…” (Ctrl/Cmd+O),<br/>or “Open .wrack file to restore audio” in the editor's missing-audio banner"]) --> ow_choose["Choose a .wrack file"]
   ow_choose --> ow_valid{"Archive passes validation?"}
   ow_valid -->|"No"| ow_errs(["Import nothing<br/>List every validation error"])
   ow_valid -->|"Yes"| ow_match{"Archive project ID matches a saved project?"}
@@ -291,30 +293,49 @@ The full study, with sources and confidence labels, is in [`docs/onboarding-rese
 
 ## First-run check
 
-The main flow was run in Chromium, Firefox and WebKit with empty profiles against the production build: no sound before a user action, Home, an example played after the volume notice, a new project, a saved preset, a return visit with the working state restored, WAV export and a `.wrack` round trip. Every step passed, and the site made no third-party requests. The review as a brand-new and as a returning user led to these changes:
+The main flow was run in Chromium, Firefox and WebKit with empty profiles against the production build: no sound before a user action, Home, an example played after the volume notice, a new project, a saved preset, a return visit with the working state restored, WAV export and a `.wrack` round trip. Every step passed, and the site made no third-party requests. The review as a brand-new and as a returning user is addressed as follows:
 
 - An empty clip opens with Step input on, so pressing a key adds a note, as the empty-editor hint says.
-- The editor shows the transport, tracks, timeline and piano roll first; live input and view settings come last.
+- The editor fits one screen: the transport and the arrangement come first, and the dock below holds the Editor, Devices and Mixer tabs.
 - The timeline has a bar-number ruler and track names.
-- Save .wrack file and Load explain what a `.wrack` file is and that edits save in the browser automatically.
+- The `.wrack` controls explain what a `.wrack` file is and that edits save in the browser automatically.
 - Each instrument and effect shows its current preset.
-- Split and Join are disabled until the project has clips; effect cards no longer overflow.
+- Split and Join are disabled until the project has clips.
 
-The full results, the feedback and what was not changed are in [`docs/first-run-check.md`](docs/first-run-check.md).
+The full results, the feedback and the items left open are in [`docs/first-run-check.md`](docs/first-run-check.md).
 
 ## Features
 
 | Area | What W-Rack provides |
 |---|---|
-| Editor | One screen without page scrolling: project header with a File menu, an icon transport, arrangement with track headers and Add and Edit menus, a resizable dock with Editor, Devices and Mixer tabs that collapses to its tabs, tooltips on icon controls, and a help strip that describes the control under the pointer or in focus |
-| Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor; parameters are knobs grouped in sections; a track's Instrument select changes its instrument type in place, keeping its clips, effects and mixer settings |
-| MIDI | Piano roll with keyboard note entry, step input, a velocity lane, quantize and clip looping; Add instrument track opens a four-bar clip in the piano roll; computer-keyboard and Web MIDI live input, played on the armed instrument tracks (Arm on the track header, or R) or else on the selected one |
-| Audio | Multi-file import, waveform timeline with a bar ruler and a keyboard treegrid, marquee selection, a clip menu (right-click, Shift+F10), split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes, editable by on-clip handles or numeric fields |
-| Effects | EQ, filter, compressor, saturation, distortion (soft clip, hard clip, foldback), delay and reverb in chains of up to eight on every track and the master |
-| Mixer | Vertical channel strips: pan knob, clip indicator, fader with a dB scale beside a peak meter with hold, mute and solo; a master strip with limiter gain reduction; Panic (`Escape`) |
+| Editor | One screen without page scrolling: project header with rename, save status and a File menu (Save .wrack file, Open .wrack file, Export WAV); an icon transport; a clip toolbar with Add and Edit menus, Snap and Grid, zoom, and split, join, duplicate and delete; the arrangement, whose ruler and track headers stay in view while it scrolls; a resizable dock with Editor, Devices and Mixer tabs that collapses to its tabs; tooltips with the name and shortcut on icon controls; an info strip that describes the control under the pointer or in focus and shows the live-input target |
+| Transport | Go to start (`Home`; `Shift+Home` for the loop start), Play/Pause (`Space`), Stop (returns to where playback started; a second Stop goes to bar 1, or to the loop start with the loop on), Loop, Metronome, Position, Tempo, Time signature, master volume and meter, Panic (`Escape`); a tempo change during playback keeps the musical position |
+| Loop | A band in the ruler: drag empty ruler space to draw a loop and turn it on, drag its edges to resize it and, while the loop is on, its body to move it; a click in the ruler moves the edit cursor; "Loop start" and "Loop end" handles move by keyboard |
+| Instruments | Subtractive, FM, additive, pluck (Karplus–Strong), granular, a 14-voice drum machine with General MIDI note mapping, and a sampler with a keyboard-operable sample editor; parameters are knobs grouped in sections, and choices are segmented buttons; a track's Instrument select changes its instrument type in place, keeping its clips, effects, mixer settings, name and colour |
+| MIDI | Piano roll with notes in the track colour, keyboard note entry, drawing and resizing by drag, step input, a velocity lane, quantize and clip looping; Add instrument track opens a four-bar clip in the piano roll; computer-keyboard and Web MIDI live input, played on the armed instrument tracks (Arm on the track header, or `R` on its row) or else on the selected one |
+| Audio | Multi-file import, waveform timeline with a bar ruler and a keyboard treegrid, marquee selection, a clip menu (right-click, `Shift+F10`) that acts on the selection, split, join, trim, move, duplicate, rename, fades, crossfades, clip gain and gain envelopes, editable by on-clip handles or by sliders in the clip properties |
+| Tracks | Add, rename (`F2` on the row, double-click on the header, or the Edit menu), delete (with a confirmation when the track has clips), mute, solo and arm; track and clip colours: teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe |
+| Effects | EQ, filter, compressor, saturation, distortion (soft clip, hard clip, foldback), delay and reverb in chains of up to eight on every track and the master; the Devices tab shows a track's instrument and effects left to right, and the master chain ends in the safety limiter |
+| Mixer | Vertical channel strips: pan knob, fader with a dB scale beside a peak meter with hold, mute, solo and a clip indicator; a master strip at the right with the limiter readout |
 | Safety | A fixed safety stage after the master: guard, DC blocker, sustained-level duck, −1 dBFS limiter and a 50 ms start fade |
-| Projects | Automatic local saving, restored working state, project lists with tempo, time signature, track count and origin, rename and duplicate, a personal preset library with auditions, `.wrack` archives, WAV export with progress, Cancel and Download |
-| Commands | A command palette (Ctrl+K or Ctrl+Shift+P, Cmd on macOS, or the header's Commands button) that searches and runs every command with its shortcut; `?` lists every shortcut; single-key shortcuts for loop (L), metronome (K), snap (G) and grid (+, −) |
+| Projects | Automatic local saving, undo and redo, restored working state, project lists with tempo, time signature, track count and origin, rename and duplicate, a personal preset library with auditions, `.wrack` archives, WAV export with progress, Cancel and Download |
+| Commands | A command palette (`Ctrl+K` or `Ctrl+Shift+P`, `Cmd` on macOS, or the header's Commands button) that searches and runs every command with its shortcut; `?` lists every shortcut |
+
+Keyboard shortcuts (`Ctrl` reads `Cmd` on macOS):
+
+| Keys | Command |
+|---|---|
+| `Space`, `Home`, `Shift+Home`, `Escape` | Play/Pause, Go to start, Go to loop start, Panic |
+| `L`, `C` | Loop, Metronome |
+| `N`, `+`, `−` | Snap on or off, finer grid, coarser grid; `Alt` while dragging places freely |
+| `Alt+=`, `Alt+−` | Zoom in, zoom out |
+| `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y` | Undo, Redo; edits within 600 ms form one step, and a text field keeps its own undo |
+| `Ctrl+E`, `Ctrl+J`, `Ctrl+D`, `Delete`, `Ctrl+A` | Split at edit cursor, Join clips, Duplicate, Delete, Select all clips |
+| `Ctrl+S`, `Ctrl+O`, `Ctrl+Shift+E`, `Ctrl+,` | Save .wrack file, Open .wrack file, Export WAV, Settings |
+| `Ctrl+K` or `Ctrl+Shift+P`, `?` | Command palette, keyboard shortcuts |
+| `A` `W` `S` `E` `D` `F` `T` `G` `Y` `H` `U` `J` `K`, `Z`, `X` | Computer-keyboard notes C to C, octave down, octave up; no page-wide letter shortcut uses these keys |
+
+Single-key shortcuts do not act in text fields, menus or lists.
 
 All audio runs in one AudioWorklet engine followed by the safety stage; no native Web Audio DSP nodes are used. Implementation details are in [`docs/a3-audio-implementation.md`](docs/a3-audio-implementation.md).
 
@@ -361,11 +382,13 @@ W-Rack targets WCAG 2.2 AA. Canvas views have DOM mirrors: the timeline is a `tr
 
 | Pair | Contrast |
 |---|---|
-| Text on background | 12.4:1 |
-| Muted text on background | 5.6:1 |
-| Control boundaries on background | 3.7:1 |
-| Focus ring on background | 5.1:1 |
-| Primary button text | 5.0:1 |
+| Text on background | 13.6:1 |
+| Muted text on background | 5.7:1 |
+| Control boundaries on background | 3.6:1 |
+| Focus ring on background | 4.8:1 |
+| Primary button text on signal orange | 5.6:1 |
+| Panic text on red | 5.8:1 |
+| Track colours on the lanes | 3.5:1 or more |
 
 The checks, keyboard paths and known gaps are recorded in [`docs/a11y-check.md`](docs/a11y-check.md).
 

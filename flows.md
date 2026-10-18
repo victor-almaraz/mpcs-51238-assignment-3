@@ -1,6 +1,6 @@
 # User flows
 
-Each flowchart describes one W-Rack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy from `docs/assignment-3-scope.md`.
+Each flowchart describes one W-Rack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy.
 
 ## First visit
 
@@ -40,7 +40,7 @@ flowchart TD
   cp_store --> cp_quota{"Write succeeded?"}
   cp_quota -->|"No: QuotaExceededError"| cp_full["“This device's browser storage is full. Save a .wrack file, then delete unused projects.”<br/>Keep the entered values"]
   cp_full --> cp_edit
-  cp_quota -->|"Yes"| cp_editor(["Editor (/projects/[id]) with one empty instrument track<br/>“Press a key or click the grid to add a note”<br/>“Add audio file” and the keyboard map"])
+  cp_quota -->|"Yes"| cp_editor(["Editor (/projects/[id]) with one empty instrument track<br/>Piano roll with step input on<br/>“Press a key or click the grid to add a note” and the keyboard map<br/>Add › “Audio file…” in the clip toolbar"])
 ```
 
 | Field | Rule | Error text |
@@ -57,19 +57,19 @@ A return visit is a visit with at least one saved project.
 flowchart TD
   rv_start(["Open W-Rack with at least one saved project"]) --> rv_home["Home (/)<br/>Recent, Create, Load, Examples"]
   rv_home -->|"“Continue” on a Recent project"| rv_route
-  rv_home -->|"Projects in the header"| rv_list["Projects (/projects)<br/>Saved projects with last-edited dates"]
+  rv_home -->|"Projects in the header"| rv_list["Projects (/projects)<br/>Saved projects with last-edited dates,<br/>tempo, time signature and track count"]
   rv_list -->|"Select a project"| rv_route["Open /projects/[id]"]
   rv_route --> rv_exists{"Project ID in w-rack:v1:index?"}
   rv_exists -->|"No"| rv_missing(["“Project not found”<br/>Links to Projects and New project"])
   rv_exists -->|"Yes"| rv_read{"Project JSON readable?"}
   rv_read -->|"No"| rv_bad(["“A saved project could not be read.”"])
-  rv_read -->|"Yes"| rv_view["Restore working state from w-rack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip<br/>Transport stopped"]
+  rv_read -->|"Yes"| rv_view["Restore working state from w-rack:v1:view:#lt;id#gt;<br/>Playhead, loop range and loop on/off, zoom and scroll,<br/>selected track and clips, open editor panel and its clip,<br/>dock tab and collapse, snap and grid, armed tracks<br/>Transport stopped"]
   rv_view --> rv_audio{"Project has audio clips or sampler zones?"}
   rv_audio -->|"No"| rv_ready(["Editor ready"])
   rv_audio -->|"Yes"| rv_decode["Load sources from IndexedDB and decode them"]
   rv_decode --> rv_all{"Every source available?"}
   rv_all -->|"Yes"| rv_ready
-  rv_all -->|"No"| rv_notloaded["Clips without a source show “Audio not loaded”<br/>Toolbar shows “Open .wrack file to restore audio”"]
+  rv_all -->|"No"| rv_notloaded["Clips without a source show “Audio not loaded”<br/>A banner below the transport shows “Open .wrack file to restore audio”"]
   rv_notloaded --> rv_ready
   rv_notloaded -.->|"“Open .wrack file to restore audio”"| rv_open[["Open a .wrack file"]]
 ```
@@ -100,7 +100,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  sp_start(["Select “Save preset” on an instrument or effect in the editor"]) --> sp_dialog["Save preset dialog<br/>Name field"]
+  sp_start(["Select “Save preset” on an instrument or effect in the Devices tab"]) --> sp_dialog["Save preset dialog<br/>Name field"]
   sp_dialog -->|"Escape"| sp_close(["Dialog closes; focus returns to “Save preset”"])
   sp_dialog -->|"Submit"| sp_valid{"Name valid?"}
   sp_valid -->|"No"| sp_err["Show the error below the field<br/>Keep the entered name<br/>Focus the field"]
@@ -123,7 +123,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ia_start(["Select “Add audio file” in the editor"]) --> ia_pick["Choose one or more files"]
+  ia_start(["Select Add › “Audio file…” in the clip toolbar,<br/>“Add audio file” in an empty timeline,<br/>or the “Add audio file…” command"]) --> ia_pick["Choose one or more files"]
   ia_pick --> ia_first{"First audio import on this device?"}
   ia_first -->|"Yes"| ia_persist["Request navigator.storage.persist()"]
   ia_first -->|"No"| ia_each
@@ -154,7 +154,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ex_start(["Select “Export” in the editor"]) --> ex_dialog["Export dialog<br/>Range: whole project or loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float<br/>Tail: 0–10 s, default 2 s"]
+  ex_start(["Select File › “Export WAV…” or press Ctrl/Cmd+Shift+E"]) --> ex_dialog["Export dialog<br/>Range: Whole project or Loop<br/>Format: WAV 16-bit with TPDF dither (default), 24-bit, 32-bit float;<br/>the last format chosen is kept in w-rack:v1:settings<br/>Tail: 0–10 s, default 2 s"]
   ex_dialog --> ex_missing{"Clips without loaded audio?"}
   ex_missing -->|"Yes"| ex_list["List the clips; they render as silence"]
   ex_missing -->|"No"| ex_go
@@ -162,20 +162,22 @@ flowchart TD
   ex_go --> ex_len{"Range within 10 minutes?"}
   ex_len -->|"No"| ex_lerr["“Export ranges are limited to 10 minutes.”"]
   ex_lerr --> ex_dialog
-  ex_len -->|"Yes"| ex_render["Disable the export control<br/>Render in an OfflineAudioContext with the same worklet graph and the safety stage"]
+  ex_len -->|"Yes"| ex_render["Stop the transport<br/>Render in an OfflineAudioContext with the same worklet graph and the safety stage<br/>Focus moves to Cancel"]
   ex_render --> ex_msgs{"Engine progress messages arriving?"}
-  ex_msgs -->|"Yes"| ex_det["Determinate progress"]
+  ex_msgs -->|"Yes"| ex_det["Determinate progress with percentage and elapsed time"]
   ex_msgs -->|"No"| ex_indet["Indeterminate progress"]
   ex_det --> ex_wav
   ex_indet --> ex_wav
-  ex_wav["Write the WAV file"] --> ex_done(["Download the WAV file<br/>Re-enable the export control"])
+  ex_render -->|"Cancel"| ex_cancel(["Discard the render; nothing downloads"])
+  ex_wav["Write the WAV file"] --> ex_ready["“Download (#lt;size#gt;)” receives focus<br/>Nothing downloads by itself"]
+  ex_ready -->|"Download"| ex_done(["Save the WAV file: save picker in Chromium, download elsewhere"])
 ```
 
 ## Save a .wrack file
 
 ```mermaid
 flowchart TD
-  sw_start(["Select “Save” in the editor"]) --> sw_size{"Archive within 500 MB?"}
+  sw_start(["Select File › “Save .wrack file” or press Ctrl/Cmd+S"]) --> sw_size{"Archive within 500 MB?"}
   sw_size -->|"No"| sw_big(["“This project is too large to save as one file.”"])
   sw_size -->|"Yes"| sw_build["Assemble project.json and audio/#lt;sourceId#gt;.#lt;ext#gt;<br/>as STORE-only ZIP Blob parts"]
   sw_build --> sw_fsa{"showSaveFilePicker available?"}
@@ -183,7 +185,7 @@ flowchart TD
   sw_fsa -->|"No"| sw_anchor["Download through #lt;a download#gt;"]
   sw_picker -->|"Cancel"| sw_cancel(["No file is written"])
   sw_picker -->|"Save"| sw_mark
-  sw_anchor --> sw_mark(["Record the archive-save date in w-rack:v1:index<br/>Clear “Not saved to file”"])
+  sw_anchor --> sw_mark(["Record the archive-save date in w-rack:v1:index<br/>The header shows “Saved to file”"])
 
   sw_leave(["Leave the page"]) --> sw_newer{"Loaded audio newer than the last archive save?"}
   sw_newer -->|"Yes"| sw_prompt(["beforeunload prompt"])
@@ -194,7 +196,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  ow_start(["Select “Open .wrack file” on Home,<br/>or “Open .wrack file to restore audio” in the editor toolbar"]) --> ow_choose["Choose a .wrack file"]
+  ow_start(["Select “Open .wrack file” on Home, File › “Open .wrack file…” (Ctrl/Cmd+O),<br/>or “Open .wrack file to restore audio” in the editor's missing-audio banner"]) --> ow_choose["Choose a .wrack file"]
   ow_choose --> ow_valid{"Archive passes validation?"}
   ow_valid -->|"No"| ow_errs(["Import nothing<br/>List every validation error"])
   ow_valid -->|"Yes"| ow_match{"Archive project ID matches a saved project?"}

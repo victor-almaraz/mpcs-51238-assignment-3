@@ -70,25 +70,25 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `HOME-01` Recent-first start page
 - **Problem:** A returning user has to find the last project before work continues.
-- **Solution:** When saved projects exist, `Recent` comes first: up to five, newest first, each opening in one activation, with "View all projects" linking to `/projects`. `Recent` is hidden when empty.
+- **Solution:** When saved projects exist, `Recent` comes first: up to five, newest first, each opening in one activation with its `Continue` link. "View all projects" links to `/projects` when more than five exist. `Recent` is hidden when empty.
 - **Prior art:** Studio One's Start page pairs a Recent Files list with pinning and create/open actions.
 - **W-Rack application:** On `/`, `Recent` precedes Create, Load and Examples on return visits.
-- **Accessibility:** A `list` of `link`s named by project title; the modified date is in the description.
+- **Accessibility:** A `list` of `link`s named "Continue <project name>"; the project summary, with the modified date, is the description.
 - **Anti-patterns:** Preview panes before open; unlabeled thumbnail tiles.
 
 ### `HOME-02` Three entry points
 - **Problem:** One dominant button hides the intents "continue a file" and "explore".
 - **Solution:** Three verb-labeled entries of equal weight: `New project`, `Open .wrack file`, and the Examples row.
 - **Prior art:** Logic Pro's Project Chooser lists templates, demo projects and tutorials. Soundtrap's first studio window offers new projects and demos. Bitwig Studio 5's Dashboard offers New Project.
-- **W-Rack application:** `New project` → `/new`; `Open .wrack file` → file picker → `SAVE-03`; example cards Beat, Ambient, Pluck melody.
-- **Accessibility:** A link, a button and a `list` of card links in reading order.
+- **W-Rack application:** `New project` → `/new`; `Open .wrack file` → file picker → `SAVE-03`; example cards Beat, Ambient and Pluck melody, each with an `Open <title>` button.
+- **Accessibility:** A link, a button and a `list` of example cards with their buttons, in reading order.
 - **Anti-patterns:** Sign-up walls before content; a forced template choice.
 
 ### `HOME-03` Stopped-on-open examples
 - **Problem:** Sound on load startles users, and browsers block it before a gesture.
 - **Solution:** Examples open stopped at bar 1. Play is highlighted, with the hint "Press Play to hear this example"; the highlight clears after first playback. Example cards on Home do not preview sound.
 - **Prior art:** Chrome creates an `AudioContext` made before a user gesture in the `suspended` state. Song Maker plays only on Play or Space.
-- **W-Rack application:** Editor transport for example copies; the hint is linked to Play with `aria-describedby`.
+- **W-Rack application:** Editor transport for example copies. The hint text shows on wide windows; Play stays highlighted and linked to the hint with `aria-describedby` at every width.
 - **Accessibility:** Focus is not moved on load. The highlight meets 3:1 non-text contrast and has a text label.
 - **Anti-patterns:** Autoplay on open; card previews on Home; pulsing animation that ignores reduced motion.
 
@@ -106,8 +106,8 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Problem:** Empty timelines, piano rolls and chains give no next step.
 - **Solution:** Each empty region shows one sentence and buttons that perform the next step:
   - Timeline: "No tracks." with `Add instrument track` and `Add audio file`.
-  - Chain: `Add effect`.
-  - Piano roll: "Press a key or click the grid to add a note."
+  - Track chain: "No effects. The signal passes through unchanged." with the Effect select and `Add effect`. Master chain: "No effects before the safety limiter."
+  - Piano roll: "Press a key or click the grid to add a note. Drag to draw a longer one.", with the keyboard map.
 - **Prior art:** BandLab Studio shows a New Track panel when a project first opens. Logic Pro's Empty Project opens the New Tracks dialog.
 - **W-Rack application:** Timeline, piano roll, track chains, master chain.
 - **Accessibility:** The message is visible text, not a placeholder; button names are unique in the region.
@@ -115,9 +115,9 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `ONB-02` One action to a playable surface
 - **Problem:** Setup steps delay the first sound.
-- **Solution:** `Add instrument track` with an instrument choice (subtractive, FM, additive, pluck, granular) creates the track with default settings and a four-bar MIDI clip, and opens the piano roll with note preview on.
+- **Solution:** `Add instrument track` with an instrument choice (subtractive, FM, additive, pluck and granular synths, drum machine, sampler) creates the track with default settings and a four-bar MIDI clip, and opens the piano roll in the Editor tab with note preview on.
 - **Prior art:** Song Maker shows a playable grid on load. BandLab starts new users from a loop.
-- **W-Rack application:** Editor Add track menu. The first note passes through `SAFE-01`.
+- **W-Rack application:** The clip toolbar's `Add` menu and the empty timeline's `Add instrument track` menu. The first note passes through `SAFE-01`.
 - **Accessibility:** Focus moves to the first piano-roll mirror cell; the result is announced: "Pluck track added, clip open in piano roll".
 - **Anti-patterns:** Opening a parameter-heavy panel before any note exists.
 
@@ -159,7 +159,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `RET-02` Resume where you left off
 - **Problem:** Reopening at default zoom and position wastes navigation.
-- **Solution:** Restore playhead, loop range and state, zoom, scroll, selection and open panel. The transport opens stopped.
+- **Solution:** Restore playhead, loop range and state, zoom, scroll, selection, open panel, dock tab and its collapsed state, snap and armed tracks. The transport opens stopped.
 - **Prior art:** Ableton Live 12's Learn View returns to the last visited page.
 - **W-Rack application:** Working state per `assignment-3-scope.md` (Resume where you left off).
 - **Accessibility:** Focus lands in the editor's main region; "Restored view at bar 9" is announced.
@@ -169,7 +169,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `SAVE-01` Autosave with visible status
 - **Problem:** Explicit-save-only loses work on tab close; silent autosave leaves users unsure.
-- **Solution:** Save after each committed edit (500 ms debounce). The header shows "Saved on this device", "Saving…" or "Not saved — storage full". On a quota error, the editor keeps the in-memory state, shows a persistent banner and offers `Save .wrack file`.
+- **Solution:** Save after each committed edit (500 ms debounce). The header shows "Saved on this device", "Saving…" or "Not saved — storage full". On a quota error, the editor keeps the in-memory state and shows a persistent banner: "This device's browser storage is full. Save a .wrack file, then delete unused projects."
 - **Prior art:** Logic Pro autosaves new projects. Ableton Live offers recovery after a crash. BandLab syncs to its cloud.
 - **W-Rack application:** Editor header; `beforeunload` prompts only while a save is pending or failed, or while session-only audio is unsaved to a file.
 - **Accessibility:** `role="status"` for state changes; `role="alert"` for the quota failure.
@@ -179,23 +179,23 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Problem:** Projects that reference external media break when moved.
 - **Solution:** `Save .wrack file` (`Mod+S`) writes project JSON, every loaded audio source and the format version. The archive contains no path references.
 - **Prior art:** Ableton Live's Collect All and Save copies media into the project folder. REAPER's save dialog can move media into the project directory. DAWproject packages audio with the project XML.
-- **W-Rack application:** Editor menu; downloads `<name>.wrack`.
-- **Accessibility:** File name and size are announced on completion.
+- **W-Rack application:** Editor `File` menu; saves `<name>.wrack`.
+- **Accessibility:** The file name is announced on completion: "Saved Beat.wrack", or "Saved Beat.wrack without 2 audio files that are not loaded."
 - **Anti-patterns:** A separate collect step; unversioned archives.
 
 ### `SAVE-03` Open-file conflict choice
 - **Problem:** Opening an archive of an existing project can overwrite work.
 - **Solution:** When the archive's project ID matches a saved project, a dialog offers `Restore audio` (keep the saved project, load missing audio), `Replace project` and `Cancel`. Otherwise the archive opens as a new saved project.
 - **Prior art:** Ableton Live prompts to save Sets from earlier versions under a new name.
-- **W-Rack application:** `/` → dialog → `/projects/[id]`.
+- **W-Rack application:** Home's Load section or the editor `File` menu → dialog ("Beat is already on this device") → `/projects/[id]`.
 - **Accessibility:** `<dialog>` with initial focus on `Restore audio`; Escape cancels.
 - **Anti-patterns:** A Yes/No "Overwrite?" prompt; a destructive default button.
 
 ### `SAVE-04` Missing audio relink
 - **Problem:** Absent audio leaves clips silent without explanation.
-- **Solution:** Clips without audio show hatching and the text "Audio not loaded". A banner lists the files and offers `Open .wrack file to restore audio`. Clips without a match stay marked.
+- **Solution:** Clips without audio show the text "Audio not loaded" in place of the waveform. A banner lists the clips and offers `Open .wrack file to restore audio`. Clips without a match stay marked.
 - **Prior art:** Ableton Live's File Manager lists missing files and, after one manual locate, searches the same location for the rest. REAPER offers a search after one file is found.
-- **W-Rack application:** Editor banner and clip overlay; sources match by `sourceId`.
+- **W-Rack application:** Editor banner and clip text; sources match by `sourceId`.
 - **Accessibility:** Mirror cell names include "audio not loaded"; the banner is a `region` named "Missing audio".
 - **Anti-patterns:** A blocking modal on open; an `OFFLINE` label with no cause or action.
 
@@ -203,7 +203,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `LIB-01` Grouped picker with My presets
 - **Problem:** A flat list mixes built-in and user settings.
-- **Solution:** Groups "My presets" (shown when non-empty) above "Built-in"; type-ahead filter; a preset applies on Enter or click only.
+- **Solution:** Groups "My presets" (shown when non-empty) above "Built-in" ("Default settings"); type-ahead filter; a preset applies on Enter or click only.
 - **Prior art:** Ableton Live's browser with search and categories; Logic Pro's My Templates; OSARA's preset dialog, which navigates without applying.
 - **W-Rack application:** Instrument and effect preset pickers.
 - **Accessibility:** `combobox` with a `listbox` of labeled groups; arrow keys move without applying.
@@ -211,18 +211,18 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `LIB-02` Save preset dialog
 - **Problem:** Unvalidated names create duplicates.
-- **Solution:** One Name field prefilled with "<current> (my version)", validated per `assignment-3-scope.md` (Presets). A duplicate name shows its error under the field; the entered name remains.
+- **Solution:** One empty Name field, validated per `assignment-3-scope.md` (Presets). A duplicate name shows its error under the field; the entered name remains.
 - **Prior art:** Ableton Live saves presets from the device title bar; Logic Pro prompts for a template name.
-- **W-Rack application:** Device header `Save preset`; the result appears under "My presets".
+- **W-Rack application:** The `Save preset` button beside each preset picker ("Save preset: Delay" in chains); the result appears under "My presets" and the device uses it.
 - **Accessibility:** Focus moves to Name on open and returns to the trigger on close.
 - **Anti-patterns:** Silent overwrite; automatic numbering without the user's input.
 
 ### `LIB-03` Audition at a controlled level
 - **Problem:** Full-scale previews cause level jumps.
-- **Solution:** A preview button per preset plays a one-bar phrase through the track chain and the safety limiter at the track's fader level. Preview stops on selection change or Escape. Selecting a preset does not preview it.
+- **Solution:** A Preview toggle beside the picker plays a one-bar phrase with the highlighted preset through the track chain and the safety limiter at the track's fader level, leaving the project unchanged. Preview stops on another choice, on Escape and after the bar. Selecting a preset does not preview it.
 - **Prior art:** Ableton Live previews in sync with the Set and has a preview volume control.
-- **W-Rack application:** Preset picker rows. The first preview passes through `SAFE-01`.
-- **Accessibility:** A toggle with `aria-pressed`, named "Preview Warm pad".
+- **W-Rack application:** Instrument and effect preset pickers. The first preview passes through `SAFE-01`.
+- **Accessibility:** A toggle with `aria-pressed`, named "Preview Warm pad" ("Preview Warm pad for Delay" in chains).
 - **Anti-patterns:** Previews that bypass the master; previews that continue after the picker closes.
 
 ## Transport
@@ -240,20 +240,20 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 - **Solution:**
   - Space toggles Play and Pause. Pause holds the playhead; Play resumes from it.
   - Stop, while playing or paused, halts and returns the playhead to where playback started; resuming from a pause keeps that start.
-  - Stop while stopped goes to bar 1, or to the loop start when the loop is on. Stop is disabled when stopped at bar 1.
+  - Stop while stopped goes to bar 1, or to the loop start when the loop is on. Stop is disabled when stopped where it would go.
   - `Home` locates to bar 1; `Shift+Home` to the loop start.
   - Escape and Panic stop every sound and leave the transport stopped, not paused.
-  - Space does nothing special inside text fields or on focused buttons.
+  - Space and Home do nothing special inside fields or on keyboard-focused controls.
 - **Prior art:** Space is play/pause in GarageBand, Logic Pro and BandLab; Logic Pro's Stop returns to the play start and a second Stop goes to the beginning.
-- **W-Rack application:** Global key handler excluding `input`, `textarea`, `select`, `button` and `[contenteditable]`.
-- **Accessibility:** A focused native button keeps its own Space behavior.
+- **W-Rack application:** Global key handler excluding `input`, `textarea`, `select`, `[contenteditable]` and keyboard-focused buttons. A button focused by a pointer click passes Space to the transport.
+- **Accessibility:** A native button reached by keyboard (`:focus-visible`) keeps its own Space behavior.
 - **Anti-patterns:** Capturing Space in fields; Enter as play.
 
 ### `TRN-03` Loop range in the ruler
 - **Problem:** A loop toggle without a visible range plays an unknown span.
 - **Solution:**
   - The ruler shows the loop range as a band: lit while the loop is on, grey while it is off. While on, its edges continue down the lanes.
-  - Dragging empty ruler space draws a loop and turns the loop on. Dragging the band's edges resizes it; dragging its body moves it. Edges snap to the grid while snap is on; Alt bypasses snap. A click without a drag moves the edit cursor.
+  - Dragging empty ruler space draws a loop and turns the loop on. Dragging the band's edges resizes it; dragging its body moves it while the loop is on, and draws a loop while it is off. Edges snap to the grid while snap is on; Alt bypasses snap. A click without a drag moves the edit cursor.
   - The loop is at least one grid step long.
   - Playback wraps at the loop end only when it reaches the end from before it. Playback that starts after the loop end, or passes it before the loop is on, continues.
 - **Prior art:** Logic Pro's cycle area and Ableton Live's loop brace in the ruler; both continue past a loop that playback starts after.
@@ -265,15 +265,15 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `ARR-01` Track header controls
 - **Problem:** Unlabeled letter buttons hide state.
-- **Solution:** Editable name, then Mute and Solo, with the track type. Muted tracks dim and show "Muted"; soloed tracks show "Solo".
+- **Solution:** Track colour, position and name, the track type, then Mute, Solo and, on instrument tracks, Arm for live input. Muted tracks dim and show "Muted"; soloed tracks show "Solo". The name is edited in a Rename dialog, opened by double-clicking the header, `F2` or the `Edit` menu.
 - **Prior art:** BandLab's mix panel; Ableton Live's track headers.
-- **W-Rack application:** Timeline headers, mirrored in the mixer.
-- **Accessibility:** "Mute Bass" and "Solo Bass" with `aria-pressed`; `M` and `S` act on the focused track.
+- **W-Rack application:** Timeline headers; mute and solo are mirrored in the mixer.
+- **Accessibility:** "Mute Bass", "Solo Bass" and "Arm Bass for live input" with `aria-pressed`; `M`, `S` and `R` act on the focused track row.
 - **Anti-patterns:** Color-only mute; identical "M" names on every track.
 
 ### `ARR-02` Clip selection model
 - **Problem:** Ambiguous selection makes edits unpredictable.
-- **Solution:** Click selects; Shift+click extends; Mod+click toggles; dragging on empty space draws a marquee; `Mod+A` selects all in the focused region. Selection survives edits and persists with the working state.
+- **Solution:** Click selects; Shift+click selects the range from the first selected clip on the same track; Mod+click toggles; dragging on empty space draws a marquee (Shift or Mod adds to the selection); `Mod+A` selects all clips. Selection survives edits and persists with the working state.
 - **Prior art:** Ableton Live moves selected clips with the arrow keys.
 - **W-Rack application:** Timeline canvas and mirror.
 - **Accessibility:** `aria-selected` on mirror cells; Space or Enter selects; Shift+Arrow extends.
@@ -281,37 +281,37 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `ARR-03` Conventional edit commands
 - **Problem:** Non-standard keys force relearning.
-- **Solution:** Split at the edit cursor `Mod+E`; duplicate `Mod+D`; join `Mod+J`; delete `Delete` or `Backspace`; move by grid `Left`/`Right`; trim start `Alt+Left`/`Alt+Right`; trim end `Alt+Shift+Left`/`Alt+Shift+Right`; on a clip, `Alt+Up`/`Alt+Down` move it to the adjacent track of the same kind; on a track, they reorder tracks. Comma and period move the edit cursor by the grid step, with Shift by a bar. Every command also appears in the clip context menu and `HELP-02`.
+- **Solution:** Split at the edit cursor `Mod+E`; duplicate `Mod+D`; join `Mod+J`; delete `Delete` or `Backspace`; move by grid `Left`/`Right`; trim start `Alt+Left`/`Alt+Right`; trim end `Alt+Shift+Left`/`Alt+Shift+Right`; on a clip, `Alt+Up`/`Alt+Down` move it to the adjacent track of the same kind; on a track, they reorder tracks. Comma and period move the edit cursor by the grid step, with Shift by a bar. Split, join, duplicate, mute, rename and delete also appear in the clip menu, which acts on the selection and counts it ("Delete 3 clips"); every shortcut appears in `HELP-02`.
 - **Prior art:** Ableton Live 12 uses `Mod+E` split, `Mod+D` duplicate, `Mod+J` consolidate. OSARA provides keyboard move and trim for REAPER items.
 - **W-Rack application:** Audio and MIDI clips; edge handles for pointer trim.
-- **Accessibility:** Results are announced ("Split Vox 1 at 5.1.1, two clips"); the context menu opens with `Shift+F10`.
+- **Accessibility:** Results are announced ("Split Vox 1 at bar 5"); the clip menu opens with `Shift+F10` or the ContextMenu key.
 - **Anti-patterns:** Split only at the pointer; join that fills gaps without notice.
 
 ### `ARR-04` Visible snap with bypass
 - **Problem:** Hidden snap state misaligns edits.
-- **Solution:** The toolbar shows "Snap: 1/16". `N` toggles snap; `+` and `-` change the grid; Alt while dragging bypasses snap. Snap is on by default.
+- **Solution:** The toolbar shows a Snap toggle and a Grid select (Bar, 1/4, 1/8, 1/16). `N` toggles snap; `+` and `-` change the grid; Alt while dragging bypasses snap. Snap is on by default, at 1/4.
 - **Prior art:** BandLab's snap is on by default; Ableton Live changes the grid with plus and minus.
-- **W-Rack application:** One snap setting per project for timeline and piano roll.
-- **Accessibility:** An `aria-pressed` toggle and a labeled select; changes are announced.
+- **W-Rack application:** Clip toolbar; one snap setting per project, saved in the working state, for timeline drags, loop edges and keyboard nudges. The piano roll has its own Grid select.
+- **Accessibility:** An `aria-pressed` toggle and a labeled select; changes are announced ("Snap: 1/16", "Snap off").
 - **Anti-patterns:** Snap state shown only by icon tint.
 
 ### `ARR-05` Fades, crossfades, gain, envelopes
 - **Problem:** Small corner handles are hard to hit and unreachable by keyboard.
 - **Solution:**
-  - Fade handles at the top corners and a gain handle at top center, each at least 24 × 24 CSS px, with a dB readout.
-  - Overlaps create equal-power crossfades.
-  - Envelope points are added by double-click and removed with Delete.
+  - On a selected audio clip at least 72 px wide, fade handles sit at the fade ends along the top edge and a gain handle at top center, each with a 24 × 24 CSS px target; the gain drag shows a dB readout.
+  - Overlapping clips mix; their fade-out and fade-in form the crossfade, and equal-power curves sum to unit power.
+  - Envelope points are added by double-click on the selected clip and removed by double-click on a point; points drag.
   - A properties panel provides numeric fade length, fade curve, clip gain and envelope point fields, within the ranges in `assignment-3-scope.md`.
 - **Prior art:** Ableton's accessibility documentation lists automation and clip edge fades as unsupported for screen readers; W-Rack provides numeric alternatives.
-- **W-Rack application:** Timeline audio clips and the clip properties panel.
-- **Accessibility:** Numeric fields satisfy WCAG 2.5.7. Envelope points are mirror rows ("time, dB") adjusted with Up and Down.
+- **W-Rack application:** Timeline audio clips and the clip properties panel in the Editor tab.
+- **Accessibility:** Numeric fields satisfy WCAG 2.5.7. Envelope points are listed in the properties panel as time and gain fields, with `Remove point N` and `Add point at edit cursor`.
 - **Anti-patterns:** Handle-only fades; gain without units.
 
 ### `ARR-06` Zoom and scroll
 - **Problem:** DAW zoom collides with browser zoom on `Mod+wheel` and `Mod+=`/`Mod+-`.
-- **Solution:** Wheel scrolls vertically; Shift+wheel scrolls horizontally; Alt+wheel zooms at the pointer; `Alt+=`, `Alt+-` and `Alt+0` zoom in, zoom out and fit. `Mod+=`, `Mod+-` and `Mod+0` stay with the browser.
+- **Solution:** Wheel scrolls vertically; Shift+wheel scrolls horizontally; Alt+wheel zooms at the pointer; `Alt+=`, `Alt+-` and `Alt+0` zoom in, zoom out and fit. A zoom keeps the edit cursor in place when it is in view, else the centre of the view. `Mod+=`, `Mod+-` and `Mod+0` stay with the browser.
 - **Prior art:** Ableton Live zooms to the selection with `Z` and back with `X`.
-- **W-Rack application:** Timeline and piano roll; zoom persists in the working state.
+- **W-Rack application:** Timeline: the browser's wheel scrolling, `Alt+=`, `Alt+-` and the zoom buttons (25 % to 800 %, in steps of 2×), with the anchor rule above; zoom persists in the working state. Alt+wheel and `Alt+0` are not bound, and the piano roll has no zoom.
 - **Accessibility:** Zoom changes are announced; the page reflows at 200% browser zoom (WCAG 1.4.4, 1.4.10).
 - **Anti-patterns:** Intercepting Ctrl+wheel.
 
@@ -320,12 +320,12 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 ### `PR-01` Single tool with keyboard entry
 - **Problem:** Modal tool palettes confuse; mouse-only entry excludes keyboard users.
 - **Solution:**
-  - Pointer: clicking an empty cell adds a grid-length note; clicking a note selects it; dragging moves; dragging an edge resizes; `B` toggles a paint mode.
+  - Pointer: clicking an empty cell adds a grid-length note; dragging from an empty cell draws a note as long as the drag; clicking a note selects it; dragging a note moves it; dragging its right edge resizes it; double-clicking it removes it. Each drag commits one edit on release. `B` toggles a paint mode.
   - Keyboard: arrows move the cursor; Enter adds or removes a note; Delete removes it; Alt+Left/Right moves it by a grid step and Alt+Up/Down transposes it by a row; Shift+Left/Right changes length; Shift+Up/Down changes velocity by 8. Left from the first column reaches the row header, where Space or Enter previews the row.
-  - A loop brace above the grid has numeric start and end fields.
+  - A Clip loop select (Off, 1, 2 or 4 bars) sets the length the clip's notes repeat over.
 - **Prior art:** Ableton Live's draw mode and grid-stepped insert marker; Song Maker's click-to-toggle cells.
-- **W-Rack application:** Piano roll panel.
-- **Accessibility:** `grid` mirror with rows named by pitch ("C4") and columns by step ("Bar 1 beat 2"); cells expose state, velocity and length.
+- **W-Rack application:** Piano roll in the dock's Editor tab, without the paint mode.
+- **Accessibility:** `grid` mirror with rows named by pitch ("C4") and cells by pitch and step ("C4, bar 2 beat 1"); a cell where a note starts names its pitch, position, length and velocity.
 - **Anti-patterns:** Five-mode palettes; drag-only note creation.
 
 ### `PR-02` Note preview on placement
@@ -338,7 +338,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `PR-03` Velocity lane and quantize
 - **Problem:** Dialog-only velocity editing is slow; destructive quantize loses timing.
-- **Solution:** A velocity lane (1–127) shows values on hover and focus and edits several notes at once. `Q` quantizes the selection, or all notes, to the grid at 100%. Undo restores the original timing.
+- **Solution:** A velocity lane (1–127) shows values on hover and focus; a drag paints across stems, editing several notes at once. `Q` quantizes every note of the clip to the grid at 100%. Undo restores the original timing.
 - **Prior art:** BandLab's MIDI editor; DAWproject stores note velocity.
 - **W-Rack application:** Lower piano-roll lane and the Quantize button.
 - **Accessibility:** Each bar is a `slider` named "Velocity C4 bar 1.1" with Arrow, Page Up/Down and Home/End keys.
@@ -347,23 +347,23 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 ### `PR-04` Drum rows
 - **Problem:** Rows labelled C1–C8 do not say which drum a note triggers.
 - **Solution:**
-  - On drum machine tracks, each row label gives note number, voice and GM name: "42 Closed hat (Closed Hi-Hat)".
+  - On drum machine tracks, each row label gives note number and voice ("42 Closed hat"); its accessible name and tooltip add the GM name: "42 Closed hat (Closed Hi-Hat)".
   - The view lists the 21 mapped notes, low to high. "Show all notes" reveals 0–127; unmapped rows read "No voice".
-  - Notes draw as fixed-width markers at their start; fill opacity shows velocity. Length stays editable in the note inspector.
+  - Notes draw as fixed-width markers at their start; fill opacity shows velocity. Pointer drags keep a drum note's length; Shift+Left and Shift+Right change it.
   - Activating a row label auditions its voice at velocity 100, through the engine and safety stage.
   - Rows 42, 44 and 46 share a choke-group indicator.
 - **Prior art:** Ableton Drum Rack shows note names, numbers and GM drum names, with choke groups. Logic Pro Drum Machine Designer and FL Studio FPC name pads by kit piece. Bitwig Drum Machine offers choke targets per chain.
 - **W-Rack application:** Piano roll on tracks whose instrument is the drum machine.
-- **Accessibility:** Row headers carry the full label text; cells name their time position ("Bar 2, beat 3"). Space on a row header auditions; Enter on a cell toggles a note; Shift+Up/Down changes velocity by 8. Labels are text, not color.
+- **Accessibility:** Row headers carry the full label as their accessible name; cells name their row and time position ("36 Kick (Bass Drum 1), bar 2 beat 3"). Space on a row header auditions; Enter on a cell toggles a note; Shift+Up/Down changes velocity by 8. Labels are text, not color.
 - **Anti-patterns:** Pitch names on drum rows; auditions outside the safety stage.
 
 ## Instruments and effects
 
 ### `DEV-01` Linear chain with bypass
 - **Problem:** Hidden order and unclear bypass produce unexpected sound.
-- **Solution:** Devices run left to right: instrument, then effects, up to eight. Each header shows name, bypass, move left, move right, preset and remove. At eight, `Add effect` is disabled with "Chain full (8 of 8)".
+- **Solution:** Devices run left to right: instrument, then up to eight effects. Each effect header shows bypass, name, move left, move right and remove, with the preset picker below. At eight, `Add effect` is disabled with "Chain full (8 of 8)".
 - **Prior art:** Ableton Live's device view exposes each device as a group with keyboard navigation; Logic Pro lists inserts in order.
-- **W-Rack application:** Track and master chains; the master ends with `SAFE-02`.
+- **W-Rack application:** The dock's Devices tab, showing the selected track's chain or the master chain; the master ends with `SAFE-02`. Each device card is as wide as its controls, and the panel scrolls sideways.
 - **Accessibility:** Devices are `group`s named "Delay, 3 of 5"; move buttons are named "Move Delay left" (WCAG 2.5.7); bypass uses `aria-pressed` and shows "Bypassed".
 - **Anti-patterns:** Drag-only reordering; bypass shown only by greying.
 
@@ -400,9 +400,9 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 ### `MIX-01` Channel strip and master defaults
 - **Problem:** Hot defaults clip the master on first playback.
 - **Solution:**
-  - Vertical channel strips, top to bottom: pan knob ("C", "L20", "R20"), clip indicator, a vertical fader with a dB scale beside a vertical peak meter, the dB readout, M and S buttons, and the track name.
-  - The master strip has the same layout, with limiter gain reduction in place of the clip indicator and no M or S.
-  - Faders follow a square taper, so the range from +6 to −12 dB has most of the travel.
+  - Vertical channel strips, top to bottom: pan knob ("C", "L20", "R20"), a vertical fader with a dB scale beside a vertical peak meter, the dB readout, a row with the M and S buttons and the clip indicator, and the track name.
+  - The master strip has the master pan knob, the limiter gain reduction, the master volume fader beside the post-limiter meter, the dB readout and the name; it has no M, S or clip indicator.
+  - Faders follow a square taper, so the range from +6 to −12 dB has most of the travel. Each meter uses its fader's scale, so a level sits beside the mark of the same dB.
   - Tracks default to 0 dB; the master defaults to −12 dB; every pan defaults to centre. Double-click resets.
 - **Prior art:** BandLab's master meter turns red on clipping; FL Studio's default template places a limiter on the master.
 - **W-Rack application:** Mixer panel with the master strip separated at the right.
@@ -411,19 +411,19 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `MIX-02` Peak meters with clip hold
 - **Problem:** Momentary overs vanish unnoticed.
-- **Solution:** Peak meters hold for 1.5 s. A "Clip" indicator latches above 0 dBFS until clicked or reset. The master shows limiter gain reduction ("Limiter −3.2 dB").
+- **Solution:** Peak meters hold for 1.5 s. A "Clip" indicator on each track strip latches above 0 dBFS until clicked. The master shows limiter gain reduction ("Limiter −3.2 dB") while it exceeds 0.5 dB, holding the deepest value for 1 s.
 - **Prior art:** BandLab's red master meter; FL Studio's limiter display.
-- **W-Rack application:** Mixer and master strip.
-- **Accessibility:** Meters are hidden from the accessibility tree. Clip state is a button, "Clear clip indicator, Bass clipped", announced once per playback.
+- **W-Rack application:** Track strips and the master strip in the Mixer tab.
+- **Accessibility:** Meters and the limiter readout are hidden from the accessibility tree. A lit clip indicator is a button, "Clear clip indicator, Bass clipped"; "Bass clipped" is announced once per latch, and clearing it moves focus to the strip's fader.
 - **Anti-patterns:** Red-only indicators; meter values announced live.
 
 ## Export
 
 ### `EXP-01` Export dialog fields
 - **Problem:** Option-heavy dialogs produce wrong ranges and cut-off tails.
-- **Solution:** Range (whole project or loop range), format (WAV 16-bit with dither stated, 24-bit, 32-bit float), tail (0–10 s, default 2 s) and file name, with the computed length ("0:42 including tail"). No normalize option.
+- **Solution:** Range (whole project or loop range), format ("WAV 16-bit (dithered)", "WAV 24-bit", "WAV 32-bit float") and tail (0–10 s, default 2 s), with the computed length ("Length: 42.0 s including the tail, at 48000 Hz") and the clips that will be silent. The file is named after the project. No normalize option.
 - **Prior art:** Ableton Live's export dialog offers render range, normalize, sample rate, bit depth and dither choices.
-- **W-Rack application:** Editor menu, `Mod+Shift+E`.
+- **W-Rack application:** Editor `File` menu, `Mod+Shift+E`.
 - **Accessibility:** `fieldset`s with legends; `NEW-02` validation; a disabled Export button states why.
 - **Anti-patterns:** A range that cuts at the last clip end; normalize on by default.
 
@@ -476,7 +476,7 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 
 ### `A11Y-02` Position and edit announcements
 - **Problem:** Screen-reader users cannot perceive playhead moves or edit results.
-- **Solution:** One polite live region announces locate and step moves ("Bar 5 beat 1"), edit results and transport start and stop. It is silent during playback and debounced to 300 ms. `/settings` provides "Announce position on play and stop" and "Announce position when moving the playhead", both on by default.
+- **Solution:** One polite live region announces locate and step moves ("Bar 5 beat 1"), edit results and transport start and stop. It is silent during playback and throttled to one announcement per 250 ms, the latest winning. `/settings` provides "Announce position on play and stop" and "Announce position when moving the playhead", both on by default.
 - **Prior art:** Logic Pro's accessibility settings for playhead announcements; OSARA's edit-cursor reports by measure, beat and grid.
 - **W-Rack application:** Global live region and `/settings`.
 - **Accessibility:** `assertive` only for errors and safety events.
@@ -503,8 +503,8 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
 ### `HELP-01` Icon controls, tooltips and help text
 - **Problem:** Text labels on every button crowd the editor; dense controls lack explanation where they are used.
 - **Solution:**
-  - Controls with a recognisable icon are icon-only (Lucide icons): transport, timeline tools, device headers, piano-roll tools, preset and sampler actions, the mixer and secondary dialog actions.
-  - Text stays where an icon would be ambiguous: dialog primary actions, Panic, empty-state calls to action and the home page.
+  - Controls with a recognisable icon are icon-only (Lucide icons): transport, timeline tools, track-header arm buttons, device headers, piano-roll tools, preset and sampler actions, the dock's collapse button and project-list row actions.
+  - Text stays where an icon would be ambiguous: dialog actions, the File, Add and Edit menu buttons, Panic, the M and S buttons, the Clip indicator, empty-state calls to action and the home page.
   - Less frequent commands live in the File, Add and Edit menus.
   - One shared tooltip shows each icon control's name with its shortcut ("Play (Space)") after a short delay on hover or keyboard focus.
   - The Info strip shows a one-sentence description of the focused or hovered control.
@@ -514,14 +514,14 @@ This library defines interaction patterns for W-Rack, derived from web DAWs (Ban
   - Each icon control has an `aria-label`, with the names used before the icons ("Split at edit cursor", "Bypass Delay").
   - A shortcut is the control's description through `aria-describedby`; a control without one has no description, so the name is not read twice.
   - Tooltips are dismissible with Escape, hoverable and persistent (WCAG 1.4.13).
-  - Targets are at least 24 × 24 px. Toggles expose `aria-pressed` and show a lit lamp on a filled cap, never colour alone.
+  - Targets are at least 24 × 24 px. Toggles expose `aria-pressed` and show an ink-filled cap while pressed (transport toggles add a lit lamp), never colour alone.
 - **Anti-patterns:** Hover-only tooltips; tooltips that repeat the label.
 
 ### `HELP-02` Command palette and shortcut overlay
 - **Problem:** Shortcuts stay hidden; keyboard users need a path to every command.
-- **Solution:** `Mod+K` opens a palette listing every command with its shortcut, fuzzy search, Enter to run and Escape to close; unavailable commands are disabled with a reason. `?` opens a grouped shortcut overlay.
+- **Solution:** `Mod+K` (also `Mod+Shift+P`) opens a palette listing every command with its shortcut, a search that matches every typed word in a command's group or label, Enter to run and Escape to close; unavailable commands are listed as disabled. `?` opens a grouped shortcut overlay, which in the editor adds the keys of the focused editors.
 - **Prior art:** REAPER's Actions list; OSARA's key map; Ableton Live's Navigate menu.
-- **W-Rack application:** Global overlay.
+- **W-Rack application:** Global dialogs, also opened by the site header's `Commands` and `Keyboard shortcuts` buttons.
 - **Accessibility:** `combobox` with a `listbox`; result counts are announced; focus returns to the previous element on close.
 - **Anti-patterns:** Shortcuts documented only outside the app.
 
@@ -531,15 +531,15 @@ The industrial design system draws attention by mechanical importance. Flair mar
 | Tier | Elements | Treatment |
 |---|---|---|
 | 1. Transport and safety | Play/Pause, Stop, Loop, Metronome, Position, master volume and meter, Panic | Indicator lamps on toggles, amber readout windows, emergency-stop Panic, signal orange on Play while it is the next step |
-| 2. Working toggles | Mute, Solo, Snap, Bypass, step input, dock tabs | Ink-filled pressed state; tabs underline the open panel |
+| 2. Working toggles | Mute, Solo, Arm, Snap, Bypass, step input, dock tabs | Ink-filled pressed state; tabs underline the open panel |
 | 3. Everything else | Menus, selects, zoom, navigation, parameter values, cards | Quiet: regular sentence-case legends, plain value readouts, thin card borders |
 
 - The display face is reserved for page titles (Home, Projects, New project, Settings) and the W-Rack wordmark. The editor's project name is the text face in bold, so it never competes with a page title.
-- Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists and missing-audio warnings.
+- Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists, missing-audio warnings and the example hint "Press Play to hear this example".
 - Small regular capitals mark structure: group headings and legends inside a panel. Controls use sentence case.
-- Signal orange marks the primary action and the selected velocity only; knob arcs and other values use ink.
+- Signal orange marks the primary action, the selected velocity and the export progress bar only; knob arcs and other values use ink.
 - Hues are reserved: blue is focus, red is danger and Panic, orange is the primary action, amber is the transport lamps and readouts. Track and clip colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) use none of them, and piano-roll notes take their track's colour.
-- Neutrals are a warm grey in three elevations: the ground, the bars (toolbars, track headers, dock bar) one step lighter, and the lanes and cards lightest.
+- Neutrals are a warm grey in three elevations: the ground; the bars (transport, dock tab strip, ruler corner, piano-roll row headers) one step lighter; and the lanes, cards, headers and clip toolbar lightest.
 
 ## Conflicts and decisions
 | Topic | Product behavior | W-Rack decision | Pattern |
@@ -557,34 +557,40 @@ The industrial design system draws attention by mechanical importance. Flair mar
 | Volume notice repetition | No DAW precedent | Once per session, with an opt-out per device | `SAFE-01` |
 
 ## Keyboard shortcuts
-Single-letter keys act only outside text fields. No global single-letter shortcut uses a computer-keyboard note key (A W S E D F T G Y H U J K, Z, X), so the shortcuts keep working while Play with keyboard is on; M and S act only on a focused track row.
+Single-letter keys act only outside text fields. No global single-letter shortcut uses a computer-keyboard note key (A W S E D F T G Y H U J K, Z, X), so the shortcuts keep working while Play with keyboard is on; M, S and R act only on a focused track row, and Q only in the piano roll.
 
 | Action | Key | Browser conflict | Handling |
 |---|---|---|---|
-| Play / pause | `Space` | Page scroll; activates focused buttons | Not captured in fields or on buttons |
-| Locate to start / loop start | `Home` / `Shift+Home` | Caret movement in fields | Not captured in fields |
+| Play / pause | `Space` | Page scroll; activates focused buttons | Not captured in fields or on keyboard-focused buttons |
+| Locate to start / loop start | `Home` / `Shift+Home` | Caret movement in fields | Not captured in fields or on focused controls |
 | Loop on/off | `L` | — | — |
 | Metronome | `C` | — | — |
+| Undo / redo | `Mod+Z` / `Mod+Shift+Z` or `Mod+Y` | Undo in text fields | Not captured in text fields, which keep their own undo; `Edit` menu alternative |
 | Split | `Mod+E` | Chrome and Edge search shortcut | Captured in the editor; menu alternative |
 | Duplicate | `Mod+D` | Bookmark | Captured in the editor |
 | Join | `Mod+J` | Chrome downloads | Captured in the editor; menu alternative |
+| Select all clips | `Mod+A` | Select page text | Focused tracks and clips; `Edit` menu alternative |
+| Delete clips / track | `Delete` or `Backspace` | — | Focused clip or track row |
 | Trim start / end | `Alt+Left/Right` / `Alt+Shift+Left/Right` | `Alt+Left` is Back on Windows | Only with a clip focused |
+| Rename track or clip | `F2` | — | Focused track or clip row; `Edit` menu alternative |
+| Clip menu | `Shift+F10` or `ContextMenu` | Browser context menu | Focused clip row |
 | Grid size | `+` / `-` | — | Unmodified keys |
 | Snap | `N` | — | — |
-| Zoom in / out / fit | `Alt+=` / `Alt+-` / `Alt+0` | `Mod+=`/`-`/`0` page zoom | Alt-modified |
+| Zoom in / out | `Alt+=` / `Alt+-` | `Mod+=`/`-`/`0` page zoom | Alt-modified |
 | Mute / solo | `M` / `S` | — | Focused track |
 | Arm for live input | `R` | — | Focused instrument track |
-| Paint mode / quantize | `B` / `Q` | — | Piano roll |
+| Quantize | `Q` | — | Piano roll |
 | Save / open `.wrack` | `Mod+S` / `Mod+O` | Save page / open file | Captured |
 | Export WAV | `Mod+Shift+E` | — | — |
 | Settings | `Mod+,` | — | Opens `/settings` |
-| Command palette | `Mod+K` | Chrome search shortcut | Captured |
+| Command palette | `Mod+K` or `Mod+Shift+P` | Chrome search shortcut; Firefox private window | Captured |
+| Shortcut overlay | `?` | — | — |
 | Panic | `Escape` | — | Outside text fields, when no dialog or menu is open |
 
 Never bound: `Mod+W`, `Mod+T`, `Mod+N`, `Mod+Shift+N`, `Mod+Shift+T`, `Mod+L`, `Mod+1`–`9`, `Ctrl+Tab`, `Mod+R`, `Mod+Shift+R`, `F5`, `F11`, `Mod+Q`, `Alt+F4`, `Mod+=`, `Mod+-`, `Mod+0`, `Tab`, `Shift+Tab`.
 
 ## Unconfirmed
-- Whether browsers allow `preventDefault` on `Mod+E`, `Mod+D`, `Mod+J` and `Mod+K` in every engine.
+- Whether browsers allow `preventDefault` on `Mod+E`, `Mod+D`, `Mod+J`, `Mod+K` and `Mod+Shift+P` in every engine.
 - FL Studio's default master limiter (forum reports only).
 - Default behaviors of Song Maker (third-party tutorials only).
 - Behaviors of GarageBand, Audiotool, Amped Studio, Soundation and Reason; no sources in this library cover them.

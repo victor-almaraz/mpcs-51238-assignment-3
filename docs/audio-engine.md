@@ -1,5 +1,11 @@
 # Audio engine
 
+This document describes the full engine design, with WAM plugin segments, `SharedArrayBuffer` state blocks and delay compensation. The Assignment 3 build implements a subset, specified in `a3-audio-implementation.md`:
+- The graph is always `EngineProcessor` (`wrack-engine`) → `SafetyProcessor` (`wrack-safety`) → `destination`. There are no plugins, segments, buses, sends or delay compensation.
+- The main thread and the worklet exchange `MessagePort` messages only (`a3-audio-implementation.md`, Messaging protocol); no `SharedArrayBuffer` is used, so cross-origin isolation is not required. Playhead position and meters arrive in `pos` messages.
+- The engine reads the frame count of each `process()` call and renders in blocks of at most 128 frames. A project holds at most 16 tracks.
+- Kernels do not use `try`/`catch` in `process()`. An effect slot whose output is non-finite resets and bypasses itself and reports a `fault`; the safety stage guards the output. The client does not rebuild the context after `processorerror`.
+
 ## Node graph
 ```
 [MediaStreamAudioSourceNode]* ─► [CaptureProcessor]*          (input → disk worker via SAB)

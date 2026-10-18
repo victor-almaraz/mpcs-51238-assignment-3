@@ -3,28 +3,30 @@
 ## Common rules
 - Pitch: f = 440·2^((p − 69)/12).
 - Velocity gain: 0.3·(vel/127)².
-- All randomness uses a seeded mulberry32 PRNG. The seed derives from (device ID, note ID), so renders are reproducible.
+- All randomness uses a seeded mulberry32 PRNG. Each kernel's seed derives from the project seed and the track index; each note seeds its noise from the kernel seed and the note's index in the track's expanded note list. Renders are therefore reproducible.
 - Voice limits and polyphony auto-gain: `audio-safety.md`.
 
 ## Kernel interface
+Instrument kernels are JavaScript classes in `src/dsp/instruments/`, registered by device type in `registry.js` as `{ params, Kernel }`. The main thread and the worklet share the registry.
+
 ```ts
 export interface InstrumentKernel {
-  readonly type: string;
-  readonly params: readonly ParamDef[];
-  readonly latencyFrames: number;
-  prepare(sampleRate: number, maxFrames: number, seed: number): void;   // may allocate
-  noteOn(offset: number, noteId: number, pitch: number, velocity: number): void;
-  noteOff(offset: number, noteId: number): void;
-  setParam(offset: number, key: string, plainValue: number): void;
-  allNotesOff(hard: boolean): void;                  // hard: no release
-  render(outL: Float32Array, outR: Float32Array, frames: number): void; // overwrites outputs
+  constructor(fs: number, global: GlobalVoices);    // allocates every buffer; `global` is the engine's shared voice budget
+  readonly stereo?: true;                           // drum machine and sampler render stereo; the others render mono
+  seed: number;                                     // set by the engine from the project seed and track index
+  setParam(id: string, plainValue: number): void;   // clamps through the ParamDef
+  noteOn(noteId: number, pitch: number, velocity: number): void;
+  noteOff(noteId: number): void;
+  releaseSequenced(): void;                         // releases sequenced notes; live notes keep sounding
+  allNotesOff(hard: boolean): void;                 // hard: 64-frame fade instead of release
   activeVoices(): number;
-  getState(): Uint8Array; setState(s: Uint8Array): void;
+  render(out: Float32Array, start: number, end: number): void;                       // mono kernels
+  render(outL: Float32Array, outR: Float32Array, start: number, end: number): void;  // stereo kernels
 }
 ```
-- `offset` ∈ [0, frames). Events arrive sorted by offset before `render`.
-- Only `prepare` and `setState` allocate.
-- The engine checks each kernel's output for non-finite samples (`audio-safety.md`).
+- `render` overwrites frames `[start, end)`. The engine renders up to each event's frame and then applies the event, so events take effect at their exact frame.
+- Sequenced notes use their index in the track's expanded note list as `noteId`; live notes use IDs from `LIVE_NOTE_BASE` (2^24) upward.
+- Only the constructor and source binding allocate.
 
 ## Synth envelopes and tuning
 Subtractive, FM and additive use an ADSR envelope: a linear attack to the peak, a decay toward the sustain level (−80 dB of the distance over the decay time), a hold at sustain, and an exponential release to −80 dB over the release time. Sustain 1 holds the peak. With sustain 0, a held note ends once the decay dies away.
@@ -144,11 +146,11 @@ Parameter IDs are `<voiceId>.<param>` and `kit.<param>`; 14 × 5 + 3 = 73 parame
 
 | Param | Range | Default | Unit | Scale |
 |---|---|---|---|---|
-| `kit.level` | −60 to +6 | 0 | dB | dB |
+| `kit.level` | −60 to +6 | 0 | dB | lin |
 | `kit.velSens` | 0–1 | 1 | — | lin |
 | `kit.choke` | off, on | on | — | enum |
-| `<voice>.level` | −60 to +6 | 0 | dB | dB |
-| `<voice>.tune` | −12 to +12 | 0 | semitones | lin |
+| `<voice>.level` | −60 to +6 | 0 | dB | lin |
+| `<voice>.tune` | −12 to +12, step 0.1 | 0 | semitones | lin |
 | `<voice>.decay` | 0.1–4 | 1 | × base T60 | log |
 | `<voice>.tone` | 0–1 | 0.5 | — | lin |
 | `<voice>.pan` | −1 to +1 | 0 | — | lin |
@@ -183,14 +185,14 @@ export interface SamplerState { selection: ZoneSelection; zones: SamplerZone[]; 
 
 | Param | Range | Default | Unit | Scale |
 |---|---|---|---|---|
-| `rootNote` | 0–127 | 60 | MIDI note | integer |
+| `rootNote` | 0–127, step 1 | 60 | MIDI note | lin |
 | `fineTune` | −100 to +100 | 0 | cents | lin |
 | `start`, `end` | 0–1 | 0, 1 | fraction of source | lin |
 | `loopMode` | off, forward, pingpong | off | — | enum |
 | `loopStart`, `loopEnd` | 0–1 | 0, 1 | fraction of source | lin |
-| `loopCrossfade` | 0–500 | 10 | ms | log |
+| `loopCrossfade` | 0–500 | 10 | ms | pow3 |
 | `trigger` | gate, trigger | gate | — | enum |
-| `attack` | 0–10 000 | 2 | ms | log |
+| `attack` | 0–10 000 | 2 | ms | pow3 |
 | `decay` | 1–10 000 | 300 | ms | log |
 | `sustain` | 0–1 | 1 | — | lin |
 | `release` | 5–10 000 | 200 | ms | log |
@@ -199,9 +201,9 @@ export interface SamplerState { selection: ZoneSelection; zones: SamplerZone[]; 
 | `filterEnvAmount` | −1 to +1 | 0 | × 48 semitones | lin |
 | `velSens` | 0–1 | 1 | — | lin |
 | `voiceMode` | poly, mono | poly | — | enum |
-| `glide` | 0–2000 | 0 | ms | log |
+| `glide` | 0–2000 | 0 | ms | pow3 |
 | `pan` | −1 to +1 | 0 | — | lin |
-| `level` | −60 to +6 | 0 | dB | dB |
+| `level` | −60 to +6 | 0 | dB | lin |
 
 - Sources are user-imported only. Notes beyond ±24 semitones from `rootNote` are silent.
 - Interpolation is 4-point cubic Hermite over half-band mip levels 0–2. Forward loops crossfade; loops are at least 64 frames.

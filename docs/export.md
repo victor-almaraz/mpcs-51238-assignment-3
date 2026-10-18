@@ -1,5 +1,7 @@
 # Export
 
+This document describes the full export design. The Assignment 3 build implements WAV export only, as specified in `assignment-3-scope.md` (Export) and `a3-audio-implementation.md` (Offline export, WAV writer): a stereo render in an `OfflineAudioContext` through the same engine and safety worklets, encoded as 16-bit PCM with TPDF dither, 24-bit PCM (`WAVE_FORMAT_EXTENSIBLE`) or 32-bit float, at most 10 minutes plus a 0–10 s tail. The file is delivered through `showSaveFilePicker` where it exists (Chromium), otherwise through a temporary `<a download>` link to a `blob:` URL (`src/lib/files/save-file.js`). The WAV writer section applies to the build, except RF64: build exports are stereo and stay below 4 GiB, so they are always plain RIFF. The other sections do not apply.
+
 ## Render paths
 | Project | Path | Length limit |
 |---|---|---|
@@ -34,8 +36,8 @@ export interface ExportCapabilities { wav: true; opus: boolean; aac: boolean; pr
 | IEEE float 32-bit | Tag 3, `fmt ` size 18 (`cbSize` 0), plus `fact` chunk; 58-byte header |
 | Data larger than 4 GiB | RF64 with `ds64` chunk |
 
-- Dither: TPDF, ±1 LSB, when reducing to 16 or 24 bits. The seed is fixed per export, so repeated exports are identical.
-- Samples are clamped to [−1, 1) before integer conversion.
+- Dither: TPDF, `u1 − u2` LSB with `u1`, `u2` uniform in [0, 1), when reducing to 16 bits. 24-bit output is rounded without dither. The seed is fixed, so repeated exports are identical.
+- Integer conversion scales by 2^(bits − 1) − 1, rounds and clamps to the integer range (−32 768 to 32 767 for 16 bits, −8 388 608 to 8 388 607 for 24 bits). Float output stores samples unchanged.
 
 ## Compressed formats
 | Codec | Containers | Availability |

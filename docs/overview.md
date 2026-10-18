@@ -1,81 +1,68 @@
 # Overview
 
 ## Product
-W-Rack (identifier `w-rack`) is a digital audio workstation that runs entirely in a web browser. It ships as a static site. No server-side component processes, stores or observes user data.
+W-Rack (identifier `w-rack`) is a digital audio workstation that runs entirely in a web browser: an arrangement sketchpad with MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. It ships as a static site built with Next.js, React and Tailwind CSS. No server-side component processes, stores or observes user data. `assignment-3-scope.md` defines the build.
 
 ## Principles
 | Principle | Requirement | Reference |
 |---|---|---|
-| Private | No tracking, telemetry or third-party requests. Data leaves the device only through user-initiated exports. | `privacy-and-security.md` |
-| Local | Projects and audio stay on the device under user control. | `storage.md` |
-| Open | Documented native format; DAWproject and SMF interchange. | `project-file-format.md` |
-| Safe | Bounded output; protection against bursts, runaway feedback and non-finite samples. | `audio-safety.md` |
-| Accessible | Every operation is available by keyboard and to screen readers; WCAG 2.2 AA. | `accessibility.md` |
+| Private | No accounts, tracking, telemetry or third-party requests. Data leaves the device only through user-initiated `.wrack` saves and WAV exports. | `privacy-and-security.md` |
+| Local | Projects, working state, presets and settings stay in `localStorage`; imported audio stays in IndexedDB. | `assignment-3-scope.md`, Persistence |
+| Open | The `.wrack` file is a documented STORE-only ZIP of `project.json` and the original audio files. | `project-file-format.md` |
+| Safe | Bounded output: a fixed safety stage after the master, a volume notice before the first sound of a session, and Panic. | `audio-safety.md` |
+| Accessible | Every operation is available by keyboard and to screen readers; WCAG 2.2 AA. | `accessibility.md`, `a11y-check.md` |
 
 ## Scope
 In scope:
-- Arrangement timeline with MIDI and audio clips
-- Piano roll
-- Non-destructive audio clip editing
-- Recording with latency compensation
-- Built-in instruments
-- Mixer: tracks, buses, sends, master
-- Automation
-- WAM 2.0 plugins installed by the user
-- Input: Web MIDI, computer keyboard, OSC over Web Serial
-- Export: WAV, browser-encodable compressed formats, stems, SMF, DAWproject
+- One-screen editor: transport, arrangement timeline with MIDI and audio clips, and a dock with Editor, Devices and Mixer tabs
+- Transport: play, pause, stop, locate, tempo, time signature, loop, metronome
+- Piano roll with a velocity lane, step input, quantize and clip looping
+- Non-destructive audio clip editing: split, join, trim, move, duplicate, fades, crossfades, clip gain and gain envelopes
+- Built-in instruments: subtractive, FM, additive, pluck, granular, drum machine, sampler
+- Effects on every track and the master: EQ, filter, compressor, saturation, distortion, delay, reverb
+- Mixer: track volume, pan, mute and solo; master volume and pan; peak meters and clip indicators
+- Input: computer keyboard and Web MIDI, played on armed or selected instrument tracks
+- Undo and redo, a command palette and a shortcut overlay
+- Personal preset library for instruments and effects
+- Export: WAV (16-bit dithered, 24-bit, 32-bit float); `.wrack` save and open
 
 Out of scope:
-- Collaboration, accounts, cloud sync
-- Video
-- Server-side processing
-- Native plugin formats (VST, AU, CLAP)
-- Notation
+- Recording, buses, sends, automation
+- Plugins (WAM 2.0, VST, AU, CLAP)
+- OSC and Web Serial
+- DAWproject and SMF import and export; compressed export formats; stems
+- Stretched audio
+- Collaboration, accounts, cloud sync, server-side processing
+- Video, notation
 
-## Stages
-| Stage | Content |
-|---|---|
-| 1 | MIDI sequencer: transport, tempo map, MIDI clips, piano roll, built-in instruments, Web MIDI and keyboard input, SMF import/export, WAV export, local projects. |
-| 2 | Audio clips: import, streaming playback from disk, waveform display, fades and crossfades. |
-| 3 | Recording: input selection, monitoring, latency calibration and compensation. |
-| 4 | Mixer and automation: buses, sends, automation lanes, metering. |
-| 5 | WAM 2.0 plugins, OSC over Web Serial, DAWproject import/export. |
+`storage.md`, `audio-streaming.md`, `recording.md`, `plugins-wam.md`, `osc-web-serial.md` and `core-and-scaffolding.md` describe a wider design that this build does not implement (`assignment-3-scope.md`, Main documents).
 
 ## Platform support
 | Capability | Chromium desktop | Firefox desktop | Safari macOS |
 |---|---|---|---|
-| Support level | Primary; all features | Supported | Supported |
-| Cross-origin isolation (`require-corp`) | Yes | Yes | Yes |
-| CSP `'wasm-unsafe-eval'` | 97+ | 102+ | 16+ |
-| OPFS sync access handles | 102+ | 111+ | 15.2+ |
-| Linked folders (File System Access pickers) | 86+ | No | No |
-| `OfflineAudioContext.suspend()` | 49+ | No | 14.1+ |
-| Web MIDI | 43+ | 108+, gated by a site-permission add-on | No |
-| Web Serial (OSC) | 89+ | 151+, gated by an add-on | No |
-| Output device selection (`AudioContext.setSinkId`) | 110+ | No | No |
-| Underrun statistics (`AudioContext.playbackStats`) | 146+ | No | No |
-| WebCodecs audio | 94+ | 130+ | 26+ |
+| Support level | Supported | Supported | Supported |
+| AudioWorklet engine and `OfflineAudioContext` export | Yes | Yes | Yes |
+| Web MIDI | Yes, after the permission prompt | Yes, with Firefox's site-permission add-on | No |
+| `.wrack` and WAV saving | File picker (`showSaveFilePicker`) | Download | Download |
+| Imported audio in IndexedDB | Yes | Yes | Yes; site data can be deleted after 7 days without a visit, and private windows keep audio for the session only |
 
-Mobile browsers are not supported. Every capability is feature-detected at run time (`core-and-scaffolding.md`).
+Narrow and mobile viewports are not checked. Web MIDI and the file picker are feature-detected at run time. The end-to-end suite runs in Chromium, Firefox and WebKit (`testing-and-acceptance.md`).
 
 ## Glossary
 | Term | Definition |
 |---|---|
-| Tick | Integer unit of musical time; 960 per quarter note (ADR-2). |
+| Tick | Integer unit of musical time; 960 per quarter note. |
 | Frame | One sample instant across all channels at the context sample rate. |
-| Render quantum | The block of frames the audio thread processes per `process()` call; 128 frames by default. |
-| Clip | A placed region on a track referencing a Source or holding notes. |
-| Source | An imported or recorded audio file and its derived caches. |
-| Source cache | Planar float32 decoded audio at the context sample rate. |
-| Track | Timeline lane of kind `instrument`, `audio` or `bus`. |
-| Channel strip | The per-track signal chain: devices, fader, pan, sends, meter. |
-| Device | A processing unit on a channel strip: built-in instrument, built-in effect, or WAM plugin. |
-| Part | A (track, channel) pair in an imported SMF. |
+| Render quantum | The block of frames the audio thread processes per `process()` call; code reads its length on every call. |
+| Clip | A placed region on a track that references a Source (audio) or holds notes (MIDI). |
+| Source | An imported audio file, identified by the SHA-256 of its bytes (`sourceId`). |
+| Track | Timeline lane of kind `instrument` or `audio`; the master is a track of kind `bus`. |
+| Channel strip | The per-track mixer controls: fader, pan, mute, solo, meter and clip indicator. |
+| Device | A processing unit on a track: a built-in instrument or a built-in effect. |
+| Working state | Per-project view state stored apart from the project: playhead, loop, zoom, scroll, selection, open panel, dock tab, snap and armed tracks. |
 | Engine node | The `AudioWorkletNode` hosting the sequencer, built-in devices and mixer. |
-| Segment | A contiguous run of built-in processing between WAM plugin boundaries. |
 | Safety stage | The final processor before the destination (`audio-safety.md`). |
-| Core | Modules written by hand by the developer (`core-and-scaffolding.md`). |
-| Scaffolding | Modules generated by coding agents (`core-and-scaffolding.md`). |
+| Edit cursor | The playhead position in the working state; split, audio import and timeline keyboard edits act at it. |
 
 ## Prior art
 | System | Relevance |
@@ -86,7 +73,7 @@ Mobile browsers are not supported. Every capability is feature-detected at run t
 
 ## Sources
 - Web Audio API 1.1 — https://www.w3.org/TR/webaudio-1.1/
-- MDN AudioContext.setSinkId — https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/setSinkId
-- Chrome 146 release notes (Playback Statistics API) — https://developer.chrome.com/release-notes/146
+- MDN Web MIDI API — https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API
+- MDN Window.showSaveFilePicker() — https://developer.mozilla.org/en-US/docs/Web/API/Window/showSaveFilePicker
 - openDAW — https://github.com/andremichelle/openDAW
 - OSARA — https://osara.reaperaccessibility.com/
