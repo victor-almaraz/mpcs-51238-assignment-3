@@ -8,15 +8,18 @@ import { validateEngineMessage, validateModel } from '../../src/dsp/protocol.js'
 import { compileModel } from '../../src/lib/audio/compile-model.js';
 import { engineTrackIds, paramChanges } from '../../src/lib/audio/param-changes.js';
 import {
+  MAX_LOOP_PASSES,
   addAudioClip,
   addAudioTrack,
   addEnvelopePoint,
+  audioPasses,
   clipEndTick,
   envelopeGainAt,
   deleteClip,
   duplicateClip,
   joinBlocker,
   joinClips,
+  isLooping,
   loopEnd,
   moveClip,
   removeTrack,
@@ -412,4 +415,129 @@ test('stopping a loop, splitting or trimming its start keeps every note it playe
   const trimmed = trimStart(looping, clipId, 1920).doc.clips[clipId];
   assert.deepEqual(played(trimmed), [0, 1920, 3840]);
   assert.equal(trimmed.loopLength, undefined);
+});
+
+/**
+ * An audio clip shaped for loop tests: a window of 94999 frames (not a whole
+ * number of ticks, so passes end in a gap of silence), fades, a gain and an
+ * envelope segment that crosses the window end.
+ */
+function shapedWindow() {
+  const { doc, clipId, trackId, makeId } = docWithClip();
+  let shaped = trimEnd(doc, clipId, -1001).doc;
+  shaped = setFade(shaped, clipId, 'fadeIn', 2000, 'exp').doc;
+  shaped = setFade(shaped, clipId, 'fadeOut', 3000, 'equalPower').doc;
+  shaped = setClipGain(shaped, clipId, -2).doc;
+  shaped = addEnvelopePoint(shaped, clipId, 20000, 0.4, makeId).doc;
+  shaped = addEnvelopePoint(shaped, clipId, 90000, 1.3, makeId).doc;
+  return { doc: shaped, clipId, trackId, makeId };
+}
+
+/** Loop length of shapedWindow's clip: its end tick, tickAt(94998) + 1, so each pass is 95000 frames apart. */
+const WINDOW_TICKS = 3800;
+const PASS = WINDOW_TICKS * FRAMES_PER_TICK;
+
+/** The compiled clip arrays of the audio track, without the clip IDs. */
+function compiledClips(doc, fs = FS) {
+  const { id: _ids, ...arrays } = compileModel(doc, fs).model.tracks[1].clips;
+  return arrays;
+}
+
+test('loopEnd repeats an audio clip window every loopLength ticks and crops the last pass', () => {
+  const { doc, clipId } = docWithClip();
+  assert.equal(clipEndTick(doc, doc.clips[clipId]), 3840);
+  const looped = loopEnd(doc, clipId, 3840 + 1920).doc;
+  const clip = looped.clips[clipId];
+  assert.ok(isLooping(clip));
+  assert.deepEqual([clip.loopLength, clip.length, clip.sourceLength], [3840, 3 * 3840 - 1920, 96000]);
+  assert.equal(clipEndTick(looped, clip), 3 * 3840 - 1920);
+  const passes = audioPasses(looped, clip);
+  assert.deepEqual(passes.map((p) => [p.start, p.sourceOffset, p.sourceLength]), [[0, 0, 96000], [3840, 0, 96000], [7680, 0, 48000]]);
+  assert.equal(passes[0].id, clipId);
+  assert.equal(passes[1].loopLength, undefined);
+  const c = compileModel(looped, FS).model.tracks[1].clips;
+  assert.deepEqual([...c.start], [0, 96000, 192000]);
+  assert.deepEqual([...c.srcStart], [0, 0, 0]);
+  assert.equal(validateModel(compileModel(looped, FS).model), null);
+  // Turning looping on alone changes neither the clip end nor the sound.
+  const on = setClipLooping(doc, clipId, true).doc;
+  assert.deepEqual(compiledClips(on), compiledClips(doc));
+  // A looping clip's end trims by ticks; the shortest loop plays 64 frames and the longest MAX_LOOP_PASSES passes.
+  assert.equal(trimEnd(looped, clipId, -960).doc.clips[clipId].length, clip.length - 960);
+  assert.equal(trimEnd(looped, clipId, -1e9).doc.clips[clipId].length, 3);
+  const longest = trimEnd(looped, clipId, 1e9).doc;
+  assert.equal(longest.clips[clipId].length, 3840 * MAX_LOOP_PASSES);
+  assert.equal(validateModel(compileModel(longest, FS).model), null);
+});
+
+test('an audio loop renders the same as its passes written out as clips, fades, envelope and crossfades included', () => {
+  const { doc, clipId, trackId, makeId } = shapedWindow();
+  let looped = loopEnd(doc, clipId, WINDOW_TICKS + 1000).doc;
+  assert.equal(looped.clips[clipId].loopLength, WINDOW_TICKS);
+  // A later clip that starts inside the last pass and outlasts it crossfades with it.
+  looped = addAudioClip(looped, { trackId, tick: clipEndTick(looped, looped.clips[clipId]) - 500, source: SOURCE }, makeId).doc;
+  const stopped = setClipLooping(looped, clipId, false, makeId);
+  assert.ok(stopped.ok);
+  const track = stopped.doc.tracks[trackId];
+  assert.equal(track.clipIds.length, 4, 'three passes and the later clip');
+  assert.equal(track.clipIds[0], clipId);
+  assert.ok(track.clipIds.every((id) => !isLooping(stopped.doc.clips[id])));
+  assert.deepEqual(compiledClips(stopped.doc), compiledClips(looped));
+  assert.deepEqual(compiledClips(stopped.doc, 44100), compiledClips(looped, 44100));
+  const frames = 3 * 96000 + 96000;
+  const channels = [tone(96000)];
+  const [al, ar] = render(looped, channels, frames);
+  const [bl, br] = render(stopped.doc, channels, frames);
+  assert.ok(peak(al.subarray(2 * PASS, 2 * PASS + 25000)) > 0.05, 'the third pass sounds');
+  assert.deepEqual(bl, al);
+  assert.deepEqual(br, ar);
+  // Each pass starts again from the window start: pass 2 sounds like pass 1.
+  const p1 = al.subarray(0, 94999);
+  const p2 = al.subarray(PASS, PASS + 94999);
+  assert.deepEqual(p2, p1);
+  assert.equal(al[94999], 0, 'the window ends a frame before the next pass, in silence');
+});
+
+test('split, start trims and join of an audio loop keep what it plays', () => {
+  const { doc, clipId, trackId, makeId } = shapedWindow();
+  const looped = loopEnd(doc, clipId, 2 * WINDOW_TICKS).doc;
+  const channels = [tone(96000)];
+  const frames = 3 * 96000;
+  const [al] = render(looped, channels, frames);
+
+  // A split inside the second pass: the passes become clips and that pass splits.
+  const split = splitClip(looped, clipId, WINDOW_TICKS + 1001, makeId);
+  assert.ok(split.ok);
+  assert.equal(split.doc.tracks[trackId].clipIds.length, 4);
+  assert.equal(split.doc.clips[split.rightId].start, WINDOW_TICKS + 1001);
+  assert.deepEqual(render(split.doc, channels, frames)[0], al);
+  // At a pass boundary, the passes on either side are the parts.
+  const atBoundary = splitClip(looped, clipId, WINDOW_TICKS, makeId);
+  assert.ok(atBoundary.ok);
+  assert.equal(atBoundary.doc.clips[atBoundary.rightId].start, WINDOW_TICKS);
+  assert.equal(atBoundary.leftId, clipId);
+  // Inside a pass's fade, the split is refused and the loop stays.
+  assert.equal(splitClip(looped, clipId, WINDOW_TICKS + 10, makeId).ok, false);
+
+  // A start trim trims the first pass; the other passes stay where they were.
+  const trimmed = trimStart(looped, clipId, 4800, makeId).doc;
+  const ids = trimmed.tracks[trackId].clipIds;
+  assert.equal(ids.length, 3);
+  assert.equal(trimmed.clips[clipId].sourceOffset, 4800);
+  assert.equal(isLooping(trimmed.clips[clipId]), false);
+  assert.deepEqual(render(trimmed, channels, frames)[0].subarray(PASS), al.subarray(PASS));
+
+  // A loop of the first half of a tick-aligned clip joins with the second half placed at its end.
+  const plain = docWithClip();
+  const halves = splitClip(plain.doc, plain.clipId, 1920, plain.makeId);
+  let joinable = loopEnd(halves.doc, halves.leftId, 1920).doc;
+  joinable = moveClip(joinable, halves.rightId, 1920).doc;
+  assert.equal(joinBlocker(joinable, halves.leftId, halves.rightId), null);
+  const [before] = render(joinable, channels, frames);
+  const joined = joinClips(joinable, halves.leftId, halves.rightId, plain.makeId);
+  assert.ok(joined.ok);
+  const kept = joined.doc.clips[joined.clipId];
+  assert.deepEqual([kept.start, kept.sourceOffset, kept.sourceLength], [1920, 0, 96000]);
+  assert.equal(joined.doc.tracks[plain.trackId].clipIds.length, 2);
+  assert.deepEqual(render(joined.doc, channels, frames)[0], before);
 });

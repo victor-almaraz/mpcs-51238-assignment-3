@@ -27,6 +27,7 @@ import {
   addAudioTrack,
   addEnvelopePoint,
   addInstrumentTrack,
+  audioPassAt,
   clipEndTick,
   isLooping,
   removeEnvelopePoint,
@@ -74,18 +75,18 @@ const ACCEPT = 'audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.oga';
 /** Time an import's success lines stay shown, ms. */
 const RESULTS_CLEAR_MS = 10000;
 
-/** Pointer over the loop handle (the top half of a MIDI clip's right edge): the repeat icon, outlined for contrast. */
+/** Pointer over the loop handle (the top half of a clip's right edge): the repeat icon, outlined for contrast. */
 const REPEAT_CURSOR = (() => {
   const paths = '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="white" stroke-width="5">${paths}</g><g stroke="black" stroke-width="2">${paths}</g></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, copy`;
 })();
 
-/** Which part of clip box `rect` content point x, y grabs: trim handles at the edges, the loop handle at the top of a MIDI clip's right edge, else the body. */
-function clipPart(clip, rect, x, y) {
+/** Which part of clip box `rect` content point x, y grabs: trim handles at the edges, the loop handle at the top of the right edge, else the body. */
+function clipPart(rect, x, y) {
   if (x - rect.x0 <= EDGE_PX) return 'trimStart';
   if (rect.x1 - x > EDGE_PX) return 'move';
-  return clip.kind === 'midi' && y - rect.top < rect.height / 2 ? 'repeatEnd' : 'trimEnd';
+  return y - rect.top < rect.height / 2 ? 'repeatEnd' : 'trimEnd';
 }
 
 /** The keyboard handles on the loop band's edges. */
@@ -196,7 +197,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       group: 'Clip',
       label: lastSelected && isLooping(lastSelected) ? 'Stop looping clip' : 'Loop clip',
       run: () => commands.setLooping(!isLooping(lastSelected)),
-      enabled: () => editable() && lastSelected?.kind === 'midi',
+      enabled: () => editable() && Boolean(lastSelected),
     },
     { id: 'timeline.select-all', group: 'Clip', label: 'Select all clips', keys: 'Mod+A', run: () => setSelection(Object.keys(project.clips)), enabled: () => hasClips },
     { id: 'timeline.focus', group: 'Go to', label: 'Tracks and clips', run: focusTree },
@@ -380,7 +381,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { separator: true },
       { label: 'Select all clips', keys: 'Mod+A', disabled: !hasClips, run: () => setSelection(Object.keys(project.clips)) },
       { label: lastSelected?.muted ? 'Unmute clip' : 'Mute clip', disabled: readOnly || !lastSelected, run: toggleMute },
-      { label: lastSelected && isLooping(lastSelected) ? 'Stop looping clip' : 'Loop clip', disabled: readOnly || lastSelected?.kind !== 'midi', run: () => commands.setLooping(!isLooping(lastSelected)) },
+      { label: lastSelected && isLooping(lastSelected) ? 'Stop looping clip' : 'Loop clip', disabled: readOnly || !lastSelected, run: () => commands.setLooping(!isLooping(lastSelected)) },
       { label: 'Rename clip…', keys: 'F2', disabled: readOnly || !lastSelected, run: () => startRename(lastSelected) },
       { label: track ? `Rename track ${track.name}…` : 'Rename track…', disabled: readOnly || !track, run: () => startRenameTrack(track) },
       { separator: true },
@@ -408,7 +409,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       { label: 'Join clips', note: join.reason, run: () => commands.join() },
       { label: `Duplicate ${what}`, run: () => commands.duplicate() },
       { label: `${clip.muted ? 'Unmute' : 'Mute'} ${what}`, run: toggleMute },
-      ...(clip.kind === 'midi' ? [{ label: `${isLooping(clip) ? 'Stop looping' : 'Loop'} ${what}`, run: () => commands.setLooping(!isLooping(clip)) }] : []),
+      { label: `${isLooping(clip) ? 'Stop looping' : 'Loop'} ${what}`, run: () => commands.setLooping(!isLooping(clip)) },
       { label: 'Rename clip…', run: () => startRename(clip) },
       { label: `Delete ${what}`, run: () => commands.remove(ids) },
     ];
@@ -592,21 +593,24 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       return;
     }
     const clip = hit.clip;
-    if (clip.kind === 'audio' && selection.includes(clip.id) && !mod && !e.shiftKey) {
+    const mode = clipPart(hit.rect, x, y);
+    // The loop handle comes before the fade-out handle it overlaps at the top of the right edge.
+    if (clip.kind === 'audio' && mode !== 'repeatEnd' && selection.includes(clip.id) && !mod && !e.shiftKey) {
       const handle = handleAt(project, clip, hit.rect, x, y, view.zoom);
       if (handle) {
         drag.current = { mode: handle, clipId: clip.id, rect: hit.rect, x0: x, y0: y };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
-      const point = envelopePointAt(project, clip, hit.rect, x, y, view.zoom);
+      // An envelope point drags within the loop pass it was grabbed in.
+      const pass = audioPassAt(project, clip, xToTick(x, view.zoom));
+      const point = envelopePointAt(project, pass, hit.rect, x, y, view.zoom);
       if (point) {
-        drag.current = { mode: 'envPoint', clipId: clip.id, pointId: point.id, rect: hit.rect, x0: x, y0: y };
+        drag.current = { mode: 'envPoint', clipId: clip.id, pass, pointId: point.id, rect: hit.rect, x0: x, y0: y };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
     }
-    const mode = clipPart(clip, hit.rect, x, y);
     let next = selection;
     if (mod) next = selection.includes(clip.id) ? selection.filter((id) => id !== clip.id) : [...selection, clip.id];
     else if (e.shiftKey && selection.length > 0 && project.clips[selection[0]]?.trackId === clip.trackId) {
@@ -632,7 +636,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         return;
       }
       const hit = readOnly ? null : hitAt(p);
-      const part = hit ? clipPart(hit.clip, hit.rect, p.x, p.y) : 'move';
+      const part = hit ? clipPart(hit.rect, p.x, p.y) : 'move';
       e.currentTarget.style.cursor = part === 'repeatEnd' ? REPEAT_CURSOR : part === 'move' ? '' : 'ew-resize';
       return;
     }
@@ -653,7 +657,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       const db = Math.round(Math.max(CLIP_GAIN_MIN_DB, Math.min(CLIP_GAIN_MAX_DB, clip.gainDb - (y - d.y0) * GAIN_DB_PER_PX)) * 10) / 10;
       setGhost({ mode: 'gain', clipId: clip.id, gainDb: db });
     } else if (d.mode === 'envPoint') {
-      setGhost({ mode: 'envPoint', clipId: clip.id, pointId: d.pointId, frame: frameAtX(project, clip, x, view.zoom), gain: gainAtY(d.rect, y) });
+      setGhost({ mode: 'envPoint', clipId: clip.id, pointId: d.pointId, frame: frameAtX(project, d.pass, x, view.zoom), gain: gainAtY(d.rect, y) });
     } else {
       const raw = Math.round((x - d.x0) / pxPerTick(view.zoom));
       // Alt while dragging bypasses snap (ARR-04).
@@ -774,14 +778,16 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     }
     if (!hit || hit.clip.kind !== 'audio' || !selection.includes(hit.clip.id)) return;
     const doc = commands.docRef.current;
-    const point = envelopePointAt(doc, hit.clip, hit.rect, pos.x, pos.y, view.zoom);
+    // On a looping clip, points belong to the window: the frame is counted from the start of the pass under the pointer.
+    const pass = audioPassAt(doc, hit.clip, xToTick(pos.x, view.zoom));
+    const point = envelopePointAt(doc, pass, hit.rect, pos.x, pos.y, view.zoom);
     if (point) {
       const result = removeEnvelopePoint(doc, hit.clip.id, point.id);
       if (result.ok) commands.commit(result.doc, 'Envelope point removed');
       return;
     }
     const gain = gainAtY(hit.rect, pos.y);
-    const result = addEnvelopePoint(doc, hit.clip.id, frameAtX(doc, hit.clip, pos.x, view.zoom), gain);
+    const result = addEnvelopePoint(doc, hit.clip.id, frameAtX(doc, pass, pos.x, view.zoom), gain);
     if (result.ok) commands.commit(result.doc, `Envelope point added at ${faderText(gainDb(gain))}`);
   }
 
@@ -885,7 +891,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
         ref={scrollRef}
         className="relative min-h-0 flex-1 overflow-auto bg-surface select-none"
         style={{ touchAction: 'pan-y' }}
-        data-help="Arrangement: double-click an empty lane to add a clip there (MIDI on instrument tracks, an audio file on audio tracks), or drop audio files on it. Drag a clip's edges to trim it; the top of a MIDI clip's right edge loops it."
+        data-help="Arrangement: double-click an empty lane to add a clip there (MIDI on instrument tracks, an audio file on audio tracks), or drop audio files on it. Drag a clip's edges to trim it; the top of a clip's right edge loops it."
         onScroll={onScroll}
         onPointerDown={onPointerDown}
         onDoubleClick={onDoubleClick}

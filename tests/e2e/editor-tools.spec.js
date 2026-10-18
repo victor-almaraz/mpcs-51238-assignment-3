@@ -197,6 +197,44 @@ test('the top of a MIDI clip right edge loops the clip; the lower part and the C
   await page.keyboard.press('Escape');
 });
 
+test('the top of an audio clip right edge loops it; the end trim keys and the Clip menu work on the loop', async ({ page }) => {
+  const id = await projectWithAudio(page);
+  const audio = async () => Object.values((await saved(page, id))?.clips ?? {}).filter((c) => c.kind === 'audio').sort((a, b) => a.start - b.start);
+  // The 2 s clip is one bar at 120 BPM: row 1, x 0 to 128. Dragging the top of its right edge two bars repeats it twice.
+  const from = await canvasPoint(page, 126, 1, 8);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 128, from.y, { steps: 4 });
+  await page.mouse.move(from.x + 256, from.y, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await audio()).map((c) => [c.length, c.loopLength, c.sourceLength])).toEqual([[3 * 3840, 3840, 96000]]);
+  await expect(clipRows(page).first()).toHaveAccessibleName(/loops every 1 bar/);
+
+  // With looping on, the end trim keys lengthen and shorten the loop.
+  await clipRows(page).first().focus();
+  await page.keyboard.press('Alt+Shift+ArrowRight');
+  await expect.poll(async () => (await audio())[0].length).toBeGreaterThan(3 * 3840);
+  await page.keyboard.press('Alt+Shift+ArrowLeft');
+  await expect.poll(async () => (await audio())[0].length).toBe(3 * 3840);
+  expect((await audio())[0].sourceLength).toBe(96000);
+
+  // Stop looping writes the passes out as clips that read the same audio.
+  await clipRows(page).first().press('ContextMenu');
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Stop looping clip' }).click();
+  await expect(clipRows(page)).toHaveCount(3);
+  await expect.poll(async () => (await audio()).map((c) => [c.start, c.sourceOffset, c.sourceLength, c.loopLength])).toEqual([
+    [0, 0, 96000, undefined],
+    [3840, 0, 96000, undefined],
+    [7680, 0, 96000, undefined],
+  ]);
+  await expect(page.getByRole('status').filter({ hasText: 'no longer looping; repeats kept as clips' })).toHaveCount(1);
+
+  // Loop clip in the Clip menu turns looping on again at the clip's length.
+  await clipRows(page).first().press('ContextMenu');
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Loop clip' }).click();
+  await expect.poll(async () => (await audio())[0].loopLength).toBe(3840);
+});
+
 test('a duplicated MIDI clip is edited on its own: selecting the copy opens it in the piano roll', async ({ page }) => {
   await page.goto('/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('Copies');

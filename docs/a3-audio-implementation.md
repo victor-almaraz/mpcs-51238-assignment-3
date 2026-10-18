@@ -195,7 +195,7 @@ The returned function is created once per kernel at construction, never in `proc
 `compile-model.js` converts the project into EngineModel arrays sorted by start frame:
 - MIDI notes become `Int32Array` `startFrame`, `endFrame` and `Uint8Array` `pitch`, `vel` per track.
 - MIDI clip looping expands notes: a note at clip tick `t` repeats at `t + k·loopLength` while inside the clip; notes are cropped at the clip end. Cap: 20 000 expanded notes per track (project limit).
-- Audio clips become `timelineStartFrame`, `srcStart`, `srcLength`, gain, fade lengths and curves, and envelope segments.
+- Audio clips become `timelineStartFrame`, `srcStart`, `srcLength`, gain, fade lengths and curves, and envelope segments. A looping audio clip becomes one clip per pass, each reading the same source window and the last cropped (`project-model.md`, Clip loops), before crossfades are found.
 - The loop region becomes `loopStartFrame`, `loopEndFrame`.
 - Any edit, tempo change or sample-rate change triggers a recompile.
 
@@ -254,6 +254,7 @@ renderBlock(off, n):
 | Trim start by Δ frames | `srcStart += Δ`, `srcLength −= Δ`, `start = tickAt(frameAt(start) + Δ)`; `srcStart ≥ 0`, `srcLength ≥ 64` (project limit). |
 | Trim end | `srcLength` clamped to `[64, sourceFrames − srcStart]`. |
 | Move | Changes `start` and track (same track kind only). Source fields are unchanged. |
+| Looping clip | Trim end sets `length` in ticks. Split, trim start and join first write the loop out as one clip per pass (`project-model.md`, Clip loops). |
 
 ### Gain stages
 `out = src[i] · clipGain · fade(i) · env(i)`

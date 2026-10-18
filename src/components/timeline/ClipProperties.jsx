@@ -16,6 +16,7 @@ import {
   COLORS,
   DEFAULT_AUDIO_RATE,
   addEnvelopePoint,
+  audioPassAt,
   audioTempo,
   removeEnvelopePoint,
   renameClip,
@@ -85,8 +86,10 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
 
   const audio = clip.kind === 'audio';
   const lengthMs = audio ? toMs(clip.sourceLength) : 0;
-  const cursorFrame = audio ? audioTempo(project).frameAt(editCursor) - audioTempo(project).frameAt(clip.start) : -1;
-  const cursorInside = cursorFrame >= 0 && cursorFrame < clip.sourceLength;
+  // On a looping clip, the edit cursor's frame is counted from the start of the pass it falls in.
+  const cursorPass = audio ? audioPassAt(project, clip, editCursor) : null;
+  const cursorFrame = audio ? audioTempo(project).frameAt(editCursor) - audioTempo(project).frameAt(cursorPass.start) : -1;
+  const cursorInside = cursorFrame >= 0 && cursorFrame < (cursorPass?.sourceLength ?? 0);
   const id = `clip-${clip.id}`;
   const points = audio ? visibleEnvelope(clip) : [];
 

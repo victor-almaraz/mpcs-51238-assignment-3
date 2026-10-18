@@ -3,7 +3,7 @@
  * the command hook. Pure functions; no React.
  */
 import { PPQ } from '@/dsp/core/constants';
-import { ENVELOPE_GAIN_MAX, audioTempo, clipEndTick, isLooping } from '@/lib/project/clip-commands';
+import { ENVELOPE_GAIN_MAX, audioPasses, audioTempo, clipEndTick, isLooping } from '@/lib/project/clip-commands';
 
 /** Row height, bar-number ruler height and pixels per quarter note at zoom 1, CSS pixels. */
 export const TRACK_H = 56;
@@ -127,7 +127,7 @@ export function clipRect(doc, clip, row, zoom) {
   };
 }
 
-/** Clip-relative frame at content x (audio clips), clamped to the clip. */
+/** Clip-relative frame at content x (audio clips, or one pass of a looping clip), clamped to the clip. */
 export function frameAtX(doc, clip, x, zoom) {
   const tempo = audioTempo(doc);
   const f = tempo.frameAt(xToTick(x, zoom)) - tempo.frameAt(clip.start);
@@ -148,12 +148,24 @@ export const gainAtY = (rect, y) => Math.max(0, Math.min(ENVELOPE_GAIN_MAX, ENVE
 export const hasHandles = (rect) => rect.x1 - rect.x0 >= 3 * HANDLE;
 
 /**
+ * The box of audio clip `clip`'s handles: its first loop pass inside clip box
+ * `rect`, or `rect` when it does not loop. Returns [pass, box].
+ */
+export function handleBox(doc, clip, rect, zoom) {
+  const pass = audioPasses(doc, clip)[0];
+  return [pass, pass === clip ? rect : { ...rect, x1: tickToX(clipEndTick(doc, pass), zoom) }];
+}
+
+/**
  * The handle of audio clip `clip` under content point x, y: 'fadeIn' (the
  * target right of the fade-in's end), 'fadeOut' (left of the fade-out's
- * start), 'gain' (top centre), or null.
+ * start), 'gain' (top centre), or null. On a looping clip, the handles sit on
+ * its first pass.
  */
-export function handleAt(doc, clip, rect, x, y, zoom) {
-  if (clip.kind !== 'audio' || !hasHandles(rect) || y < rect.top || y > rect.top + HANDLE) return null;
+export function handleAt(doc, looped, clipRect, x, y, zoom) {
+  if (looped.kind !== 'audio') return null;
+  const [clip, rect] = handleBox(doc, looped, clipRect, zoom);
+  if (!hasHandles(rect) || y < rect.top || y > rect.top + HANDLE) return null;
   const fadeInX = xAtFrame(doc, clip, clip.fadeIn.length, zoom);
   const fadeOutX = xAtFrame(doc, clip, clip.sourceLength - clip.fadeOut.length, zoom);
   const mid = (rect.x0 + rect.x1) / 2;
@@ -163,7 +175,7 @@ export function handleAt(doc, clip, rect, x, y, zoom) {
   return null;
 }
 
-/** The visible envelope point of `clip` within POINT_HIT px of x, y, or null. */
+/** The visible envelope point of `clip` (an audio clip, or one pass of a looping clip) within POINT_HIT px of x, y, or null. */
 export function envelopePointAt(doc, clip, rect, x, y, zoom) {
   if (clip.kind !== 'audio') return null;
   let best = null;

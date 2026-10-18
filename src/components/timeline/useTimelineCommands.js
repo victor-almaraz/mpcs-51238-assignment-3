@@ -7,6 +7,7 @@ import {
   clipEndTick,
   deleteClip,
   duplicateClip,
+  isLooping,
   joinBlocker,
   joinClips,
   loopEnd,
@@ -92,14 +93,17 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     commit(next, `Moved ${first.name} to ${barText(first.start, meter)}, ${next.tracks[first.trackId].name}`);
   }
 
-  /** Trims the selection's start (`edge` 'start') or end by `steps` grid steps, or by `dTick` ticks when given. */
+  /**
+   * Trims the selection's start (`edge` 'start') or end by `steps` grid steps, or by `dTick` ticks when given.
+   * Audio clips trim by frames, except the end of a looping clip, which lengthens or shortens the loop by ticks.
+   */
   function trim(edge, steps, dTick) {
     if (readOnly) return;
     let doc = docRef.current;
     const clips = selectedClips(doc);
     for (const clip of clips) {
       let delta;
-      if (clip.kind === 'midi') delta = dTick ?? steps * stepTicks;
+      if (clip.kind === 'midi' || (edge === 'end' && isLooping(clip))) delta = dTick ?? steps * stepTicks;
       else {
         const at = edge === 'start' ? clip.start : clipEndTick(doc, clip);
         if (dTick !== undefined) {
@@ -114,25 +118,27 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     commit(doc, `${c.name}: ${barText(c.start, meter)} to ${barText(clipEndTick(doc, c), meter)}`);
   }
 
-  /** Lengthens the selected MIDI clips by `dTick` ticks as loops, turning looping on at their current length. */
+  /** Lengthens the selected clips by `dTick` ticks as loops, turning looping on at their current length. */
   function repeat(dTick) {
     if (readOnly) return;
     let doc = docRef.current;
-    const clips = selectedClips(doc).filter((c) => c.kind === 'midi');
+    const clips = selectedClips(doc);
     for (const clip of clips) doc = loopEnd(doc, clip.id, dTick).doc;
     if (clips.length === 0) return;
     const c = doc.clips[clips[0].id];
     commit(doc, `${c.name}: loops to ${barText(clipEndTick(doc, c), meter)}`);
   }
 
-  /** Turns looping on or off for the selected MIDI clips. */
+  /** Turns looping on or off for the selected clips; off keeps the repeats, as notes (MIDI) or clips (audio). */
   function setLooping(on) {
     if (readOnly) return;
     let doc = docRef.current;
-    const clips = selectedClips(doc).filter((c) => c.kind === 'midi');
+    const clips = selectedClips(doc);
     for (const clip of clips) doc = setClipLooping(doc, clip.id, on).doc;
     if (clips.length === 0) return;
-    commit(doc, `${clips.length === 1 ? clips[0].name : `${clips.length} clips`} ${on ? 'looping' : 'no longer looping; repeats kept as notes'}`);
+    const kinds = new Set(clips.map((c) => c.kind));
+    const kept = kinds.size > 1 ? 'repeats kept' : kinds.has('midi') ? 'repeats kept as notes' : 'repeats kept as clips';
+    commit(doc, `${clips.length === 1 ? clips[0].name : `${clips.length} clips`} ${on ? 'looping' : `no longer looping; ${kept}`}`);
   }
 
   /** Splits the selected clips (or the clips under the cursor on `trackId`) at the edit cursor. */
@@ -190,8 +196,9 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
       announce(`Cannot join: ${reason}`);
       return;
     }
-    commit(joinClips(docRef.current, a.id, b.id).doc, `Joined ${a.name} and ${b.name}`);
-    setSelection([a.id]);
+    const joined = joinClips(docRef.current, a.id, b.id);
+    commit(joined.doc, `Joined ${a.name} and ${b.name}`);
+    setSelection([joined.clipId]);
   }
 
   function duplicate() {

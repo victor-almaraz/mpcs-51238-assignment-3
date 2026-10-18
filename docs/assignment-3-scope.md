@@ -238,7 +238,7 @@ The five synths share an Octave (−3 to 3) and Cents (−100 to 100) tuning. Sh
 | Fades | Fade-in and fade-out; curves `linear`, `equalPower`, `exp` |
 | Crossfade | Overlapping clips on one track crossfade over the overlap, `equalPower` by default |
 | Gain envelope | Per-clip breakpoints, linear gain −∞ to +6 dB per point (project limit), linear segments, applied per sample |
-| Loop (MIDI) | A MIDI clip repeats its notes to fill its length |
+| Loop | A MIDI clip repeats its notes, and an audio clip its source window, to fill its length |
 | Rename and colour | Per clip |
 
 ## Mixer

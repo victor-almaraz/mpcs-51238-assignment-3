@@ -6,9 +6,9 @@ import { getSource } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
 import { levelFor, peaksFor } from '@/lib/audio/peaks-client';
 import { faderText } from '@/components/mixer/TrackStrip';
-import { audioTempo, clipEndTick, envelopeGainAt, isLooping } from '@/lib/project/clip-commands';
+import { audioPasses, audioTempo, clipEndTick, envelopeGainAt, isLooping } from '@/lib/project/clip-commands';
 import { expandClipNotes } from '@/lib/project/midi-commands';
-import { HEADER_W, RULER_H, TRACK_H, clipRect, envelopeY, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
+import { HEADER_W, RULER_H, TRACK_H, clipRect, envelopeY, handleBox, hasHandles, pxPerTick, trackClips, xAtFrame } from './layout';
 import { cssVar } from '@/components/ui/css-var';
 
 /** Min/max of `level` over source frames [from, to). */
@@ -104,6 +104,22 @@ function drawHandles(ctx, doc, clip, rect, zoom, sx, colors, gainDrag) {
     ctx.fillRect(mid - w / 2, rect.top + 16, w, 15);
     ctx.fillStyle = colors.bg;
     ctx.fillText(text, mid - w / 2 + 4, rect.top + 27);
+  }
+}
+
+/** Marks the start of each loop pass after the first at canvas x positions `xs`: a notch in the top band and a faint line. */
+function drawPassNotches(ctx, xs, top, ch, color) {
+  ctx.fillStyle = color;
+  for (const x of xs) {
+    const lx = Math.round(x);
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(lx, top, 1, ch);
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.moveTo(lx - 4, top);
+    ctx.lineTo(lx + 4, top);
+    ctx.lineTo(lx, top + 6);
+    ctx.fill();
   }
 }
 
@@ -267,29 +283,38 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
           ctx.rect(x, top, cw, ch);
           ctx.clip();
           if (clip.kind === 'audio') {
-            const shown = drawWaveform(ctx, p.project, clip, x, top + 14, ch - 16, p.zoom, w, clip.muted ? colors.line : colors.muted);
+            // A looping clip draws each pass: the window's waveform and fades again, cropped like the pass.
+            const tempo = audioTempo(p.project);
+            const passes = audioPasses(p.project, clip);
+            let shown = true;
+            for (const pass of passes) {
+              const px = pass.start * k - sx;
+              if (px > w) break;
+              const startFrame = tempo.frameAt(pass.start);
+              if (tempo.tickAt(startFrame + pass.sourceLength) * k - sx < 0) continue;
+              shown = drawWaveform(ctx, p.project, pass, px, top + 14, ch - 16, p.zoom, w, clip.muted ? colors.line : colors.muted) && shown;
+              const fadeIn = Math.min(pass.fadeIn.length, pass.sourceLength);
+              const fadeOut = Math.min(pass.fadeOut.length, pass.sourceLength);
+              if (fadeIn > 0 || fadeOut > 0) {
+                ctx.strokeStyle = colors.fg;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                if (fadeIn > 0) {
+                  ctx.moveTo(px, top + ch);
+                  ctx.lineTo(tempo.tickAt(startFrame + fadeIn) * k - sx, top + 4);
+                }
+                if (fadeOut > 0) {
+                  ctx.moveTo(tempo.tickAt(startFrame + pass.sourceLength - fadeOut) * k - sx, top + 4);
+                  ctx.lineTo(tempo.tickAt(startFrame + pass.sourceLength) * k - sx, top + ch);
+                }
+                ctx.stroke();
+              }
+            }
             if (!shown) {
               ctx.fillStyle = colors.fg;
               ctx.fillText('Audio not loaded', x + 4, top + 32);
             }
-            const fadeIn = clip.fadeIn.length;
-            const fadeOut = clip.fadeOut.length;
-            if (fadeIn > 0 || fadeOut > 0) {
-              const tempo = audioTempo(p.project);
-              const startFrame = tempo.frameAt(clip.start);
-              ctx.strokeStyle = colors.fg;
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              if (fadeIn > 0) {
-                ctx.moveTo(x, top + ch);
-                ctx.lineTo(tempo.tickAt(startFrame + fadeIn) * k - sx, top + 4);
-              }
-              if (fadeOut > 0) {
-                ctx.moveTo(tempo.tickAt(startFrame + clip.sourceLength - fadeOut) * k - sx, top + 4);
-                ctx.lineTo(x + cw, top + ch);
-              }
-              ctx.stroke();
-            }
+            if (passes.length > 1) drawPassNotches(ctx, passes.slice(1).map((pass) => pass.start * k - sx), top, ch, colors.fg);
           } else {
             const { notes, lo, span } = clipPicture(clip);
             ctx.fillStyle = clip.muted ? colors.line : colors.muted;
@@ -303,18 +328,9 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
             }
             // Each loop pass after the first starts at a notch in the top band and a faint line.
             if (isLooping(clip)) {
-              ctx.fillStyle = colors.fg;
-              for (let t = clip.loopLength; t < clip.length; t += clip.loopLength) {
-                const lx = Math.round((clip.start + t) * k - sx);
-                ctx.globalAlpha = 0.25;
-                ctx.fillRect(lx, top, 1, ch);
-                ctx.globalAlpha = 1;
-                ctx.beginPath();
-                ctx.moveTo(lx - 4, top);
-                ctx.lineTo(lx + 4, top);
-                ctx.lineTo(lx, top + 6);
-                ctx.fill();
-              }
+              const xs = [];
+              for (let t = clip.loopLength; t < clip.length; t += clip.loopLength) xs.push((clip.start + t) * k - sx);
+              drawPassNotches(ctx, xs, top, ch, colors.fg);
             }
           }
           ctx.fillStyle = colors.fg;
@@ -330,8 +346,16 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
             ctx.beginPath();
             ctx.rect(x, top, cw, ch);
             ctx.clip();
-            drawEnvelope(ctx, p.project, clip, rect, p.zoom, sx, colors);
-            if (isSelected) drawHandles(ctx, p.project, clip, rect, p.zoom, sx, colors, g?.mode === 'gain' && g.clipId === clip.id);
+            for (const pass of audioPasses(p.project, clip)) {
+              const px = pass.start * k - sx;
+              if (px > w) break;
+              const passRect = { ...rect, x0: pass.start * k, x1: clipEndTick(p.project, pass) * k };
+              if (passRect.x1 - sx >= 0) drawEnvelope(ctx, p.project, pass, passRect, p.zoom, sx, colors);
+            }
+            if (isSelected) {
+              const [first, box] = handleBox(p.project, clip, rect, p.zoom);
+              drawHandles(ctx, p.project, first, box, p.zoom, sx, colors, g?.mode === 'gain' && g.clipId === clip.id);
+            }
             ctx.restore();
           }
           if (g && g.clipIds?.includes(clip.id)) {

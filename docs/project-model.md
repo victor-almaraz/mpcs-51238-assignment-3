@@ -53,7 +53,8 @@ export interface MidiClip extends ClipBase { kind: 'midi'; length: Tick; loopLen
 export interface Note { id: NoteId; tick: Tick; length: Tick; pitch: number; velocity: number; channel: number } // tick relative to clip start
 export interface AudioClip extends ClipBase {
   kind: 'audio'; sourceId: SourceId;
-  sourceOffset: Frames; sourceLength: Frames;   // source frames at the original sample rate
+  sourceOffset: Frames; sourceLength: Frames;   // source frames at the original sample rate; a loop repeats this window
+  length?: Tick; loopLength?: Tick;             // looping clips only: played length and pass period (Clip loops)
   gainDb: number; fadeIn: Fade; fadeOut: Fade;
   envelope: GainPoint[];                        // clip gain envelope (a3-audio-implementation.md, Gain stages)
   takeGroup?: string;
@@ -80,6 +81,27 @@ export interface Send { id: SendId; from: TrackId; to: TrackId; gainDb: number; 
 export interface AutomationLane { id: LaneId; paramId: ParamId; enabled: boolean; points: AutomationPoint[] } // automation.md
 export interface Marker { tick: Tick; name: string }
 ```
+
+## Clip loops
+A clip loops while `loopLength` is set. It repeats every `loopLength` ticks from `start` until `start + length`.
+
+- A MIDI clip repeats the notes in `[0, loopLength)` (`expandClipNotes`).
+- An audio clip repeats its window, the source frames `[sourceOffset, sourceOffset + sourceLength)`. Its `length` and `loopLength` are ticks; `sourceLength` stays the window length.
+- Turning looping on sets `loopLength` and `length` to the clip's length in ticks. For an audio clip that is its end tick minus its start, so the first pass is the whole window and turning looping on does not change what the clip plays.
+
+### Audio loop passes
+`audioPasses(doc, clip)` in `clip-commands.js` lists the passes of an audio loop as plain audio clips. The compile step, the timeline drawing and the edits all use it.
+
+- Pass `k` starts at tick `start + k·loopLength` and reads the window from its first frame.
+- A pass is cropped at the next pass start and at the clip end. A window shorter than its period is followed by silence until the next pass. Pass starts fall on ticks, so a window that is not a whole number of ticks long ends less than one tick before the next pass; on a tempo ramp, the period in frames differs from pass to pass.
+- Each pass is the window clip with its end trimmed to the pass. Clip gain, fades and the envelope apply to every pass: each pass fades in and fades out, and a cropped pass fades out at its crop. The envelope repeats in every pass and keeps the points that shape the cropped part.
+- Automatic crossfades treat each pass as a clip. A later clip that starts inside the last pass and outlasts it crossfades with that pass; passes lying wholly inside another clip get no automatic fades.
+- The compile step emits one engine clip per pass, so a loop renders the same as its passes written out as clips, in playback and in WAV export. A loop plays at most 1000 passes (`MAX_LOOP_PASSES`, the engine's clips per track); a track keeps at most 1000 engine clips and 20 000 envelope points, the earliest first.
+
+### Loop edits
+- With looping on, an end trim changes `length` in ticks, from 64 frames up to 1000 passes. The window changes only while looping is off.
+- Turning looping off keeps what the clip plays: a MIDI loop's repeats become notes; an audio loop becomes one clip per pass (`unrollAudioLoop`), the first keeping the clip's ID.
+- Split, a start trim and Join write a loop out first. An audio split then splits the pass at the split point; at a pass boundary, the passes on either side are the two parts. A start trim trims the first pass. Join joins the last pass of the first clip with the first pass of the second.
 
 ## Track colours
 New tracks take the next colour of this list in order (track count modulo 11). A clip has the colour of its track unless `color` is set; the clip properties offer the same list. The values are in `src/lib/project/clip-commands.js` (`COLORS`); each reaches at least 3.5:1 contrast on the track lanes, and none uses a hue reserved for a semantic colour (focus blue, danger red, primary orange, lamp amber).
@@ -129,6 +151,7 @@ export interface CommandError { code: 'invalid' | 'missing' | 'limit'; message: 
 | `renameClip(doc, clipId, name)` | Sets the clip name, 1–60 characters after trimming. |
 | `setClipColor(doc, clipId, color)` | Sets the clip colour, a `#rrggbb` value. |
 | Clip editing | `addAudioClip`, `createClip`, `moveClip`, `duplicateClip`, `deleteClip`, `splitClip`, `joinClips`, `trimStart`, `trimEnd`, `setClipGain`, `setFade` and the envelope-point commands (`a3-audio-implementation.md`, Edit math). |
+| Clip loops | `setClipLooping(doc, clipId, on)` and `loopEnd(doc, clipId, deltaTicks)`, which turns looping on and trims the end (Clip loops). |
 | Note editing | `addNote`, `moveNote`, `resizeNote`, `setVelocity`, `deleteNote`, `quantize`, `setLoopLength` (`midi-commands.js`). |
 | Effects | `addEffect`, `removeEffect`, `moveEffect`, `setEffectBypass` (`effect-commands.js`). |
 | Transport and devices | `setTempo`, `setTimeSignature`, `setDeviceParam`, `setGranularSource`, `setSamplerSource`. |

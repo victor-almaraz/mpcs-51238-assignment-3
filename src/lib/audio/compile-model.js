@@ -7,13 +7,13 @@ import { clampParam, clampParams } from '../../dsp/core/params.js';
 import { PAN, TRACK_GAIN } from '../../dsp/mixer/mixer.js';
 import { instrumentFor } from '../../dsp/instruments/registry.js';
 import { effectFor } from '../../dsp/effects/registry.js';
-import { MAX_CLIPS_PER_TRACK, MAX_EFFECTS, MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
+import { MAX_CLIPS_PER_TRACK, MAX_EFFECTS, MAX_ENVELOPE_POINTS, MAX_NOTES_PER_TRACK, MODEL_SCHEMA } from '../../dsp/protocol.js';
 import { MeterMap } from '../../dsp/timing/meter-map.js';
 import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { expandClipNotes } from '../project/midi-commands.js';
 import { curveIndex } from '../../dsp/clips/fades.js';
 import { dbToGain } from '../../dsp/core/math.js';
-import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE, audioTempo, clipEndTick } from '../project/clip-commands.js';
+import { CLIP_GAIN_MIN_DB, DEFAULT_AUDIO_RATE, audioPasses, audioTempo, clipEndTick } from '../project/clip-commands.js';
 
 /** Bars an empty project spans, for its end frame and default loop. */
 const MIN_BARS = 4;
@@ -50,10 +50,7 @@ function scaler(doc, fs) {
 /** Last tick used by any clip, or 0. */
 function contentEndTick(doc) {
   let end = 0;
-  for (const clip of Object.values(doc.clips)) {
-    if (clip.kind === 'midi') end = Math.max(end, clip.start + clip.length);
-    else end = Math.max(end, clipEndTick(doc, clip));
-  }
+  for (const clip of Object.values(doc.clips)) end = Math.max(end, clipEndTick(doc, clip));
   return end;
 }
 
@@ -67,37 +64,45 @@ function contentEndTick(doc) {
  * Where a later clip starts inside an earlier one and outlasts it, the
  * overlap of L frames becomes the earlier clip's fade-out and the later
  * clip's fade-in, L frames of equalPower (the crossfade); a clip lying wholly
- * inside another gets no automatic fades. Muted clips are skipped.
+ * inside another gets no automatic fades. A looping clip compiles as one clip
+ * per pass (audioPasses), so it renders the same as its passes written out as
+ * clips, crossfades included. Muted clips are skipped. At most
+ * MAX_CLIPS_PER_TRACK clips and MAX_ENVELOPE_POINTS points, the earliest kept.
  */
 function compileClips(doc, track, scale) {
   const tempo = audioTempo(doc);
   const sourceIds = [];
   const clips = [];
   for (const clipId of track.clipIds) {
-    const clip = doc.clips[clipId];
-    if (!clip || clip.kind !== 'audio' || clip.muted) continue;
-    const startAr = tempo.frameAt(clip.start);
-    const start = scale(startAr);
-    const length = scale(startAr + clip.sourceLength) - start;
-    if (length <= 0) continue;
-    let source = sourceIds.indexOf(clip.sourceId);
-    if (source < 0) source = sourceIds.push(clip.sourceId) - 1;
-    clips.push({
-      id: clip.id,
-      start,
-      length,
-      srcStart: Math.max(0, start + scale(clip.sourceOffset - startAr)),
-      source,
-      gain: clip.gainDb <= CLIP_GAIN_MIN_DB ? 0 : dbToGain(clip.gainDb),
-      fadeIn: Math.min(length, scale(clip.fadeIn?.length ?? 0)),
-      fadeOut: Math.min(length, scale(clip.fadeOut?.length ?? 0)),
-      fadeInCurve: curveIndex(clip.fadeIn?.curve),
-      fadeOutCurve: curveIndex(clip.fadeOut?.curve),
-      envelope: (clip.envelope ?? []).map((p) => ({ frame: scale(p.frame), gain: p.gain })),
-    });
+    const looped = doc.clips[clipId];
+    if (!looped || looped.kind !== 'audio' || looped.muted) continue;
+    for (const clip of audioPasses(doc, looped)) {
+      const startAr = tempo.frameAt(clip.start);
+      const start = scale(startAr);
+      const length = scale(startAr + clip.sourceLength) - start;
+      if (length <= 0) continue;
+      let source = sourceIds.indexOf(clip.sourceId);
+      if (source < 0) source = sourceIds.push(clip.sourceId) - 1;
+      clips.push({
+        id: clip.id,
+        start,
+        length,
+        srcStart: Math.max(0, start + scale(clip.sourceOffset - startAr)),
+        source,
+        gain: clip.gainDb <= CLIP_GAIN_MIN_DB ? 0 : dbToGain(clip.gainDb),
+        fadeIn: Math.min(length, scale(clip.fadeIn?.length ?? 0)),
+        fadeOut: Math.min(length, scale(clip.fadeOut?.length ?? 0)),
+        fadeInCurve: curveIndex(clip.fadeIn?.curve),
+        fadeOutCurve: curveIndex(clip.fadeOut?.curve),
+        envelope: (clip.envelope ?? []).map((p) => ({ frame: scale(p.frame), gain: p.gain })),
+      });
+    }
   }
   clips.sort((a, b) => a.start - b.start);
   if (clips.length > MAX_CLIPS_PER_TRACK) clips.length = MAX_CLIPS_PER_TRACK;
+  let points = 0;
+  const over = clips.findIndex((c) => (points += c.envelope.length) > MAX_ENVELOPE_POINTS);
+  if (over >= 0) clips.length = over;
   const equalPower = curveIndex('equalPower');
   for (let j = 1; j < clips.length; j++) {
     const b = clips[j];

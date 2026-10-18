@@ -9,6 +9,7 @@ import { TempoMap } from '../../dsp/timing/tempo-map.js';
 import { INSTRUMENT_LABELS, createId, createDevice, createTrack } from './model.js';
 import { expandClipNotes } from './midi-commands.js';
 import { clamp } from '../../dsp/core/math.js';
+import { MAX_CLIPS_PER_TRACK } from '../../dsp/protocol.js';
 import { fail } from './result.js';
 
 export const MAX_TRACKS = 16;
@@ -21,6 +22,8 @@ export const CLIP_GAIN_MAX_DB = 12;
 export const ENVELOPE_GAIN_MAX = 1.9953;
 export const FADE_CURVES = ['linear', 'equalPower', 'exp'];
 export const DEFAULT_AUDIO_RATE = 48000;
+/** Most passes a looping audio clip plays: each pass is one engine clip (project limit). */
+export const MAX_LOOP_PASSES = MAX_CLIPS_PER_TRACK;
 
 const requireInt = (v, name) => {
   if (!Number.isInteger(v)) throw new Error(`${name} must be an integer, got ${v}`);
@@ -250,9 +253,9 @@ export function addAudioClip(doc, { trackId, tick, source }, makeId = createId) 
   return { ok: true, doc: next, clipId, trackId: target };
 }
 
-/** Clip end in ticks: start + length for MIDI clips; the tick of the last frame + 1 for audio clips. */
+/** Clip end in ticks: start + length for MIDI and looping audio clips; the tick of the last frame + 1 for other audio clips. */
 export function clipEndTick(doc, clip) {
-  if (clip.kind === 'midi') return clip.start + clip.length;
+  if (clip.kind === 'midi' || isLooping(clip)) return clip.start + clip.length;
   const tempo = audioTempo(doc);
   return tempo.tickAt(tempo.frameAt(clip.start) + clip.sourceLength - 1) + 1;
 }
@@ -394,13 +397,26 @@ export function deleteClip(doc, clipId) {
  * each part keeps the envelope points that shape it, so both render the same
  * samples as the unsplit clip. A split inside a fade is refused.
  * MIDI: notes before the split stay left (cropped at it), the rest move right.
+ * A loop is written out first (unrollLoop); an audio loop becomes one clip per
+ * pass (unrollAudioLoop) and the pass at the split point splits, or, at a pass
+ * boundary, the passes on either side are the parts.
  * Returns { ok, doc, leftId, rightId }.
  */
 export function splitClip(doc, clipId, tick, makeId = createId) {
   requireInt(tick, 'tick');
-  if (!getClip(doc, clipId)) return fail('missing', 'No such clip.');
-  const clip = unrollLoop(getClip(doc, clipId), makeId);
-  if (tick <= clip.start || tick >= clipEndTick(doc, clip)) return fail('invalid', 'The split point is outside the clip.');
+  const original = getClip(doc, clipId);
+  if (!original) return fail('missing', 'No such clip.');
+  if (tick <= original.start || tick >= clipEndTick(doc, original)) return fail('invalid', 'The split point is outside the clip.');
+  if (original.kind === 'audio' && isLooping(original)) {
+    const flat = unrollAudioLoop(doc, clipId, makeId);
+    const parts = flat.clipIds.map((id) => flat.doc.clips[id]);
+    const inside = parts.find((p) => p.start < tick && tick < clipEndTick(flat.doc, p));
+    if (inside) return splitClip(flat.doc, inside.id, tick, makeId);
+    const right = parts.find((p) => p.start >= tick);
+    if (!right) return fail('invalid', 'The split point is after the clip’s audio.');
+    return { ok: true, doc: flat.doc, leftId: parts.findLast((p) => p.start < tick).id, rightId: right.id };
+  }
+  const clip = unrollLoop(original, makeId);
   const rightId = makeId('clp');
   let left;
   let right;
@@ -456,9 +472,12 @@ export function joinBlocker(doc, aId, bId) {
   if (a.kind !== b.kind) return 'An audio clip and a MIDI clip cannot be joined.';
   if (a.kind === 'midi') return b.start === a.start + a.length ? null : 'The clips must touch: the second starts where the first ends.';
   if (a.sourceId !== b.sourceId) return 'The clips use different audio files.';
-  if (b.sourceOffset !== a.sourceOffset + a.sourceLength) return 'The second clip does not continue the first clip’s audio.';
+  // A loop joins by its last pass (A) or its first pass (B).
+  const last = audioPasses(doc, a).at(-1);
+  const first = audioPasses(doc, b)[0];
+  if (first.sourceOffset !== last.sourceOffset + last.sourceLength) return 'The second clip does not continue the first clip’s audio.';
   const tempo = audioTempo(doc);
-  if (tempo.frameAt(b.start) !== tempo.frameAt(a.start) + a.sourceLength) return 'The clips must touch: the second starts where the first ends.';
+  if (tempo.frameAt(first.start) !== tempo.frameAt(last.start) + last.sourceLength) return 'The clips must touch: the second starts where the first ends.';
   return null;
 }
 
@@ -484,12 +503,23 @@ function joinEnvelopes(a, b, makeId) {
   return [...inA.filter((p) => p.frame < len - 1), edgeA, edgeB, ...inB.filter((p) => p.frame > len)];
 }
 
-/** Joins B into A (A keeps its fade-in and takes B's fade-out; joinEnvelopes merges the envelopes). */
+/**
+ * Joins B into A (A keeps its fade-in and takes B's fade-out; joinEnvelopes
+ * merges the envelopes). Loops are written out first; of audio loops, A's last
+ * pass and B's first pass join. Returns { ok, doc, clipId } with the joined clip.
+ */
 export function joinClips(doc, aId, bId, makeId = createId) {
   const blocker = joinBlocker(doc, aId, bId);
   if (blocker) return fail('invalid', blocker);
-  const a = unrollLoop(doc.clips[aId], makeId);
-  const b = unrollLoop(doc.clips[bId], makeId);
+  let flat = doc;
+  let keep = aId;
+  if (doc.clips[aId].kind === 'audio') {
+    const unrolled = unrollAudioLoop(doc, aId, makeId);
+    keep = unrolled.clipIds.at(-1);
+    flat = unrollAudioLoop(unrolled.doc, bId, makeId).doc;
+  }
+  const a = unrollLoop(flat.clips[keep], makeId);
+  const b = unrollLoop(flat.clips[bId], makeId);
   const joined =
     a.kind === 'audio'
       ? {
@@ -499,15 +529,16 @@ export function joinClips(doc, aId, bId, makeId = createId) {
           envelope: joinEnvelopes(a, b, makeId),
         }
       : { ...a, length: a.length + b.length, notes: [...a.notes, ...b.notes.map((n) => ({ ...n, tick: n.tick + a.length }))] };
-  const removed = deleteClip(setClip(doc, joined), bId);
-  return { ok: true, doc: removed.doc, clipId: aId };
+  const removed = deleteClip(setClip(flat, joined), bId);
+  return { ok: true, doc: removed.doc, clipId: keep };
 }
 
 /**
  * Trims an audio clip's start by `deltaFrames` (positive shortens): srcStart
  * += Δ, srcLength −= Δ, start = tickAt(frameAt(start) + Δ); srcStart ≥ 0 and
- * srcLength ≥ 64 hold. MIDI clips trim by `deltaFrames` read as ticks, with
- * any loop written out first (unrollLoop).
+ * srcLength ≥ 64 hold. MIDI clips trim by `deltaFrames` read as ticks. A loop
+ * is written out first (unrollLoop, unrollAudioLoop); an audio loop's first
+ * pass is the clip that trims.
  */
 export function trimStart(doc, clipId, delta, makeId = createId) {
   requireInt(delta, 'delta');
@@ -526,6 +557,7 @@ export function trimStart(doc, clipId, delta, makeId = createId) {
       }),
     };
   }
+  if (isLooping(clip)) return trimStart(unrollAudioLoop(doc, clipId, makeId).doc, clipId, delta, makeId);
   const tempo = audioTempo(doc);
   const startFrame = tempo.frameAt(clip.start);
   // The start cannot move before the source start or before bar 1.
@@ -545,7 +577,8 @@ export function trimStart(doc, clipId, delta, makeId = createId) {
 /**
  * `clip` with a MIDI loop written out: the notes it plays (expandClipNotes) with
  * new IDs, and no loopLength. Other clips come back unchanged. Edits that cut
- * into a loop (split, start trims, joins, Stop looping) start from this.
+ * into a loop (split, start trims, joins, Stop looping) start from this; audio
+ * loops are written out as clips by unrollAudioLoop.
  */
 export function unrollLoop(clip, makeId = createId) {
   if (clip.kind !== 'midi' || !clip.loopLength) return clip;
@@ -554,34 +587,111 @@ export function unrollLoop(clip, makeId = createId) {
   return { ...rest, notes: expandClipNotes(clip).map((n) => ({ ...n, id: makeId('nte') })) };
 }
 
-/** True when MIDI clip `clip` repeats its first loopLength ticks to fill its length. */
+/**
+ * True when `clip` repeats: a MIDI clip its first loopLength ticks, an audio
+ * clip its source window, every loopLength ticks to fill its length.
+ */
 export function isLooping(clip) {
-  return clip.kind === 'midi' && clip.loopLength > 0;
+  return clip.loopLength > 0;
+}
+
+const passCache = new WeakMap(); // clip → { tempo, passes }
+
+/**
+ * The passes audio clip `clip` plays, as audio clips without loop fields. Pass
+ * k of a looping clip starts at tick start + k·loopLength and reads the window
+ * [sourceOffset, sourceOffset + sourceLength), cropped at the next pass start
+ * and at the clip end; like an end trim, a cropped pass keeps its fades (the
+ * fade-out ends at the crop) and the envelope points that shape it. The first
+ * pass keeps the clip ID, the others are `<id>~<k>`. A clip that is not looping
+ * is its own only pass. At most MAX_LOOP_PASSES; cached per clip and tempo map.
+ */
+export function audioPasses(doc, clip) {
+  if (clip.kind !== 'audio' || !isLooping(clip)) return [clip];
+  const tempo = audioTempo(doc);
+  const cached = passCache.get(clip);
+  if (cached?.tempo === tempo) return cached.passes;
+  const { loopLength, length: _length, ...plain } = clip;
+  const endTick = clip.start + clip.length;
+  const endFrame = tempo.frameAt(endTick);
+  const passes = [];
+  for (let k = 0, t = clip.start; t < endTick && k < MAX_LOOP_PASSES; k++, t += loopLength) {
+    const from = tempo.frameAt(t);
+    const frames = Math.min(clip.sourceLength, Math.min(endFrame, tempo.frameAt(t + loopLength)) - from);
+    if (frames <= 0) continue;
+    const envelope = frames < clip.sourceLength ? envelopeWindow(clip.envelope, 0, frames) : clip.envelope;
+    passes.push({ ...plain, id: k === 0 ? clip.id : `${clip.id}~${k}`, start: t, sourceLength: frames, envelope });
+  }
+  passCache.set(clip, { tempo, passes });
+  return passes;
+}
+
+/** The pass of audio clip `clip` that tick `tick` falls in: the last pass starting at or before it, else the first. */
+export function audioPassAt(doc, clip, tick) {
+  const passes = audioPasses(doc, clip);
+  return passes.findLast((p) => p.start <= tick) ?? passes[0];
 }
 
 /**
- * Turns looping on for MIDI clip `clipId` (its current length repeats when it is
- * lengthened) or off (the repeats become notes, so the clip sounds the same).
+ * Writes out looping audio clip `clipId` as one clip per pass (audioPasses), in
+ * its place in the track order; the first keeps its ID, the others get new IDs.
+ * The clips render the same as the loop. Other clips stay as they are.
+ * Returns { doc, clipIds } with the IDs in time order.
+ */
+export function unrollAudioLoop(doc, clipId, makeId = createId) {
+  const clip = doc.clips[clipId];
+  if (clip.kind !== 'audio' || !isLooping(clip)) return { doc, clipIds: [clipId] };
+  const passes = audioPasses(doc, clip).map((p, k) => (k === 0 ? p : { ...p, id: makeId('clp') }));
+  const ids = passes.map((p) => p.id);
+  const track = doc.tracks[clip.trackId];
+  const at = track.clipIds.indexOf(clipId);
+  const clipIds = [...track.clipIds.slice(0, at), ...ids, ...track.clipIds.slice(at + 1)];
+  const clips = { ...doc.clips };
+  for (const p of passes) clips[p.id] = p;
+  return { doc: { ...doc, clips, tracks: { ...doc.tracks, [track.id]: { ...track, clipIds } } }, clipIds: ids };
+}
+
+/**
+ * Turns looping on for clip `clipId`: its current length in ticks becomes the
+ * loop length, and lengthening it repeats it. Turning it off keeps what it
+ * plays: a MIDI clip's repeats become notes, an audio clip's passes become
+ * clips (unrollAudioLoop).
  */
 export function setClipLooping(doc, clipId, on, makeId = createId) {
   const clip = getClip(doc, clipId);
-  if (!clip || clip.kind !== 'midi') return fail('missing', 'No MIDI clip.');
-  if (on) return { ok: true, doc: isLooping(clip) ? doc : setClip(doc, { ...clip, loopLength: clip.length }) };
+  if (!clip) return fail('missing', 'No such clip.');
+  if (on) {
+    if (isLooping(clip)) return { ok: true, doc };
+    const length = clipEndTick(doc, clip) - clip.start;
+    return { ok: true, doc: setClip(doc, { ...clip, length, loopLength: length }) };
+  }
+  if (clip.kind === 'audio') return { ok: true, doc: unrollAudioLoop(doc, clipId, makeId).doc };
   return { ok: true, doc: setClip(doc, unrollLoop(clip, makeId)) };
 }
 
-/** Lengthens or shortens MIDI clip `clipId` by `delta` ticks as a loop: looping turns on first, at its current length. */
+/** Lengthens or shortens clip `clipId` by `delta` ticks as a loop: looping turns on first, at its current length. */
 export function loopEnd(doc, clipId, delta) {
   const looped = setClipLooping(doc, clipId, true);
   return looped.ok ? trimEnd(looped.doc, clipId, delta) : looped;
 }
 
-/** Trims an audio clip's end to `sourceLength + delta` frames within [64, sourceFrames − srcStart]; MIDI clips by ticks. */
+/**
+ * Trims an audio clip's end to `sourceLength + delta` frames within [64,
+ * sourceFrames − srcStart]. MIDI clips trim by ticks; looping audio clips trim
+ * their length by ticks too, playing at least 64 frames and at most
+ * MAX_LOOP_PASSES passes.
+ */
 export function trimEnd(doc, clipId, delta) {
   requireInt(delta, 'delta');
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No such clip.');
   if (clip.kind === 'midi') return { ok: true, doc: setClip(doc, { ...clip, length: Math.max(1, clip.length + delta) }) };
+  if (isLooping(clip)) {
+    const tempo = audioTempo(doc);
+    const shortest = tempo.tickAt(tempo.frameAt(clip.start) + MIN_CLIP_FRAMES - 1) + 1 - clip.start;
+    const length = clamp(clip.length + delta, shortest, clip.loopLength * MAX_LOOP_PASSES);
+    return { ok: true, doc: setClip(doc, { ...clip, length }) };
+  }
   const sourceFrames = doc.sources[clip.sourceId]?.frames ?? clip.sourceOffset + clip.sourceLength;
   const length = clamp(clip.sourceLength + delta, MIN_CLIP_FRAMES, sourceFrames - clip.sourceOffset);
   return { ok: true, doc: setClip(doc, { ...clip, sourceLength: length, envelope: envelopeWindow(clip.envelope, 0, length) }) };
