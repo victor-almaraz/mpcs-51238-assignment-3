@@ -35,6 +35,8 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
     const shown = [FLOOR_DB, FLOOR_DB];
     const held = [FLOOR_DB, FLOOR_DB];
     const heldAt = [0, 0];
+    // Last written styles: an unchanged meter (silence, a stopped transport) writes nothing.
+    const written = [['', ''], ['', '']];
     let frame = 0;
     let last = performance.now();
     function draw(now) {
@@ -49,8 +51,12 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
           held[ch] = Math.max(db, FLOOR_DB);
           heldAt[ch] = now;
         }
-        if (bars[ch].current) bars[ch].current.style.transform = `scaleY(${toFraction(shown[ch])})`;
-        if (holds[ch].current) holds[ch].current.style.bottom = `${toFraction(held[ch]) * 100}%`;
+        // Transforms only: they move the bar and the hold line without a layout.
+        // Rounded below a pixel at meter heights (< 200 px), so a steady level writes nothing.
+        const bar = `scaleY(${toFraction(shown[ch]).toFixed(2)})`;
+        const hold = `translateY(${Math.round((1 - toFraction(held[ch])) * 200) / 2}%)`;
+        if (bar !== written[ch][0] && bars[ch].current) bars[ch].current.style.transform = written[ch][0] = bar;
+        if (hold !== written[ch][1] && holds[ch].current) holds[ch].current.style.transform = written[ch][1] = hold;
       }
       frame = requestAnimationFrame(draw);
     }
@@ -69,7 +75,8 @@ export default function Meter({ read, scale = null, className = 'h-24 w-5' }) {
             className="absolute inset-0 origin-bottom bg-gradient-to-t from-level-low via-level-mid to-level-high"
             style={{ transform: 'scaleY(0)' }}
           />
-          <div ref={holds[ch]} className="absolute right-0 left-0 h-px bg-lamp" style={{ bottom: '0%' }} />
+          {/* The hold line is the top edge of a full-height layer moved by translateY. */}
+          <div ref={holds[ch]} className="pointer-events-none absolute inset-0 border-t border-lamp" style={{ transform: 'translateY(100%)' }} />
         </div>
       ))}
     </div>

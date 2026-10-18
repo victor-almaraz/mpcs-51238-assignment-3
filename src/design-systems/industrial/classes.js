@@ -94,7 +94,7 @@ export const readout = 'rounded-ds bg-window text-lamp tabular-nums';
 /** A plain value readout (parameters, track levels): ink digits on the panel. */
 export const valueReadout = 'rounded-ds bg-bg text-fg tabular-nums';
 
-/** Page title (h1): the wide display face, like a panel's model legend. */
+/** Page title (h1 of a route page): the wide display face, like a panel's model legend. Only page titles and the wordmark use it. */
 export const pageHeading =
   'font-display text-[1.75rem] leading-none font-bold uppercase tracking-[0.01em] sm:text-5xl';
 

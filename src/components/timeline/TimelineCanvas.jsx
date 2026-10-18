@@ -27,6 +27,9 @@ function bucketRange(level, from, to) {
   return lo === Infinity ? null : [lo, hi];
 }
 
+/** Longest gap between redraws of an idle, unchanged timeline, ms. */
+const IDLE_REDRAW_MS = 250;
+
 function drawWaveform(ctx, doc, clip, x0, top, height, zoom, width, color) {
   const source = getSource(clip.sourceId);
   if (!source) return false;
@@ -124,6 +127,7 @@ function drawHandles(ctx, doc, clip, rect, zoom, sx, colors, gainDrag) {
  */
 export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter, selected, ghost, editCursor, loop, scrollRef }) {
   const props = useRef(null);
+  const playheadRef = useRef(null);
   useEffect(() => {
     props.current = { project, rowIds, zoom, meter, selected, ghost, editCursor, loop };
   });
@@ -145,11 +149,29 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
     };
     const engine = getEngine();
     let frame = 0;
-    function draw() {
+    // The canvas redraws when what it shows changes, and else at most IDLE_REDRAW_MS apart (waveform
+    // peaks arrive from a worker later). The playhead is a separate element moved by a transform each
+    // frame while playing, so playback does not repaint the canvas.
+    const drawn = { p: null, sx: -1, sy: -1, w: 0, h: 0, playing: false, at: 0 };
+    function draw(now) {
       frame = requestAnimationFrame(draw);
       const p = props.current;
       const scroller = scrollRef.current;
       if (!p || !scroller) return;
+      const playing = engine.getState().playing;
+      const head = playheadRef.current;
+      if (head && playing) {
+        const px = engine.positionTick() * pxPerTick(p.zoom);
+        const laneW = scroller.clientWidth - HEADER_W;
+        // Follow playback: page the view once the playhead leaves it (or wraps back before it).
+        if (px > scroller.scrollLeft + laneW - 24 || px < scroller.scrollLeft) scroller.scrollLeft = Math.max(0, px - 48);
+        head.style.display = '';
+        head.style.height = `${Math.min(scroller.clientHeight, RULER_H + Math.max(TRACK_H, p.rowIds.length * TRACK_H))}px`;
+        head.style.transform = `translate(${Math.round(px)}px, var(--sy, 0px))`;
+      } else if (head && head.style.display !== 'none') head.style.display = 'none';
+      const same = drawn.p === p && drawn.sx === scroller.scrollLeft && drawn.sy === scroller.scrollTop && drawn.w === scroller.clientWidth && drawn.h === scroller.clientHeight && drawn.playing === playing;
+      if (same && now - drawn.at < IDLE_REDRAW_MS) return;
+      Object.assign(drawn, { p, sx: scroller.scrollLeft, sy: scroller.scrollTop, w: scroller.clientWidth, h: scroller.clientHeight, playing, at: now });
       const dpr = window.devicePixelRatio || 1;
       // The canvas covers the visible area only; it is held in view in both directions (--sx, --sy).
       const w = Math.max(1, scroller.clientWidth - HEADER_W);
@@ -331,18 +353,16 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
       ctx.fillRect(0, RULER_H - 1, w, 1);
       ctx.fillStyle = colors.focus;
       for (let y = 0; y < h; y += 8) ctx.fillRect(p.editCursor * k - sx, y, 1, 4);
-      if (engine.getState().playing) {
-        const px = engine.positionTick() * k;
-        ctx.fillStyle = colors.fg;
-        ctx.fillRect(px - sx, 0, 2, h);
-        // Follow playback: page the view once the playhead leaves it (or wraps back before it).
-        if (px > sx + w - 24 || px < sx) scroller.scrollLeft = Math.max(0, px - 48);
-      }
     }
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [scrollRef, canvasRef]);
 
   // Right of the track headers, held in view while the arrangement scrolls (--sx, --sy).
-  return <canvas ref={canvasRef} aria-hidden="true" className="absolute top-0 block" style={{ left: HEADER_W, transform: 'translate(var(--sx, 0px), var(--sy, 0px))' }} />;
+  return (
+    <>
+      <canvas ref={canvasRef} aria-hidden="true" className="absolute top-0 block" style={{ left: HEADER_W, transform: 'translate(var(--sx, 0px), var(--sy, 0px))' }} />
+      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 z-[5] w-0.5 bg-fg" style={{ left: HEADER_W, display: 'none' }} />
+    </>
+  );
 }

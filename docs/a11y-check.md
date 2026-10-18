@@ -23,7 +23,7 @@ Values come from the industrial tokens (`src/design-systems/industrial/tokens.cs
 | Primary button text on signal orange | 5.6:1 | 4.5:1 |
 | Panic text on red | 5.8:1 | 4.5:1 |
 | Lit lamp on a pressed control, in a readout window | 9.7:1, 10.3:1 | 3:1 |
-| Track colours (teal, violet, olive, rose, copper, slate) on the lanes | 3.5:1 or more | 3:1 |
+| Track colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) on the lanes | 3.6:1 or more | 3:1 |
 
 Status never depends on color alone: pressed toggles expose `aria-pressed` and a lamp, bypassed effects show "Bypassed", and clip storage states are words.
 

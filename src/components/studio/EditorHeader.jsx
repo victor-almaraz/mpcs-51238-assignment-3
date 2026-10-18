@@ -62,7 +62,7 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
                   finish(false);
                 }
               }}
-              className={cx('min-h-8 w-72 rounded-ds border border-border-strong bg-bg px-2 font-display text-lg uppercase', focusRing)}
+              className={cx('min-h-8 w-72 rounded-ds border border-border-strong bg-bg px-2 font-sans text-base', focusRing)}
             />
             {error ? (
               <p id="project-name-error" className={errorText}>
@@ -71,7 +71,8 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
             ) : null}
           </div>
         ) : (
-          <h1 className="truncate font-display text-xl leading-tight font-bold uppercase">{name}</h1>
+          // The project name is the editor's heading, in the text face: the display face is for page titles.
+          <h1 className="truncate font-sans text-lg leading-tight font-bold">{name}</h1>
         )}
         {!editing && !readOnly ? (
           <IconButton ref={renameRef} icon="pencil" label="Rename project" size="sm" variant="ghost" onClick={begin} />

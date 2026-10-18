@@ -534,10 +534,11 @@ The industrial design system draws attention by mechanical importance. Flair mar
 | 2. Working toggles | Mute, Solo, Snap, Bypass, step input, dock tabs | Ink-filled pressed state; tabs underline the open panel |
 | 3. Everything else | Menus, selects, zoom, navigation, parameter values, cards | Quiet: regular sentence-case legends, plain value readouts, thin card borders |
 
+- The display face is reserved for page titles (Home, Projects, New project, Settings) and the W-Rack wordmark. The editor's project name is the text face in bold, so it never competes with a page title.
 - Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists and missing-audio warnings.
 - Small regular capitals mark structure: group headings and legends inside a panel. Controls use sentence case.
 - Signal orange marks the primary action and the selected velocity only; knob arcs and other values use ink.
-- Hues are reserved: blue is focus, red is danger and Panic, orange is the primary action, amber is the transport lamps and readouts. Track and clip colours (teal, violet, olive, rose, copper, slate) use none of them, and piano-roll notes take their track's colour.
+- Hues are reserved: blue is focus, red is danger and Panic, orange is the primary action, amber is the transport lamps and readouts. Track and clip colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) use none of them, and piano-roll notes take their track's colour.
 - Neutrals are a warm grey in three elevations: the ground, the bars (toolbars, track headers, dock bar) one step lighter, and the lanes and cards lightest.
 
 ## Conflicts and decisions

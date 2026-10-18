@@ -40,7 +40,7 @@ async function projectWithAudio(page, files = [{ name: 'tone.wav', mimeType: 'au
 
 const clipRows = (page) => page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="2"]');
 const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `w-rack:v1:project:${id}`);
-const audioClip = async (page, id) => Object.values((await saved(page, id)).clips).find((c) => c.kind === 'audio');
+const audioClip = async (page, id) => Object.values((await saved(page, id))?.clips ?? {}).find((c) => c.kind === 'audio');
 
 /** Canvas geometry, as in src/components/timeline/layout.js: ruler and track heights. */
 const RULER_H = 24;
@@ -135,7 +135,7 @@ test('fade, gain and envelope handles on a selected audio clip edit it by pointe
   await page.mouse.move(fadeFrom.x + 30, fadeFrom.y, { steps: 3 });
   await page.mouse.move(fadeFrom.x + 52, fadeFrom.y, { steps: 3 });
   await page.mouse.up();
-  await expect.poll(async () => (await audioClip(page, id)).fadeIn.length).toBeGreaterThan(30000);
+  await expect.poll(async () => (await audioClip(page, id))?.fadeIn.length).toBeGreaterThan(30000);
 
   // Gain handle at the top centre (x = 64): 40 px up is +10 dB.
   const gainFrom = await canvasPoint(page, 64, 1, 8);
@@ -144,15 +144,15 @@ test('fade, gain and envelope handles on a selected audio clip edit it by pointe
   await page.mouse.move(gainFrom.x, gainFrom.y - 20, { steps: 3 });
   await page.mouse.move(gainFrom.x, gainFrom.y - 40, { steps: 3 });
   await page.mouse.up();
-  await expect.poll(async () => (await audioClip(page, id)).gainDb).toBe(10);
+  await expect.poll(async () => (await audioClip(page, id))?.gainDb).toBe(10);
 
   // Double-click in the clip adds an envelope point; double-clicking the point removes it.
   const at = await canvasPoint(page, 96, 1, 25);
   await page.mouse.dblclick(at.x, at.y);
-  await expect.poll(async () => (await audioClip(page, id)).envelope.length).toBe(1);
+  await expect.poll(async () => (await audioClip(page, id))?.envelope.length).toBe(1);
   const point = (await audioClip(page, id)).envelope[0];
   expect(point.gain).toBeGreaterThan(0.9);
   expect(point.gain).toBeLessThan(1.1);
   await page.mouse.dblclick(at.x, at.y);
-  await expect.poll(async () => (await audioClip(page, id)).envelope.length).toBe(0);
+  await expect.poll(async () => (await audioClip(page, id))?.envelope.length).toBe(0);
 });

@@ -16,9 +16,13 @@ function cssVar(name, fallback) {
  * all input. `ghost` is the provisional note of a drag, drawn dashed. `view` is { scrollX, scrollY, width, height }; the playhead is
  * read from the engine in a requestAnimationFrame loop, never React state.
  */
+/** Longest gap between redraws of an idle, unchanged piano roll, ms. */
+const IDLE_REDRAW_MS = 250;
+
 export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
   const canvasRef = useRef(null);
   const props = useRef(null);
+  const playheadRef = useRef(null);
   useEffect(() => {
     props.current = { view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
   });
@@ -37,12 +41,27 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
     };
     const engine = getEngine();
     let frame = 0;
-    function draw() {
+    // As the timeline: the canvas redraws on change, else at most IDLE_REDRAW_MS apart; the playhead
+    // is a separate element moved by a transform, so playback does not repaint the grid.
+    const drawn = { p: null, playing: false, at: 0 };
+    function draw(now) {
       const p = props.current;
-      if (!p) {
+      const playing = engine.getState().playing;
+      const head = playheadRef.current;
+      if (p && head) {
+        const tick = engine.positionTick() - p.clipStart;
+        const inClip = playing && p.clip && tick >= 0 && tick <= p.clip.length;
+        if (inClip) {
+          head.style.display = '';
+          head.style.height = `${Math.max(1, p.view.height)}px`;
+          head.style.transform = `translate(${Math.round(tick * (CELL_W / p.grid))}px, ${p.view.scrollY}px)`;
+        } else if (head.style.display !== 'none') head.style.display = 'none';
+      }
+      if (!p || (drawn.p === p && drawn.playing === playing && now - drawn.at < IDLE_REDRAW_MS)) {
         frame = requestAnimationFrame(draw);
         return;
       }
+      Object.assign(drawn, { p, playing, at: now });
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(1, p.view.width - LABEL_W);
       const h = Math.max(1, p.view.height);
@@ -103,11 +122,6 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
         ctx.strokeRect(x + 1.5, r * ROW_H - sy + 3.5, width - 1, ROW_H - 7);
         ctx.setLineDash([]);
       }
-      const tick = engine.positionTick() - p.clipStart;
-      if (p.clip && tick >= 0 && tick <= length) {
-        ctx.fillStyle = colors.playhead;
-        ctx.fillRect(tick * tickW - sx, 0, 2, h);
-      }
       frame = requestAnimationFrame(draw);
     }
     frame = requestAnimationFrame(draw);
@@ -115,11 +129,14 @@ export default function PianoRollCanvas({ view, rows, clip, clipStart, grid, bar
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="pointer-events-none absolute"
-      style={{ left: LABEL_W, top: 0, transform: `translate(${view.scrollX}px, ${view.scrollY}px)` }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute"
+        style={{ left: LABEL_W, top: 0, transform: `translate(${view.scrollX}px, ${view.scrollY}px)` }}
+      />
+      <div ref={playheadRef} aria-hidden="true" className="pointer-events-none absolute top-0 w-0.5 bg-focus" style={{ left: LABEL_W, display: 'none' }} />
+    </>
   );
 }

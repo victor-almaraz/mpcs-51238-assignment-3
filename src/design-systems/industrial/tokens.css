@@ -19,7 +19,7 @@
  * C 0.004-0.01. Semantic hues are reserved: blue is focus, red is danger and Panic,
  * orange is the primary action, amber is the transport lamps and readouts. Track and
  * clip colours (COLORS in clip-commands.js) take other hues: teal, violet, olive, rose,
- * copper, slate, each >= 3.5:1 on the lanes.
+ * copper, slate, plum, steel, mustard, pine, taupe, each >= 3.5:1 on the lanes.
  *
  * Contrast (WCAG 2.2):
  *   fg: 13.6:1 on bg, 16.5:1 on surface, 11.4:1 on active

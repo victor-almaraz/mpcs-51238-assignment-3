@@ -36,6 +36,11 @@ export const COLORS = [
   { value: '#b54076', label: 'Rose' },
   { value: '#a25e2b', label: 'Copper' },
   { value: '#576574', label: 'Slate' },
+  { value: '#8c3f91', label: 'Plum' },
+  { value: '#237486', label: 'Steel' },
+  { value: '#827525', label: 'Mustard' },
+  { value: '#2b7351', label: 'Pine' },
+  { value: '#766558', label: 'Taupe' },
 ];
 const TRACK_COLORS = COLORS.map((c) => c.value);
 
