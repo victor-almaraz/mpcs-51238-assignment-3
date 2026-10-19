@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { addInstrumentTrack } from '../support/editor.js';
 
 /*
  * The loop range: a band in the ruler with keyboard handles, drawn or edited
@@ -80,4 +81,48 @@ test('with the loop on, playback that starts after the loop end plays on instead
   await transport(page).getByRole('button', { name: 'Pause' }).click();
   // Pause keeps the real position, not one wrapped into the loop.
   expect(await page.evaluate(() => globalThis.__wrackEngine.positionTick())).toBeGreaterThan(3 * BAR);
+});
+
+test('in 7/8 the 1/4 grid restarts at each bar line, for loop handles and clip loops alike', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill('Seven');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Seven');
+  await transport(page).getByRole('combobox', { name: 'Beats per bar' }).selectOption('7');
+  await transport(page).getByRole('combobox', { name: 'Note value' }).selectOption('8');
+  await expect(page.getByText(/ BPM · 7\/8$/)).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Clip commands' }).getByLabel('Grid', { exact: true })).toHaveValue('1');
+
+  // A 7/8 bar is three quarter notes and an eighth: four steps from a bar line reach the next one.
+  const end = loopEnd(page);
+  await end.focus();
+  await page.keyboard.press('PageUp');
+  const bar = Number(/^bar (\d+)$/.exec(await end.getAttribute('aria-valuetext'))[1]);
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+  await expect(end).toHaveAttribute('aria-valuetext', `bar ${bar} beat 7`);
+  await page.keyboard.press('ArrowRight');
+  await expect(end).toHaveAttribute('aria-valuetext', `bar ${bar + 1}`);
+  await page.keyboard.press('ArrowLeft');
+  await expect(end).toHaveAttribute('aria-valuetext', `bar ${bar} beat 7`);
+
+  // Dragging a clip's loop handle near a bar line lands on it: the clip loops to bar 6 (5 bars of 3360 ticks).
+  await addInstrumentTrack(page, 'Pluck synth');
+  const id = new URL(page.url()).pathname.split('/').pop();
+  const canvas = page.locator('section[aria-labelledby="studio-timeline"] canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  const px = (tick) => (tick * 32) / PPQ; // zoom 1: 32 px per quarter note
+  const y = box.y + 24 + 56 + 3 + 8; // the top half of row 1, where the loop handle is
+  const clipEnd = box.x + px(4 * 3360) - 2;
+  await page.mouse.move(clipEnd, y);
+  await page.mouse.down();
+  await page.mouse.move(clipEnd + px(3200) / 2, y, { steps: 4 });
+  await page.mouse.move(clipEnd + px(3200), y, { steps: 4 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => {
+      const doc = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
+      return Object.values(doc.clips).map((c) => [c.loopLength, c.length]);
+    })
+    .toEqual([[4 * 3360, 5 * 3360]]);
 });

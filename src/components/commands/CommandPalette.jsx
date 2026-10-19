@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Dialog from '@/components/ui/Dialog';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { dispatchShortcut, displayKeys, getCommands, getPaletteRequests, matchesQuery, requestPalette, subscribeCommands } from '@/lib/commands/registry';
+import { dispatchShortcut, displayKeys, getCommands, getPaletteOpener, getPaletteRequests, matchesQuery, requestPalette, subscribeCommands } from '@/lib/commands/registry';
 import useCommands from './useCommands';
 
 const EMPTY = [];
@@ -31,6 +31,8 @@ const isPaletteKey = (e) => {
  * a search field (a combobox) over the commands registered on the page. Up
  * and Down move through the matches, Enter runs one, Escape closes. Unavailable
  * commands are listed as disabled. Navigation commands are always present.
+ * On close, focus returns to the request's opener (the header button) when
+ * given, otherwise to the element focused before the palette opened.
  * The same listener runs global command shortcuts (dispatchShortcut).
  */
 export default function CommandPalette() {
@@ -41,11 +43,14 @@ export default function CommandPalette() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [seenRequests, setSeenRequests] = useState(requests);
+  const [opener, setOpener] = useState(null);
+  const returnFocusRef = useMemo(() => ({ current: opener }), [opener]);
   const inputRef = useRef(null);
   const listId = useId();
 
   if (requests !== seenRequests) {
     setSeenRequests(requests);
+    setOpener(getPaletteOpener());
     setOpen(true);
     setQuery('');
     setActive(0);
@@ -103,7 +108,7 @@ export default function CommandPalette() {
   const optionId = (i) => `${listId}-option-${i}`;
 
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} title="Commands" initialFocusRef={inputRef} closeOnBackdrop className="w-[min(36rem,95vw)]">
+    <Dialog open={open} onClose={() => setOpen(false)} title="Commands" initialFocusRef={inputRef} returnFocusRef={returnFocusRef} closeOnBackdrop className="w-[min(36rem,95vw)]">
       <div className="flex flex-col gap-2">
         <label htmlFor={`${listId}-input`} className="text-sm text-muted">
           Search commands

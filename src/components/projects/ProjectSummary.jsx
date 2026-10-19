@@ -16,7 +16,7 @@ const UNITS = [
 
 /** "3 days ago", "yesterday", "just now" for `iso` relative to `now` (ms). */
 export function relativeText(iso, now) {
-  const s = (new Date(iso).getTime() - now) / 1000;
+  const s = (Date.parse(iso) - now) / 1000;
   for (const [unit, size] of UNITS) {
     if (Math.abs(s) >= size) return relativeFormat.format(Math.round(s / size), unit);
   }
@@ -32,6 +32,16 @@ export function metadataText(entry) {
   return parts.join(' · ');
 }
 
+/**
+ * "Edited 3 days ago (12 Mar 2026, 14:05)" for `iso` relative to `now` (ms),
+ * or "Edit date unknown" when `iso` is not a date.
+ */
+export function editedText(iso, now) {
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return 'Edit date unknown';
+  return `Edited ${relativeText(iso, now)} (${dateFormat.format(time)})`;
+}
+
 /** The aria-describedby value for row actions of `entry` shown with ProjectSummary `id`. */
 export const describedBy = (entry, id) => (entry.origin ? `${id}-origin ${id}` : id);
 
@@ -42,7 +52,6 @@ export const describedBy = (entry, id) => (entry.origin ? `${id}-origin ${id}` :
  */
 export default function ProjectSummary({ entry, id }) {
   const [now] = useState(() => Date.now());
-  const absolute = dateFormat.format(new Date(entry.modifiedAt));
   const metadata = metadataText(entry);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -51,7 +60,8 @@ export default function ProjectSummary({ entry, id }) {
         {entry.origin ? <span id={`${id}-origin`} className="rounded-ds border border-border-strong px-1.5 text-xs">From example: {entry.origin}</span> : null}
       </div>
       <span id={id} className="text-xs text-muted">
-        Edited {relativeText(entry.modifiedAt, now)} ({absolute}){metadata ? ` · ${metadata}` : ''}
+        {editedText(entry.modifiedAt, now)}
+        {metadata ? ` · ${metadata}` : ''}
       </span>
     </div>
   );

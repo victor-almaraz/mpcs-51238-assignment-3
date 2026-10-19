@@ -20,6 +20,8 @@ export const archiveFileName = (name) => safeFileName(name, '.wrack');
  * every loaded source in one STORE-only ZIP, with the "Not saved to file"
  * indicator beside it. `project` is the open document. With `trigger` false
  * there is no button and the project.save-wrack command saves (a File menu).
+ * A download, whose completion the browser does not report, counts as saved
+ * to file; its message says the download started.
  */
 export default function SaveArchive({ project, disabled, trigger = true }) {
   useSyncExternalStore(subscribeProjects, getIndexSnapshot, () => null);
@@ -49,10 +51,11 @@ export default function SaveArchive({ project, disabled, trigger = true }) {
       const carried = Object.keys(project.sources).filter((id) => !built.value.missing.includes(id));
       markArchiveSaved(project, carried);
       const missing = built.value.missing.length;
+      const done = outcome === 'saved' ? `Saved ${archiveFileName(project.name)}` : `Download of ${archiveFileName(project.name)} started`;
       setMessage(
         missing === 0
-          ? `Saved ${archiveFileName(project.name)}`
-          : `Saved ${archiveFileName(project.name)} without ${missing} audio ${missing === 1 ? 'file' : 'files'} that ${missing === 1 ? 'is' : 'are'} not loaded.`,
+          ? done
+          : `${done} without ${missing} audio ${missing === 1 ? 'file' : 'files'} that ${missing === 1 ? 'is' : 'are'} not loaded.`,
       );
     } catch (err) {
       console.error(err);

@@ -36,6 +36,10 @@ export default function Fader({ id, label, value, min, max, step = 0.1, onChange
     return valueAt(1 - (clientY - r.top) / r.height);
   };
 
+  const endDrag = () => {
+    drag.current = null;
+  };
+
   function onKeyDown(e) {
     if (disabled) return;
     if (e.key === 'PageUp' || e.key === 'PageDown') {
@@ -66,18 +70,25 @@ export default function Fader({ id, label, value, min, max, step = 0.1, onChange
           inputRef.current?.focus();
           e.currentTarget.setPointerCapture(e.pointerId);
           const onCap = e.target.closest('[data-cap]');
-          drag.current = { y0: e.clientY, f0: onCap ? fraction(value) : fraction(valueAtY(e.clientY)) };
+          drag.current = { y: e.clientY, f: onCap ? fraction(value) : fraction(valueAtY(e.clientY)) };
           if (!onCap) set(valueAtY(e.clientY));
         }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
+          if (e.buttons === 0) {
+            drag.current = null;
+            return;
+          }
+          // Each move adds its own distance at the current speed, so Shift changes only later moves.
           const r = trackRef.current.getBoundingClientRect();
-          set(valueAt(d.f0 + (d.y0 - e.clientY) / r.height / (e.shiftKey ? 10 : 1)));
+          d.f += (d.y - e.clientY) / r.height / (e.shiftKey ? 10 : 1);
+          d.y = e.clientY;
+          set(valueAt(d.f));
         }}
-        onPointerUp={() => {
-          drag.current = null;
-        }}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
         onDoubleClick={() => !disabled && onReset?.()}
       >
         <input

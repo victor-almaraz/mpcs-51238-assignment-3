@@ -147,17 +147,21 @@ export function estimateUsage() {
   return units * BYTES_PER_CODE_UNIT;
 }
 
+/** Every debounced writer, for discardPendingWrites(). */
+const writers = new Set();
+
 /**
- * Returns a writer that coalesces values and calls `write(value)` once
+ * Returns a writer that coalesces values per key and calls `write(value)`
  * `delayMs` after the last schedule() (assignment-3-scope.md: 500 ms).
- * `write` returns { ok } or { ok: false, error }. A failed value stays pending,
- * so the next flush retries it. A value for a different `keyOf` flushes the
- * pending one first.
+ * `write` returns { ok } or { ok: false, error }. Each `keyOf(value)` holds at
+ * most one pending value, the newest. A failed value stays pending until a
+ * newer value for its key replaces it, a flush writes it, or discard() drops
+ * it. A value for a different key flushes the other pending values first.
  *
  * State: { status: 'idle' | 'pending' | 'saved' | 'error', error }.
  */
 export function createDebouncedWriter({ write, delayMs, keyOf = () => '' }) {
-  let pending = null;
+  const pending = new Map(); // key → newest value not yet written
   let timer = null;
   let state = { status: 'idle', error: null };
   const stateListeners = new Set();
@@ -170,36 +174,62 @@ export function createDebouncedWriter({ write, delayMs, keyOf = () => '' }) {
   function flush() {
     clearTimeout(timer);
     timer = null;
-    if (pending === null) return state;
-    const value = pending;
-    const result = write(value);
-    if (result.ok) {
-      if (pending === value) pending = null;
-      setState({ status: 'saved', error: null });
-    } else {
-      setState({ status: 'error', error: result.error });
+    if (pending.size === 0) return state;
+    let error = null;
+    for (const [key, value] of [...pending]) {
+      const result = write(value);
+      if (!result.ok) error = result.error;
+      else if (pending.get(key) === value) pending.delete(key);
     }
+    setState(error === null ? { status: 'saved', error: null } : { status: 'error', error });
     return state;
   }
 
   function schedule(value) {
-    if (pending !== null && keyOf(pending) !== keyOf(value)) flush();
-    pending = value;
+    const key = keyOf(value);
+    if ([...pending.keys()].some((k) => k !== key)) flush();
+    pending.set(key, value);
     clearTimeout(timer);
     timer = setTimeout(flush, delayMs);
     if (state.status !== 'error') setState({ status: 'pending', error: null });
   }
 
-  return {
+  /** Drops the pending value for `key`, or every pending value when `key` is undefined. */
+  function discard(key) {
+    if (key === undefined) pending.clear();
+    else pending.delete(key);
+    if (pending.size > 0) return;
+    clearTimeout(timer);
+    timer = null;
+    if (state.status === 'pending' || state.status === 'error') setState({ status: 'idle', error: null });
+  }
+
+  const writer = {
     schedule,
     flush,
+    discard,
     getState: () => state,
-    hasPending: () => pending !== null,
+    hasPending: () => pending.size > 0,
+    /** The pending value for `key`, or null. */
+    pendingFor: (key) => pending.get(key) ?? null,
+    /** Every pending value, oldest key first. */
+    pendingValues: () => [...pending.values()],
     subscribe(listener) {
       stateListeners.add(listener);
       return () => stateListeners.delete(listener);
     },
   };
+  writers.add(writer);
+  return writer;
+}
+
+/**
+ * Drops pending values for `key` from every debounced writer, or every pending
+ * value when `key` is undefined, so data that was deleted is not written back
+ * on the next flush. Project and working-state writers key values by project ID.
+ */
+export function discardPendingWrites(key) {
+  for (const writer of writers) writer.discard(key);
 }
 
 const hideHandlers = new Set();

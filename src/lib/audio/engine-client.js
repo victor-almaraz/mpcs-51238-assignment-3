@@ -52,6 +52,7 @@ function createClient() {
   let stoppedTick = 0; // playhead while stopped or paused
   let playStart = 0; // where the current or last playback started
   let last = { playFrame: 0, ctxFrame: 0 }; // latest engine report while playing
+  let started = { playFrame: 0, ctxFrame: 0 }; // the play, locate or relocate the current reports follow
   let state = {
     status: 'idle',
     noticeOpen: false,
@@ -65,15 +66,21 @@ function createClient() {
     faults: [], // effects the engine reset and bypassed: { trackId ('master' or a track ID), deviceId, slot }
   };
   let meters = null; // latest engine meters (Float32Array)
+  let metersHeld = false; // a structural model is pending: meter reports still follow the old track layout
+  let heldRev = -1; // rev of the model whose ack ends the hold
+  const panicListeners = new Set();
   let level = { peakL: 0, peakR: 0, reduction: 1 }; // latest post-limiter master level
   const pendingParams = new Map(); // "target:paramId" → value, sent once per frame
-  let liveTarget = 0; // engine track index being edited: previews, and live input while no track is armed
+  let liveTarget = -1; // engine track index being edited (-1 for none): previews, and live input while no track is armed
   let armedTargets = []; // engine track indices armed for live input (keyboard and MIDI)
   const liveLimiter = new FloodLimiter();
   const nowS = () => performance.now() / 1000;
 
-  /** Tracks live input plays on: the armed ones, else the track being edited. */
-  const inputTargets = () => (armedTargets.length > 0 ? armedTargets : [liveTarget]);
+  /** Tracks live input plays on: the armed ones, else the track being edited, else none. */
+  const inputTargets = () => {
+    if (armedTargets.length > 0) return armedTargets;
+    return liveTarget >= 0 ? [liveTarget] : [];
+  };
 
   /** Sends one MIDI event to each of `targets` (default: the live input targets). */
   function sendLive(status, data1, data2, targets = inputTargets()) {
@@ -104,7 +111,9 @@ function createClient() {
   let modelFrame = 0; // pending requestAnimationFrame for a coalesced model message
 
   function sendModel() {
-    if (compiled) send({ t: 'model', rev: ++rev, model: compiled.model });
+    if (!compiled) return;
+    send({ t: 'model', rev: ++rev, model: compiled.model });
+    heldRev = rev;
   }
 
   let modelPending = false;
@@ -113,8 +122,9 @@ function createClient() {
 
   /**
    * Sends model and params changes at most once per animation frame
-   * (a3-audio-implementation.md, Main to engine). A pending model carries
-   * every param, so pending params are dropped when one is sent.
+   * (a3-audio-implementation.md, Main to engine). A structural change compiles
+   * every param into the model and drops the params pending before it; params
+   * changed after it follow the model, which the engine applies them to.
    */
   function scheduleFlush() {
     if (!engine || modelFrame) return;
@@ -122,7 +132,6 @@ function createClient() {
       modelFrame = 0;
       if (modelPending) {
         modelPending = false;
-        pendingParams.clear();
         sendModel();
         // The engine keeps its playhead in frames across a model swap; a tempo edit while playing
         // would move it to another bar, so playback carries on from the same tick instead.
@@ -130,10 +139,12 @@ function createClient() {
           const frame = compiled.tempo.frameAt(relocateTick);
           send({ t: 'transport', op: 'locate', frame });
           last = { playFrame: frame, ctxFrame: contextFrame() };
+          started = last;
           relocating = last;
         }
         relocateTick = null;
-      } else if (pendingParams.size > 0) {
+      }
+      if (pendingParams.size > 0) {
         const values = new Float64Array(3 * pendingParams.size);
         let i = 0;
         for (const [key, value] of pendingParams) {
@@ -248,9 +259,9 @@ function createClient() {
   }
 
   /**
-   * True for a position report from before a tempo-edit relocate reached the engine: its
-   * frames count at the old tempo. A report within half a second of the relocated position
-   * (or one a second after it) ends the wait.
+   * True for a position report from before a relocate reached the engine (a locate while
+   * playing, or a tempo edit, whose old frames count at the old tempo). A report within half
+   * a second of the relocated position (or one a second after it) ends the wait.
    */
   function staleReport(msg) {
     if (!relocating) return false;
@@ -266,8 +277,11 @@ function createClient() {
   function onEngineMessage(event) {
     const msg = event.data;
     if (msg.t === 'pos') {
-      meters = msg.meters;
+      meters = metersHeld ? null : msg.meters;
       if (msg.playing && !staleReport(msg)) last = { playFrame: msg.playFrame, ctxFrame: msg.ctxFrame };
+    } else if (msg.t === 'ack') {
+      // The port keeps message order, so reports after this ack measure the new track layout.
+      if (msg.rev === heldRev) metersHeld = false;
     } else if (msg.t === 'fault') {
       setState({ faults: [...state.faults, { trackId: msg.trackId, deviceId: msg.deviceId, slot: msg.slot }] });
     } else if (msg.t === 'source-status') {
@@ -275,7 +289,11 @@ function createClient() {
     } else if (msg.t === 'sampler-zone-invalid') {
       const prev = state.samplers[msg.deviceId] ?? { status: 'bound', sourceId: null };
       setState({ samplers: { ...state.samplers, [msg.deviceId]: { ...prev, reason: msg.reason } } });
-    } else if (msg.t === 'error') console.error(`Engine error: ${msg.code}`, msg.detail);
+    } else if (msg.t === 'error') {
+      // A rejected model leaves the engine on the old layout, which its meters follow.
+      if (msg.detail === 'model' || msg.code === 'fs-mismatch') metersHeld = false;
+      console.error(`Engine error: ${msg.code}`, msg.detail);
+    }
   }
 
   function onSafetyMessage(event) {
@@ -391,9 +409,15 @@ function createClient() {
         const tick = state.playing && before ? this.positionTick() : null;
         compile();
         modelPending = true;
+        // The model carries every param; params pending before it address the old track indices.
+        pendingParams.clear();
+        // Meter slots follow the track layout, so meters stay empty until the engine swaps models.
+        meters = null;
+        metersHeld = true;
         if (tick !== null && compiled && compiled.tempo.frameAt(tick) !== before.frameAt(tick)) {
           relocateTick = tick;
           last = { playFrame: compiled.tempo.frameAt(tick), ctxFrame: contextFrame() };
+          started = last;
           relocating = last;
         }
         sendLoop();
@@ -404,7 +428,8 @@ function createClient() {
 
     /**
      * Panic: stops the transport and fades every sound in the engine; the
-     * safety stage restarts its fade-in. Returns true when audio was running.
+     * safety stage restarts its fade-in, and panic listeners end their
+     * auditions. Returns true when audio was running.
      */
     panic() {
       if (!engine) return false;
@@ -412,7 +437,14 @@ function createClient() {
       send({ t: 'panic' });
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
       setState({ playing: false, paused: false });
+      for (const listener of panicListeners) listener();
       return true;
+    },
+
+    /** Calls `listener` on every panic; returns the unsubscribe function. */
+    subscribePanic(listener) {
+      panicListeners.add(listener);
+      return () => panicListeners.delete(listener);
     },
 
     /** Returns and clears the faults the engine reported since the last call. */
@@ -422,10 +454,12 @@ function createClient() {
       return faults;
     },
 
-    /** Sets the engine track index that live notes and previews play on. */
+    /**
+     * Sets the engine track index that live notes and previews play on, or -1
+     * for none. Held live notes end only on a track that stops receiving input.
+     */
     setLiveTarget(index) {
       const before = inputTargets();
-      if (index !== liveTarget && engine) sendLive(CONTROL_CHANGE, CC_ALL_NOTES_OFF, 0, [liveTarget]);
       liveTarget = index;
       releaseDropped(before);
     },
@@ -465,16 +499,17 @@ function createClient() {
     },
 
     /**
-     * Note preview (PR-02): plays `pitch` for 250 ms through the target track's
-     * chain, on its own MIDI channel so it never cuts a held note. No preview
-     * plays during playback.
+     * Note preview (PR-02): plays `pitch` for 250 ms through the chain of
+     * engine track `track` (default: the track being edited), on its own MIDI
+     * channel so it never cuts a held note. The note ends on the track it
+     * started on. No preview plays during playback or without a track.
      */
-    preview(pitch, velocity = 100) {
-      if (state.playing) return;
+    preview(pitch, velocity = 100, track = liveTarget) {
+      if (state.playing || track < 0) return;
       this.requestSound(() => {
         if (!liveLimiter.allow(nowS())) return;
-        sendLive(NOTE_ON | PREVIEW_CHANNEL, pitch, velocity, [liveTarget]);
-        setTimeout(() => sendLive(NOTE_OFF | PREVIEW_CHANNEL, pitch, 0, [liveTarget]), 250);
+        sendLive(NOTE_ON | PREVIEW_CHANNEL, pitch, velocity, [track]);
+        setTimeout(() => sendLive(NOTE_OFF | PREVIEW_CHANNEL, pitch, 0, [track]), 250);
       });
     },
 
@@ -491,7 +526,11 @@ function createClient() {
       setState({ masterVolumeDb: db });
     },
 
-    /** Latest engine meters: [peakL, peakR, meanSquareL, meanSquareR] per track slot, master last; or null. */
+    /**
+     * Latest engine meters: [peakL, peakR, meanSquareL, meanSquareR] per track
+     * slot, master last; or null, also from a structural change until the
+     * engine swaps to its model.
+     */
     getMeters: () => meters,
 
     /** Latest post-limiter master level: { peakL, peakR, reduction (linear gain) }. */
@@ -512,6 +551,8 @@ function createClient() {
       send({ t: 'transport', op: 'play', frame });
       safety.port.postMessage({ t: 'resume-fade', v: PROTOCOL_VERSION });
       last = { playFrame: frame, ctxFrame: contextFrame() };
+      started = last;
+      relocating = last; // a report from an earlier playback may still be in flight
       setState({ playing: true, paused: false });
     },
 
@@ -539,13 +580,21 @@ function createClient() {
     /** The tick where the current or last playback started. */
     playStart: () => playStart,
 
-    /** Moves the playhead to `tick`. */
+    /**
+     * Moves the playhead to `tick`. While paused, `tick` also becomes the play
+     * start that Stop returns to.
+     */
     locate(tick) {
       stoppedTick = tick;
+      if (state.paused) playStart = tick;
       if (!compiled) return;
       const frame = compiled.tempo.frameAt(tick);
       send({ t: 'transport', op: 'locate', frame });
-      if (ctx) last = { playFrame: frame, ctxFrame: contextFrame() };
+      if (!ctx) return;
+      last = { playFrame: frame, ctxFrame: contextFrame() };
+      started = last;
+      // Reports from before the locate reaches the engine would move the playhead back.
+      if (state.playing) relocating = last;
     },
 
     /** Sets the loop range in ticks and turns the loop on or off. */
@@ -563,9 +612,12 @@ function createClient() {
 
     /**
      * The tick being heard now. While playing: the last reported play frame
-     * advanced by the audible context time since the report (getOutputTimestamp
-     * when present, else currentTime minus output latency), wrapped into the
-     * loop when it is on.
+     * moved by the audible context time since the report (getOutputTimestamp
+     * when present, else currentTime minus output latency), which trails the
+     * report by the output latency. Until the start of a play or locate is
+     * audible the readout holds there; with the loop on, a position past the
+     * loop end wraps to its start, and one before the loop start after a wrap
+     * falls at the end of the previous pass.
      */
     positionTick() {
       if (!state.playing || !ctx || !compiled) return stoppedTick;
@@ -575,13 +627,18 @@ function createClient() {
         ts && ts.contextTime > 0
           ? ts.contextTime * rate + ((performance.now() - ts.performanceTime) / 1000) * rate
           : (ctx.currentTime - (ctx.baseLatency ?? 0) - (ctx.outputLatency ?? 0)) * rate;
-      let frame = last.playFrame + Math.max(0, audible - last.ctxFrame);
+      if (audible <= started.ctxFrame) return compiled.tempo.tickAt(Math.floor(started.playFrame));
+      let frame = last.playFrame + (audible - last.ctxFrame);
       if (loop.on) {
         // As in the engine, only a pass that reaches the loop end from before it wraps;
         // playback that started after the loop end, or passed it before the loop was on, plays on.
         const start = compiled.tempo.frameAt(loop.startTick);
         const end = compiled.tempo.frameAt(loop.endTick);
-        if (end > start && last.playFrame < end && frame >= end) frame = start + ((frame - start) % (end - start));
+        const length = end - start;
+        if (length > 0 && last.playFrame < end && frame >= end) frame = start + ((frame - start) % length);
+        // A report behind the unwrapped distance from the start by more than half a pass has wrapped.
+        const wrapped = started.playFrame + (last.ctxFrame - started.ctxFrame) - last.playFrame > length / 2;
+        if (length > 0 && wrapped && last.playFrame >= start && last.playFrame < end && frame < start) frame += length;
       }
       return compiled.tempo.tickAt(Math.floor(frame));
     },

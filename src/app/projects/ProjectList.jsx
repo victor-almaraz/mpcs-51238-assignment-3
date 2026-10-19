@@ -18,7 +18,8 @@ import IconButton from '@/components/ui/IconButton';
 /**
  * Every saved project, most recently edited first (RET-01), with "Open",
  * "Rename", "Duplicate" and "Delete", each named with the project. Rename
- * edits the name in a dialog; Delete asks for confirmation.
+ * edits the name in a dialog; Delete asks for confirmation. Deleting the
+ * last project moves focus to "Create a project".
  */
 export default function ProjectList() {
   const indexRaw = useSyncExternalStore(subscribeProjects, getIndexSnapshot, () => null);
@@ -31,6 +32,7 @@ export default function ProjectList() {
   const triggerRef = useRef(null);
   const listRef = useRef(null);
   const nameRef = useRef(null);
+  const createRef = useRef(null);
 
   /** Loads the saved document of `entry`, applies `change(doc)` and saves the result under its ID. */
   function rewrite(entry, change) {
@@ -65,7 +67,7 @@ export default function ProjectList() {
   function confirmDelete() {
     const index = listed.value.findIndex((p) => p.id === pending.id);
     const result = deleteProject(pending.id);
-    focusAfterRemoval(() => listRef.current, index, '[aria-label^="Delete "]', () => document.querySelector('main h1'));
+    focusAfterRemoval(() => listRef.current, index, '[aria-label^="Delete "]', () => createRef.current);
     if (result.ok) {
       pruneStoredSources().catch((err) => console.error('Stored audio cleanup failed', err));
       setMessage(`Deleted ${pending.name}`);
@@ -96,7 +98,7 @@ export default function ProjectList() {
         <div className="flex flex-col gap-3">
           <p>No saved projects on this device.</p>
           <div>
-            <Link href="/new" className={cx(controlBase, controlSizes.md, buttonVariants.primary)}>
+            <Link ref={createRef} href="/new" className={cx(controlBase, controlSizes.md, buttonVariants.primary)}>
               Create a project
             </Link>
           </div>

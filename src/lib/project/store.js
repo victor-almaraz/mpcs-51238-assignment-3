@@ -9,6 +9,7 @@ import { migrate } from '../storage/migrate.js';
 import { isIndex, isProjectDoc } from '../storage/schema.js';
 import {
   createDebouncedWriter,
+  discardPendingWrites,
   onPageHide,
   readJson,
   readRaw,
@@ -63,11 +64,8 @@ export function subscribeProjects(onChange) {
   return subscribeStorage(onChange);
 }
 
-/**
- * Writes `doc` and its index entry now. On failure the previous saved state
- * stays. Returns { ok: true, value: doc } or { ok: false, error }.
- */
-export function saveProject(doc) {
+/** Writes `doc` and its index entry. On failure the previous saved state stays. */
+function writeProject(doc) {
   const index = readIndex();
   if (!index.ok) return index;
   const written = writeJson(projectKey(doc.id), doc);
@@ -95,8 +93,20 @@ export function saveProject(doc) {
   return { ok: true, value: doc };
 }
 
-const writer = createDebouncedWriter({ write: saveProject, delayMs: SAVE_DELAY_MS, keyOf: (doc) => doc.id });
-let latest = null; // the newest edited document, saved or pending
+/** Pending edits by project ID; a failed save stays pending and retries on the next flush. */
+const writer = createDebouncedWriter({ write: writeProject, delayMs: SAVE_DELAY_MS, keyOf: (doc) => doc.id });
+
+/**
+ * Writes `doc` and its index entry now. On failure the previous saved state
+ * stays. A successful save replaces any pending edit of the same project, so
+ * callers pass a document built on loadProject(), which includes that edit.
+ * Returns { ok: true, value: doc } or { ok: false, error }.
+ */
+export function saveProject(doc) {
+  const result = writeProject(doc);
+  if (result.ok) writer.discard(doc.id);
+  return result;
+}
 
 /** Writes any pending edit now. Returns the save state. */
 export function flushSaves() {
@@ -119,10 +129,10 @@ export function hasUnsavedEdits() {
  * page is hidden. The first edit of an example copy saves it as a project.
  */
 export function commitEdit(doc, now = new Date().toISOString()) {
-  latest = { ...doc, modifiedAt: now };
+  const edited = { ...doc, modifiedAt: now };
   onPageHide(flushSaves);
-  writer.schedule(latest);
-  return latest;
+  writer.schedule(edited);
+  return edited;
 }
 
 /** Creates and saves a project from validated New project form values. */
@@ -131,12 +141,14 @@ export function createProject({ name, tempo, timeSignature }, now = new Date().t
 }
 
 /**
- * Loads a project: the newest edit or unsaved example copy in memory, else the
- * saved JSON brought to the current schema. Returns { ok: true, value, readOnly }
- * (value null when no such project) or { ok: false, error }.
+ * Loads a project: its pending edit (not yet written, or failed to write) or
+ * unsaved example copy in memory, else the saved JSON brought to the current
+ * schema. Returns { ok: true, value, readOnly } (value null when no such
+ * project) or { ok: false, error }.
  */
 export function loadProject(id) {
-  if (latest?.id === id) return { ok: true, value: latest, readOnly: false };
+  const edited = writer.pendingFor(id);
+  if (edited) return { ok: true, value: edited, readOnly: false };
   const copy = unsaved.get(id);
   if (copy) return { ok: true, value: copy.doc, readOnly: false };
   const result = readJson(projectKey(id), (v) => isProjectDoc(v, id));
@@ -148,7 +160,8 @@ export function loadProject(id) {
 }
 
 /**
- * Removes a saved project, its working state and its index entry.
+ * Removes a saved project, its working state and its index entry, and drops
+ * their pending writes so a later flush does not restore them.
  * Returns { ok: true } or { ok: false, error }.
  */
 export function deleteProject(id) {
@@ -158,8 +171,8 @@ export function deleteProject(id) {
   if (!indexed.ok) return { ok: false, error: writeError(indexed.error) };
   removeKey(projectKey(id));
   removeKey(viewKey(id));
+  discardPendingWrites(id);
   unsaved.delete(id);
-  if (latest?.id === id) latest = null;
   return { ok: true };
 }
 
@@ -181,6 +194,17 @@ export function openExampleCopy(slug, id, now = new Date().toISOString()) {
 /** True while `id` is an example copy that has not been saved. */
 export function isUnsavedCopy(id) {
   return unsaved.has(id);
+}
+
+/**
+ * Documents held only in memory: pending edits (including failed saves) and
+ * example copies not saved yet. A pending edit stands in for its project's
+ * copy, so each project ID appears once.
+ */
+export function unsavedDocuments() {
+  const docs = new Map(writer.pendingValues().map((doc) => [doc.id, doc]));
+  for (const [id, { doc }] of unsaved) if (!docs.has(id)) docs.set(id, doc);
+  return [...docs.values()];
 }
 
 /**

@@ -9,8 +9,9 @@ import IconButton from '@/components/ui/IconButton';
 /**
  * Editor header (NEW-03, SAVE-01): the project name as the page heading with
  * "Rename" for editing it in place (Enter or leaving the field commits,
- * Escape reverts), tempo and time signature, the save status, and the
- * project's file actions (`actions`).
+ * Escape reverts; Enter and Escape return focus to "Rename", leaving the
+ * field keeps focus where it went), tempo and time signature, the save
+ * status, and the project's file actions (`actions`).
  */
 export default function EditorHeader({ name, tempo, meter, saveStatus, onRename, readOnly, actions }) {
   const [editing, setEditing] = useState(false);
@@ -24,7 +25,7 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
     setEditing(true);
   }
 
-  function finish(commit) {
+  function finish(commit, refocus) {
     if (commit) {
       const problem = validateProjectName(draft);
       if (problem) {
@@ -35,7 +36,7 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
     }
     setEditing(false);
     setError(null);
-    setTimeout(() => renameRef.current?.focus(), 0);
+    if (refocus) setTimeout(() => renameRef.current?.focus(), 0);
   }
 
   return (
@@ -53,13 +54,13 @@ export default function EditorHeader({ name, tempo, meter, saveStatus, onRename,
               aria-invalid={error ? 'true' : undefined}
               aria-describedby={error ? 'project-name-error' : undefined}
               onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => finish(true)}
+              onBlur={() => finish(true, false)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') finish(true);
+                if (e.key === 'Enter') finish(true, true);
                 else if (e.key === 'Escape') {
                   e.preventDefault();
                   e.stopPropagation();
-                  finish(false);
+                  finish(false, true);
                 }
               }}
               className={cx('min-h-8 w-72 rounded-ds border border-border-strong bg-bg px-2 font-sans text-base', focusRing)}

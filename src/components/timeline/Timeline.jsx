@@ -28,6 +28,7 @@ import {
   addEnvelopePoint,
   addInstrumentTrack,
   audioPassAt,
+  audioPasses,
   clipEndTick,
   isLooping,
   removeEnvelopePoint,
@@ -67,6 +68,7 @@ import {
   trackClips,
   xToTick,
 } from './layout';
+import { nextGridTick, snapToGrid } from '@/lib/project/grid';
 
 /** Envelope gain in dB for readouts; 0 is −∞. */
 const gainDb = (g) => (g <= 0 ? -Infinity : gainToDb(g));
@@ -138,11 +140,15 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   const cancelDeleteRef = useRef(null);
   // Keyboard nudges always step by the grid; pointer drags follow it while snap is on.
   const stepTicks = view.snap === 'bar' ? barTicks : Number(view.snap) * PPQ;
-  const snapTick = (t, free) => (free || !view.snapOn ? t : Math.round(t / stepTicks) * stepTicks);
+  // The grid restarts at each bar line (grid.js), so bar lines are grid points in any meter.
+  const gridStep = view.snap === 'bar' ? Infinity : stepTicks;
+  const snapTick = (t, free) => (free || !view.snapOn ? t : snapToGrid(t, meter, gridStep));
   const loop = loopRange(project, view);
   /** The last clip end plus TAIL_BARS: how far the lanes and the loop end reach. */
-  const lanesEnd = useMemo(() => contentEnd(project) + TAIL_BARS * barTicks, [project, barTicks]);
-  const loopMin = Math.max(1, stepTicks); // shortest loop: one grid step
+  const lanesEnd = contentEnd(project) + TAIL_BARS * barTicks;
+  // The shortest loop spans one grid step: its end is at least the grid point after its start, its start at most the one before its end.
+  const minLoopEnd = (start) => nextGridTick(start, meter, gridStep, 1);
+  const maxLoopStart = (end) => nextGridTick(end, meter, gridStep, -1);
   const fileRef = useRef(null);
   /** Where the file picker's audio goes: set by each opening, so a cancelled pick leaves nothing behind. */
   const pickTarget = useRef(null);
@@ -167,7 +173,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     project,
     rowIds,
     meter,
-    stepTicks,
+    gridStep,
     editCursor,
     selection,
     setSelection,
@@ -228,8 +234,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   }
 
   function stepCursor(sign, unit) {
-    const step = unit === 'bar' ? barTicks : stepTicks;
-    setCursor(Math.round(editCursor / step) * step + sign * step);
+    setCursor(nextGridTick(editCursor, meter, unit === 'bar' ? Infinity : gridStep, sign));
   }
 
   /**
@@ -536,12 +541,11 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
   }
 
   /**
-   * Sets the loop range (view state) and announces it; `on` also turns the loop
-   * on or off. Edges are clamped so the loop is at least one grid step long.
+   * Sets the loop range (view state) to `start` and `end`, which the caller has
+   * clamped (loopDrag, onLoopKey), and announces it; `on` also turns the loop on or off.
    */
   function setLoopRange(start, end, on) {
-    const s = Math.max(0, Math.min(start, end - loopMin));
-    const next = { loop: { start: s, end: Math.max(end, s + loopMin) } };
+    const next = { loop: { start, end } };
     if (on !== undefined) next.loopEnabled = on;
     onViewChange(next);
     const lit = on ?? view.loopEnabled;
@@ -564,11 +568,12 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     if (d.mode === 'loopNew') {
       const a = snapTick(d.t0, free);
       const b = snapTick(t, free);
-      return { start: Math.min(a, b), end: Math.max(Math.max(a, b), Math.min(a, b) + loopMin) };
+      return { start: Math.min(a, b), end: Math.max(a, b, minLoopEnd(Math.min(a, b))) };
     }
-    if (d.mode === 'loopStart') return { start: Math.max(0, Math.min(snapTick(t, free), loop.end - loopMin)), end: loop.end };
-    if (d.mode === 'loopEnd') return { start: loop.start, end: Math.max(snapTick(t, free), loop.start + loopMin) };
-    const start = Math.max(0, d.start + snapTick(t - d.t0, free));
+    if (d.mode === 'loopStart') return { start: Math.max(0, Math.min(snapTick(t, free), maxLoopStart(loop.end))), end: loop.end };
+    if (d.mode === 'loopEnd') return { start: loop.start, end: Math.max(snapTick(t, free), minLoopEnd(loop.start)) };
+    // A moved loop keeps its length; its start lands on the grid.
+    const start = Math.max(0, snapTick(d.start + t - d.t0, free));
     return { start, end: start + (d.end - d.start) };
   }
 
@@ -598,7 +603,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     if (clip.kind === 'audio' && mode !== 'repeatEnd' && selection.includes(clip.id) && !mod && !e.shiftKey) {
       const handle = handleAt(project, clip, hit.rect, x, y, view.zoom);
       if (handle) {
-        drag.current = { mode: handle, clipId: clip.id, rect: hit.rect, x0: x, y0: y };
+        // The handles sit on the first loop pass, so fade drags measure that pass.
+        drag.current = { mode: handle, clipId: clip.id, pass: audioPasses(project, clip)[0], rect: hit.rect, x0: x, y0: y };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
@@ -620,7 +626,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     } else if (!selection.includes(clip.id) || mode !== 'move') next = [clip.id];
     setSelection(next);
     if (!next.includes(clip.id)) return;
-    drag.current = { mode, x0: x, row0: row, clipIds: mode === 'move' ? next : [clip.id] };
+    // Drags snap the edge of the grabbed clip they move: its start, or its end for trims and loops at the end.
+    const anchor = mode === 'trimEnd' || mode === 'repeatEnd' ? clipEndTick(project, clip) : clip.start;
+    // Every drag edits the selection; a plain trim or loop drag has selected the grabbed clip alone.
+    drag.current = { mode, x0: x, row0: row, anchor, clipIds: next };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -649,10 +658,10 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       if (Math.abs(x - d.x0) < 4 && Math.abs(y - d.y0) < 4) return;
       setGhost({ mode: 'marquee', x0: d.x0, y0: d.y0, x1: x, y1: y });
     } else if (d.mode === 'fadeIn' || d.mode === 'fadeOut') {
-      const f = frameAtX(project, clip, x, view.zoom);
+      const f = frameAtX(project, d.pass, x, view.zoom);
       const other = d.mode === 'fadeIn' ? clip.fadeOut.length : clip.fadeIn.length;
-      const raw = d.mode === 'fadeIn' ? f : clip.sourceLength - f;
-      setGhost({ mode: d.mode, clipId: clip.id, length: Math.max(0, Math.min(clip.sourceLength - other, raw)) });
+      const raw = d.mode === 'fadeIn' ? f : d.pass.sourceLength - f;
+      setGhost({ mode: d.mode, clipId: clip.id, length: Math.max(0, Math.min(d.pass.sourceLength - other, raw)) });
     } else if (d.mode === 'gain') {
       const db = Math.round(Math.max(CLIP_GAIN_MIN_DB, Math.min(CLIP_GAIN_MAX_DB, clip.gainDb - (y - d.y0) * GAIN_DB_PER_PX)) * 10) / 10;
       setGhost({ mode: 'gain', clipId: clip.id, gainDb: db });
@@ -660,8 +669,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       setGhost({ mode: 'envPoint', clipId: clip.id, pointId: d.pointId, frame: frameAtX(project, d.pass, x, view.zoom), gain: gainAtY(d.rect, y) });
     } else {
       const raw = Math.round((x - d.x0) / pxPerTick(view.zoom));
-      // Alt while dragging bypasses snap (ARR-04).
-      const dTick = snapTick(raw, e.altKey);
+      // Alt while dragging bypasses snap (ARR-04); otherwise the dragged edge lands on the grid.
+      const dTick = snapTick(d.anchor + raw, e.altKey) - d.anchor;
       const dRow = d.mode === 'move' ? row - d.row0 : 0;
       // Most pointer moves stay within a snap step: only a changed result re-renders the timeline.
       const g = ghostRef.current;
@@ -684,21 +693,27 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
     return ids;
   }
 
-  /** Loop start and end handles by keyboard: arrows by the grid, Page Up and Page Down by bars, Home and End to the limits. */
+  /**
+   * Loop start and end handles by keyboard: arrows by the grid, Page Up and Page Down by bars, Home and End to the limits.
+   * A handle at its limit stays put: it never moves against its key's direction.
+   */
   function onLoopKey(e, edge) {
     const value = loop[edge];
     const limit = Math.max(loop.end, lanesEnd);
     let next;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = value - stepTicks;
-    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = value + stepTicks;
-    else if (e.key === 'PageDown') next = value - barTicks;
-    else if (e.key === 'PageUp') next = value + barTicks;
-    else if (e.key === 'Home') next = edge === 'start' ? 0 : loop.start + loopMin;
-    else if (e.key === 'End') next = edge === 'start' ? loop.end - loopMin : limit;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = nextGridTick(value, meter, gridStep, -1);
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = nextGridTick(value, meter, gridStep, 1);
+    else if (e.key === 'PageDown') next = nextGridTick(value, meter, Infinity, -1);
+    else if (e.key === 'PageUp') next = nextGridTick(value, meter, Infinity, 1);
+    else if (e.key === 'Home') next = edge === 'start' ? 0 : minLoopEnd(loop.start);
+    else if (e.key === 'End') next = edge === 'start' ? maxLoopStart(loop.end) : limit;
     else return;
     e.preventDefault();
-    const start = edge === 'start' ? Math.max(0, Math.min(next, loop.end - loopMin)) : loop.start;
-    const end = edge === 'end' ? Math.min(limit, Math.max(next, loop.start + loopMin)) : loop.end;
+    const back = e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'Home';
+    const clamped = edge === 'start' ? Math.max(0, Math.min(next, maxLoopStart(loop.end))) : Math.min(limit, Math.max(next, minLoopEnd(loop.start)));
+    const moved = back ? Math.min(value, clamped) : Math.max(value, clamped);
+    const start = edge === 'start' ? moved : loop.start;
+    const end = edge === 'end' ? moved : loop.end;
     setLoopRange(start, end);
     revealTick(edge === 'start' ? start : end);
   }
@@ -739,7 +754,7 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
       // Moves and trims act on d.clipIds (the selection), so they carry no single clipId.
       if (g.dTick === 0 && g.dRow === 0) return;
       if (d.mode === 'move') {
-        if (g.dRow !== 0) commands.moveToRow(g.dTick, d.row0 + g.dRow);
+        if (g.dRow !== 0) commands.moveToRow(g.dTick, g.dRow);
         else commands.move(g.dTick);
       } else commands.trim(d.mode === 'trimStart' ? 'start' : 'end', 0, g.dTick);
       return;
@@ -956,8 +971,8 @@ export default function Timeline({ project, view, onViewChange, onEdit, readOnly
               role="slider"
               tabIndex={0}
               aria-label={label}
-              aria-valuemin={edge === 'start' ? 0 : loop.start + loopMin}
-              aria-valuemax={edge === 'start' ? loop.end - loopMin : Math.max(loop.end, lanesEnd)}
+              aria-valuemin={edge === 'start' ? 0 : Math.min(loop.end, minLoopEnd(loop.start))}
+              aria-valuemax={edge === 'start' ? Math.max(loop.start, maxLoopStart(loop.end)) : Math.max(loop.end, lanesEnd)}
               aria-valuenow={loop[edge]}
               aria-valuetext={barText(loop[edge], meter)}
               data-help={`${label}: drag the loop band's edges in the ruler, or use the arrow keys (grid steps) and Page Up and Page Down (bars).`}

@@ -9,7 +9,7 @@ import { cx, focusRing, groupHeading, sectionHeading } from '@/design-systems/in
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getEngine } from '@/lib/audio/engine-client';
-import { noteAt, notesStartingIn } from '@/lib/project/midi-commands';
+import { editableLength, noteAt, notesStartingIn } from '@/lib/project/midi-commands';
 import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
 import { barText, spanText } from '@/components/timeline/layout';
@@ -39,13 +39,18 @@ const AUTOSCROLL_MAX = 20;
 const NO_NOTES = { notes: [] };
 /** Stretch resolution while Alt is held: a 1/64 note. */
 const FREE_STEP = PPQ / 16;
+/** Step input: note-ons this close to the first note of a chord, ms, join it on one tick. */
+const CHORD_MS = 40;
+/** Pitches with a drum voice: the default drum rows. */
+const DRUM_PITCHES = new Set(rowPitches(true, false));
 
 /**
  * Piano roll (PR-01 to PR-04): a canvas for the picture and a role="grid"
  * DOM mirror ("Notes") for input and assistive technology. Rows are pitches
- * (or the GM drum rows), columns are grid steps of the clip; only visible rows
- * and columns, plus the cursor cell, are in the DOM. Every edit goes through
- * the note commands.
+ * (or the GM drum rows), columns are grid steps of the clip's editable length
+ * (the loop of a looping clip, whose repeats draw dimmed and read-only); only
+ * visible rows and columns, plus the cursor cell, are in the DOM. Every edit
+ * goes through the note commands.
  *
  * Keys on a cell: arrows move the cursor (Left from the first column reaches
  * the row header); Enter adds or removes a note; Delete removes it;
@@ -57,7 +62,8 @@ const FREE_STEP = PPQ / 16;
  * at the view's edges; each drag is one edit on release. Drum notes keep one
  * length. The cursor is
  * a pitch and a tick, so it stays put when the grid or the row set changes.
- * `stepInsertRef.current(pitch)` is set while step input is on.
+ * `stepInsertRef.current(pitch)` is set while step input is on: notes played
+ * within CHORD_MS of each other go on one tick and advance the cursor once.
  */
 export default function PianoRollGrid({ project, trackId, view, onViewChange, onEdit, readOnly, stepInsertRef }) {
   const engine = getEngine();
@@ -88,7 +94,9 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const beatTicks = (4 * PPQ) / denominator;
   const newClipLength = 4 * barTicks;
   const length = clip?.length ?? newClipLength;
-  const cols = Math.max(1, Math.ceil(length / grid));
+  // Only the notes that play are edited: a looping clip's loop, not its repeats.
+  const editLength = clip ? editableLength(clip) : length;
+  const cols = Math.max(1, Math.ceil(editLength / grid));
 
   // Open on the clip's notes (their median pitch), else on C4 or the kick.
   const [cursor, setCursorState] = useState(() => {
@@ -127,6 +135,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const drag = useRef(null);
   /** Set while the pointer moves the cursor: the cell under it is in view, so the view stays put. */
   const pointerCursor = useRef(false);
+  /** Step input: the chord being entered, { tick, at, pitches }, or null. */
+  const chordRef = useRef(null);
 
   const commands = usePianoRollCommands({
     project, trackId, clipId: clip?.id ?? null, grid, isDrums, meter, readOnly,
@@ -142,18 +152,31 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     setCursor({ pitch: rows[rr], tick: cc < 0 ? HEADER : cc * grid });
   }
 
-  // Step input: computer-keyboard and MIDI notes insert at the cursor and advance it.
+  // Step input: computer-keyboard and MIDI notes insert at the cursor and advance it. A note
+  // within CHORD_MS of a chord's first note joins that chord's tick; the cursor advances once
+  // per chord, and only when its first note was added.
   useEffect(() => {
     if (!stepInsertRef) return undefined;
     stepInsertRef.current = stepInput
-      ? (pitch) => {
+      ? (played) => {
+          // On a drum clip a pitch with a drum voice (a pad, a GM drum map) goes on its own row.
+          // Any other pitch, such as the computer keyboard's C4 to C5, has no voice and no
+          // default row, so it goes on the cursor row, the row being edited, rather than off view.
+          const pitch = isDrums && !DRUM_PITCHES.has(played) ? rows[row] : played;
+          const now = performance.now();
+          const chord = chordRef.current;
+          if (chord && now - chord.at <= CHORD_MS) {
+            if (!chord.pitches.has(pitch) && commands.add(chord.tick, pitch, { sounds: false })) chord.pitches.add(pitch);
+            return;
+          }
+          chordRef.current = null;
           const tick = Math.max(0, cursorRef.current.tick);
-          const clipLength = commands.clipLength(newClipLength);
-          if (tick >= clipLength) {
+          if (tick >= commands.clipLength(newClipLength)) {
             announce('End of clip');
             return;
           }
-          commands.add(tick, pitch, { sounds: false });
+          if (!commands.add(tick, pitch, { sounds: false })) return;
+          chordRef.current = { tick, at: now, pitches: new Set([pitch]) };
           setCursor({ pitch: cursorRef.current.pitch, tick: tick + grid });
         }
       : null;
@@ -322,15 +345,17 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
 
   /**
    * The span a stretch from `d.mode`'s edge leaves with the pointer at tick `t`: snapped to the
-   * grid, or to FREE_STEP with Alt; the note keeps at least one step and the other edge stays.
+   * grid, or to FREE_STEP with Alt, and the end to the editable length; the note keeps at least
+   * one step, or its own length when shorter, and the other edge stays.
    */
   function stretched(d, t, free) {
     const n = d.note;
     const step = free ? FREE_STEP : grid;
+    const shortest = Math.min(step, n.length);
     const at = Math.round(t / step) * step;
     const end = n.tick + n.length;
-    if (d.mode === 'resizeEnd') return { ...n, length: Math.max(step, Math.min(length, at) - n.tick) };
-    const start = Math.max(0, Math.min(at, end - step));
+    if (d.mode === 'resizeEnd') return { ...n, length: Math.max(shortest, Math.min(editLength, at) - n.tick) };
+    const start = Math.max(0, Math.min(at, end - shortest));
     return { ...n, tick: start, length: end - start };
   }
 
@@ -344,7 +369,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     const n = d.note;
     const dTick = (d.c - d.originC) * grid;
     const r = Math.max(0, Math.min(rows.length - 1, rows.indexOf(n.pitch) + (d.r - d.originR)));
-    return { ...n, tick: Math.max(0, Math.min(length - 1, n.tick + dTick)), pitch: rows[r] };
+    return { ...n, tick: Math.max(0, Math.min(editLength - 1, n.tick + dTick)), pitch: rows[r] };
   }
 
   function endDrag() {
@@ -492,6 +517,11 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       .map((t) => ({ value: String(t), label: spanText(t, meter, clip?.start ?? 0) })),
   ];
   const title = `Piano roll: ${track.name}`;
+  // The lane edits the notes the grid shows: those starting in the editable length, on a row.
+  const laneNotes = useMemo(() => {
+    const shown = new Set(rows);
+    return (clip?.notes ?? []).filter((n) => n.tick < editLength && shown.has(n.pitch));
+  }, [clip?.notes, editLength, rows]);
 
   return (
     <section aria-labelledby="pianoroll-heading" className="flex min-h-0 flex-1 flex-col gap-1">
@@ -541,7 +571,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
           onChange={(v) => commands.setLoop(v === 'off' ? null : Number(v))}
           options={loopOptions}
         />
-        <IconToggle icon="footprints" label="Step input" pressed={stepInput} onClick={() => setStepInput(!stepInput)} data-help="Step input: each played note is added at the cursor, which then moves one grid step." />
+        <IconToggle icon="footprints" label="Step input" pressed={stepInput} onClick={() => setStepInput(!stepInput)} data-help="Step input: each played note or chord is added at the cursor, which then moves one grid step. On drum tracks, keys without a drum voice add to the cursor row." />
         <IconToggle icon="volume-2" label="Preview notes" pressed={previewOn} onClick={() => setPreviewOn(!previewOn)} data-help="Preview notes: placing or moving a note plays it." />
         <IconButton icon="grid-3x3" label="Quantize" shortcut="Q" onClick={() => commands.quantize()} disabled={!clip || readOnly} data-help="Quantize (Q): moves every note to the grid." />
         {isDrums ? <IconToggle icon="list" label="Show all notes" pressed={showAll} onClick={() => setShowAll(!showAll)} data-help="Show all notes: every General MIDI drum row, not only the kit's." /> : null}
@@ -562,12 +592,14 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
             setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
           }}
         >
-          <div className="relative" style={{ width: LABEL_W + cols * cellW, height: rows.length * ROW_H }}>
+          {/* Wide enough for the whole clip, so the repeats of a loop show past its editable columns. */}
+          <div className="relative" style={{ width: LABEL_W + Math.max(cols * cellW, Math.ceil(length * (cellW / grid))), height: rows.length * ROW_H }}>
             <PianoRollCanvas
               tickW={cellW / grid}
               view={scroll}
               rows={rows}
               clip={clip}
+              editLength={editLength}
               clipStart={clip?.start ?? 0}
               grid={grid}
               barTicks={barTicks}
@@ -671,7 +703,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
       {/* The lane stays with an empty clip ("No notes"), so the layout does not jump. */}
       <VelocityLane
         cellW={cellW}
-        clip={clip}
+        notes={laneNotes}
         isDrums={isDrums}
         meter={meter}
         grid={grid}

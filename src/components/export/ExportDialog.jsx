@@ -36,11 +36,12 @@ const clockText = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).pad
  * clips that will be silent, and a progress bar with percentage, elapsed time
  * and Cancel. A finished render offers Download with the file size; nothing
  * downloads by itself. Cancel discards the render's output; a new export waits
- * until the cancelled render ends. The live transport stops first. `loop` is
- * the loop range in ticks. With `trigger` false the dialog has no button of
- * its own and opens through the project.export command (a File menu).
+ * until the cancelled render ends. Live playback pauses in place first and
+ * `onPause(tick)` receives the tick where it paused. `loop` is the loop range
+ * in ticks. With `trigger` false the dialog has no button of its own and
+ * opens through the project.export command (a File menu).
  */
-export default function ExportDialog({ project, loop, disabled, trigger = true }) {
+export default function ExportDialog({ project, loop, disabled, trigger = true, onPause }) {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState('project');
   const [format, setFormat] = useState(() => getSettings().exportFormat);
@@ -92,7 +93,8 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
     setReady(null);
     setElapsed(0);
     flushSaves();
-    getEngine().stop();
+    const engine = getEngine();
+    if (engine.getState().playing) onPause?.(engine.pause());
     setProgress(null);
     try {
       const result = await renderOffline(project, fs, {
@@ -131,9 +133,16 @@ export default function ExportDialog({ project, loop, disabled, trigger = true }
     requestAnimationFrame(() => exportRef.current?.focus());
   }
 
+  /** Saves the finished render; a dismissed picker changes nothing and a failed write shows an error. */
   async function download() {
-    const outcome = await saveFile(ready.blob, ready.name, WAV_TYPE);
-    if (outcome === 'saved') setMessage(`Exported ${ready.name}`);
+    setError(null);
+    try {
+      const outcome = await saveFile(ready.blob, ready.name, WAV_TYPE);
+      if (outcome !== 'cancelled') setMessage(`Exported ${ready.name}`);
+    } catch (err) {
+      console.error(err);
+      setError(`${ready.name} could not be saved. Try Download again.`);
+    }
   }
 
   function close() {

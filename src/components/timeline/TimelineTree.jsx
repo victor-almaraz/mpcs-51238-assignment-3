@@ -27,7 +27,9 @@ const rowKey = (kind, id) => `${kind}:${id}`;
  * track above or below of the same kind; Mod+E splits at the edit cursor;
  * Mod+J joins; Mod+D duplicates; Delete or Backspace removes; the
  * ContextMenu key or Shift+F10 opens the clip menu. Comma and
- * period move the edit cursor by the snap step (with Shift, a bar).
+ * period move the edit cursor by the snap step (with Shift, a bar). Moves,
+ * trims and Delete act on the selection when it holds the focused clip, else
+ * on the focused clip alone.
  */
 export default function TimelineTree({
   project,
@@ -114,6 +116,8 @@ export default function TimelineTree({
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     const horizontal = key === 'ArrowLeft' || key === 'ArrowRight';
     const sign = key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 1;
+    // The clips a clip command acts on: the selection when it holds the focused clip, else that clip.
+    const targets = row.kind === 'clip' ? (selection.includes(row.clip.id) ? selection : [row.clip.id]) : [];
     let handled = true;
     if (row.kind === 'clip' && (key === 'ContextMenu' || (e.shiftKey && key === 'F10'))) {
       onClipMenu(row.clip, rowRefs.current.get(row.key));
@@ -135,11 +139,11 @@ export default function TimelineTree({
         pendingFocus.current = rowKey('c', copies[0]);
       }
     } else if (row.kind === 'clip' && horizontal && !mod) {
-      if (e.altKey) commands.trim(e.shiftKey ? 'end' : 'start', sign);
-      else commands.move(sign * commands.snapStep());
+      if (e.altKey) commands.trim(e.shiftKey ? 'end' : 'start', sign, undefined, targets);
+      else commands.nudge(sign, targets);
       pendingFocus.current = row.key;
     } else if (e.altKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
-      if (row.kind === 'clip') commands.move(0, sign);
+      if (row.kind === 'clip') commands.move(0, sign, targets);
       else commands.moveTrack(row.trackId, sign);
       pendingFocus.current = row.key;
     } else if (key === 'ArrowDown') arrive(rows[i + 1], e);
@@ -169,7 +173,7 @@ export default function TimelineTree({
       setSelection(hits.map((c) => c.id));
     } else if (key === 'Delete' || key === 'Backspace') {
       if (row.kind === 'clip') {
-        const doomed = selection.includes(row.clip.id) ? selection : [row.clip.id];
+        const doomed = targets;
         const keep = (r) => r?.kind === 'clip' && r.trackId === row.trackId && !doomed.includes(r.clip.id);
         const neighbour = rows.slice(i + 1).find(keep) ?? rows.slice(0, i).reverse().find(keep);
         commands.remove(doomed);

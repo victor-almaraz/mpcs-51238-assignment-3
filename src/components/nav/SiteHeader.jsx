@@ -21,7 +21,8 @@ function normalize(path) {
 /**
  * Shared header on every route. The link for the current route carries
  * aria-current="page" and the pressed (ink) look; the others are quiet links.
- * Other routes (the editor) match none.
+ * Other routes (the editor) match none. The Commands and Keyboard shortcuts
+ * buttons pass themselves as the opener, so focus returns to them on close.
  */
 export default function SiteHeader() {
   const pathname = normalize(usePathname() ?? '');
@@ -55,8 +56,8 @@ export default function SiteHeader() {
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <IconButton icon="command" label="Commands" shortcut="Ctrl/Cmd+K" aria-keyshortcuts="Control+K Meta+K Control+Shift+P Meta+Shift+P" onClick={requestPalette} data-help="Commands (Ctrl/Cmd+K): search and run any command." />
-          <IconButton icon="circle-question-mark" label="Keyboard shortcuts" shortcut="?" onClick={() => runCommand('help.shortcuts')} />
+          <IconButton icon="command" label="Commands" shortcut="Ctrl/Cmd+K" aria-keyshortcuts="Control+K Meta+K Control+Shift+P Meta+Shift+P" onClick={(e) => requestPalette(e.currentTarget)} data-help="Commands (Ctrl/Cmd+K): search and run any command." />
+          <IconButton icon="circle-question-mark" label="Keyboard shortcuts" shortcut="?" onClick={(e) => runCommand('help.shortcuts', e.currentTarget)} />
         </div>
       </div>
     </header>

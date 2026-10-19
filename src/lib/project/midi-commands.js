@@ -32,6 +32,14 @@ function getClip(doc, clipId) {
 }
 
 /**
+ * Ticks of `clip` whose notes play and can be edited: the clip length, or a
+ * shorter loop length. Notes starting at or after it are silent (expandClipNotes).
+ */
+export function editableLength(clip) {
+  return clip.loopLength > 0 ? Math.min(clip.length, clip.loopLength) : clip.length;
+}
+
+/**
  * Creates an empty MIDI clip on `trackId` at tick `start` spanning `length`
  * ticks (default: four bars of the first meter). Returns { ok, doc, clipId }.
  */
@@ -52,7 +60,8 @@ export function createClip(doc, trackId, { start = 0, length, name } = {}, makeI
 
 /**
  * Adds a note at clip-relative `tick` with `pitch`, `length` and `velocity`.
- * The note must start inside the clip. Returns { ok, doc, noteId }.
+ * The note must start inside the clip's editable length (inside the loop of a
+ * looping clip). Returns { ok, doc, noteId }.
  */
 export function addNote(doc, clipId, { tick, pitch, length, velocity = DEFAULT_VELOCITY }, makeId = createId) {
   requireTick(tick, 'tick');
@@ -60,6 +69,7 @@ export function addNote(doc, clipId, { tick, pitch, length, velocity = DEFAULT_V
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No MIDI clip to add the note to.');
   if (tick < 0 || tick >= clip.length) return fail('invalid', 'Notes start inside their clip.');
+  if (tick >= editableLength(clip)) return fail('invalid', 'Notes in a looping clip start inside the loop.');
   if (!Number.isInteger(pitch) || pitch < PITCH_MIN || pitch > PITCH_MAX) return fail('invalid', 'Pitch is 0–127.');
   if (length < 1) return fail('invalid', 'A note lasts at least one tick.');
   const noteId = makeId('nte');
@@ -80,33 +90,43 @@ function updateNote(doc, clipId, noteId, update) {
 
 /**
  * Moves a note by `dTick` ticks and `dPitch` semitones. Its start stays
- * inside the clip and its pitch within 0–127.
+ * inside the clip's editable length and its pitch within 0–127.
  */
 export function moveNote(doc, clipId, noteId, dTick = 0, dPitch = 0) {
   requireTick(dTick, 'dTick');
   if (!Number.isInteger(dPitch)) throw new Error('dPitch must be an integer');
   return updateNote(doc, clipId, noteId, (n, clip) => ({
     ...n,
-    tick: clamp(n.tick + dTick, 0, clip.length - 1),
+    tick: clamp(n.tick + dTick, 0, editableLength(clip) - 1),
     pitch: clamp(n.pitch + dPitch, PITCH_MIN, PITCH_MAX),
   }));
 }
 
-/** Changes a note's length by `dLength` ticks; the length stays at least `minLength` (≥ 1). */
+/**
+ * Changes a note's length by `dLength` ticks. A shrink stops at `minLength`
+ * (at least 1), or at the note's own length when it is already shorter, so a
+ * shrink never lengthens a note. An edit that leaves the length unchanged
+ * returns the document as it was.
+ */
 export function resizeNote(doc, clipId, noteId, dLength, minLength = 1) {
   requireTick(dLength, 'dLength');
   requireTick(minLength, 'minLength');
-  return updateNote(doc, clipId, noteId, (n) => ({ ...n, length: Math.max(Math.max(1, minLength), n.length + dLength) }));
+  const note = getClip(doc, clipId)?.notes.find((n) => n.id === noteId);
+  if (!note) return updateNote(doc, clipId, noteId, (n) => n);
+  const floor = Math.max(1, Math.min(minLength, note.length));
+  const length = Math.max(floor, note.length + dLength);
+  if (length === note.length) return { ok: true, doc, note };
+  return updateNote(doc, clipId, noteId, (n) => ({ ...n, length }));
 }
 
 /**
  * Sets a note's start and length in one edit (stretching either edge): the start is
- * clamped into the clip, the length to at least 1 tick.
+ * clamped into the clip's editable length, the length to at least 1 tick.
  */
 export function setNoteSpan(doc, clipId, noteId, tick, length) {
   requireTick(tick, 'tick');
   requireTick(length, 'length');
-  return updateNote(doc, clipId, noteId, (n, clip) => ({ ...n, tick: clamp(tick, 0, clip.length - 1), length: Math.max(1, length) }));
+  return updateNote(doc, clipId, noteId, (n, clip) => ({ ...n, tick: clamp(tick, 0, editableLength(clip) - 1), length: Math.max(1, length) }));
 }
 
 /** Sets a note's velocity, clamped to 1–127. */
@@ -124,8 +144,10 @@ export function deleteNote(doc, clipId, noteId) {
 
 /**
  * Moves note starts to the nearest multiple of `grid` ticks (100 %), keeping
- * lengths; starts stay inside the clip. `noteIds` limits it to a selection;
- * by default every note in the clip.
+ * lengths; starts stay inside the clip's editable length. Only notes that play
+ * (starting inside the editable length) move; notes a trim or a loop hides keep
+ * their ticks. `noteIds` limits it to a selection; by default every note in the
+ * clip. Returns { ok, doc, count }, `count` being the number of notes quantized.
  */
 export function quantize(doc, clipId, grid, noteIds = null) {
   requireTick(grid, 'grid');
@@ -133,11 +155,15 @@ export function quantize(doc, clipId, grid, noteIds = null) {
   const clip = getClip(doc, clipId);
   if (!clip) return fail('missing', 'No MIDI clip.');
   const only = noteIds ? new Set(noteIds) : null;
-  const last = Math.floor((clip.length - 1) / grid) * grid;
-  const notes = clip.notes.map((n) =>
-    only && !only.has(n.id) ? n : { ...n, tick: Math.min(last, Math.round(n.tick / grid) * grid) },
-  );
-  return { ok: true, doc: withClip(doc, { ...clip, notes }) };
+  const end = editableLength(clip);
+  const last = Math.floor((end - 1) / grid) * grid;
+  let count = 0;
+  const notes = clip.notes.map((n) => {
+    if ((only && !only.has(n.id)) || n.tick < 0 || n.tick >= end) return n;
+    count++;
+    return { ...n, tick: Math.min(last, Math.round(n.tick / grid) * grid) };
+  });
+  return { ok: true, doc: withClip(doc, { ...clip, notes }), count };
 }
 
 /**

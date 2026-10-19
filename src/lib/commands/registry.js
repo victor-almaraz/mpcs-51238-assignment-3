@@ -13,6 +13,8 @@ const listeners = new Set();
 const claims = new Set(); // predicates for keys another handler takes first
 let snapshot = [];
 let paletteRequests = 0;
+let paletteOpener = null;
+let commandOpener = null;
 
 function changed() {
   snapshot = [...commands.values()];
@@ -41,21 +43,42 @@ export function subscribeCommands(listener) {
 /** True when command `id` is registered and enabled. */
 export const commandEnabled = (id) => commands.get(id)?.enabled() ?? false;
 
-/** Runs command `id` when it is registered and enabled; returns whether it ran. */
-export function runCommand(id) {
+/**
+ * Runs command `id` when it is registered and enabled; returns whether it ran.
+ * `opener` is the control that invoked it (a header button): a command that
+ * opens a dialog reads it with getCommandOpener() while running and returns
+ * focus to it on close.
+ */
+export function runCommand(id, opener = null) {
   if (!commandEnabled(id)) return false;
-  commands.get(id).run();
+  commandOpener = opener;
+  try {
+    commands.get(id).run();
+  } finally {
+    commandOpener = null;
+  }
   return true;
 }
 
-/** Asks the palette to open (the header button and the shortcut). */
-export function requestPalette() {
+/** The opener passed to the runCommand call in progress, or null. */
+export const getCommandOpener = () => commandOpener;
+
+/**
+ * Asks the palette to open (the header button and the shortcut). `opener` is
+ * the element that receives focus when the palette closes; without one, focus
+ * returns to the element focused before it opened.
+ */
+export function requestPalette(opener = null) {
   paletteRequests++;
+  paletteOpener = opener;
   for (const listener of listeners) listener();
 }
 
 /** Counts palette requests (a useSyncExternalStore snapshot). */
 export const getPaletteRequests = () => paletteRequests;
+
+/** The opener of the latest palette request, or null. */
+export const getPaletteOpener = () => paletteOpener;
 
 /** Words of `query` that all occur in the command's label or group, case-insensitively. */
 export function matchesQuery(command, query) {

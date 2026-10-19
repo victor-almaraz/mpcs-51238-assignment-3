@@ -58,6 +58,10 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
   const origin = min < 0 && max > 0 ? -SWEEP + ((0 - min) / (max - min)) * 2 * SWEEP : -SWEEP;
   const [px, py] = at(angle, R - 6);
 
+  const endDrag = () => {
+    drag.current = null;
+  };
+
   function onKeyDown(e) {
     if (disabled) return;
     if (e.key === 'PageUp' || e.key === 'PageDown') {
@@ -109,17 +113,24 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
           e.preventDefault();
           inputRef.current?.focus();
           e.currentTarget.setPointerCapture(e.pointerId);
-          drag.current = { y0: e.clientY, v0: value };
+          drag.current = { y: e.clientY, v: value };
         }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d) return;
+          if (e.buttons === 0) {
+            drag.current = null;
+            return;
+          }
+          // Each move adds its own distance at the current speed, so Shift changes only later moves.
           const speed = (max - min) / DRAG_PX / (e.shiftKey ? 10 : 1);
-          set(d.v0 + (d.y0 - e.clientY) * speed);
+          d.v += (d.y - e.clientY) * speed;
+          d.y = e.clientY;
+          set(d.v);
         }}
-        onPointerUp={() => {
-          drag.current = null;
-        }}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
         onDoubleClick={() => !disabled && onReset?.()}
       >
         <input

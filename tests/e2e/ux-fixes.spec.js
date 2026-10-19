@@ -159,10 +159,13 @@ test('arming sends live notes only to armed tracks; with none armed they follow 
   // notes play on the selected track: track 1 while none is chosen.
   await play();
   await page.getByRole('alertdialog', { name: 'Volume notice' }).getByRole('button', { name: 'Continue' }).click();
+  // A tap released before audio starts is dropped (no note may stick), so wait for the engine.
+  await expect.poll(() => page.evaluate(() => globalThis.__wrackEngine.getState().status)).toBe('running');
   await sent();
   await play();
   await expect.poll(sent).toEqual([0]);
-  await expect(page.getByText(/^Input: .+ \(selected\)$/)).toBeVisible();
+  // With nothing selected, input goes to the first instrument track; "(selected)" marks only a selected one.
+  await expect(page.getByText('Input: Drums', { exact: true })).toBeVisible();
 
   await arm('Bass').click();
   await arm('Lead stab').click();

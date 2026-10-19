@@ -27,10 +27,6 @@ export function tickToX(tick, zoom) {
   return tick * pxPerTick(zoom);
 }
 
-/** `tick` rounded to the nearest multiple of `step`. */
-export function snap(tick, step) {
-  return Math.max(0, Math.round(tick / step) * step);
-}
 
 /** "bar 5" on a bar line, else "bar 5 beat 3" (beats from 1), for a MeterMap. */
 export function barText(tick, meter) {

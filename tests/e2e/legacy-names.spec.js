@@ -14,14 +14,10 @@ test('projects, settings and stored audio saved as "w-rack" carry over as "wrack
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Kept');
   await expect(page.getByText('Saved on this device', { exact: true })).toBeVisible();
 
-  // Write the data back under the former names, as an earlier version saved it.
+  // Write the data back under the former names, as an earlier version saved it: the stored audio
+  // now, and the localStorage keys at the start of the next load, before any app code runs.
   await page.goto('/settings');
   await page.evaluate(async () => {
-    for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith('wrack:')) continue;
-      localStorage.setItem(`w-rack:${key.slice('wrack:'.length)}`, localStorage.getItem(key));
-      localStorage.removeItem(key);
-    }
     await new Promise((resolve, reject) => {
       const request = indexedDB.open('w-rack', 1);
       request.onupgradeneeded = () => request.result.createObjectStore('sources', { keyPath: 'sourceId' });
@@ -38,7 +34,15 @@ test('projects, settings and stored audio saved as "w-rack" carry over as "wrack
       request.onerror = () => reject(new Error(`legacy open failed: ${request.error}`));
     });
   });
-  expect((await keys(page)).every((k) => !k.startsWith('wrack:'))).toBe(true);
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('legacy-written')) return;
+    sessionStorage.setItem('legacy-written', '1');
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith('wrack:')) continue;
+      localStorage.setItem(`w-rack:${key.slice('wrack:'.length)}`, localStorage.getItem(key));
+      localStorage.removeItem(key);
+    }
+  });
 
   await page.reload();
   await expect(page.getByRole('list', { name: 'Stored audio files' })).toContainText('legacy.wav');

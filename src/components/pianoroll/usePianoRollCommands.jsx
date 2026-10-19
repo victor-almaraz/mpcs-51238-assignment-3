@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { getEngine } from '@/lib/audio/engine-client';
 import {
-  addNote, createClip, deleteNote, moveNote, noteAt, quantize, resizeNote, setLoopLength, setNoteSpan, setVelocity,
+  addNote, createClip, deleteNote, editableLength, moveNote, noteAt, quantize, resizeNote, setLoopLength, setNoteSpan, setVelocity,
 } from '@/lib/project/midi-commands';
 import { setClipLooping } from '@/lib/project/clip-commands';
 import { noteText } from './layout';
@@ -50,8 +50,14 @@ export default function usePianoRollCommands({
   }
 
   const commands = {
-    /** Length of the clip being edited, in ticks (a new clip's length when there is none). */
-    clipLength: (fallback) => currentClip()?.length ?? fallback,
+    /**
+     * Editable length of the clip being edited, in ticks: its loop length when it loops
+     * (editableLength), or `fallback`, a new clip's length, when there is no clip.
+     */
+    clipLength: (fallback) => {
+      const clip = currentClip();
+      return clip ? editableLength(clip) : fallback;
+    },
 
     /** The note at a cell in the newest document (drum rows: notes starting there only). */
     noteIn: (tick, pitch) => {
@@ -173,7 +179,8 @@ export default function usePianoRollCommands({
     quantize() {
       const clip = currentClip();
       if (readOnly || !clip) return;
-      commit(quantize(docRef.current, clip.id, grid), `Quantized ${clip.notes.length} notes to the grid`);
+      const result = quantize(docRef.current, clip.id, grid);
+      commit(result, result.ok ? `Quantized ${result.count} ${result.count === 1 ? 'note' : 'notes'} to the grid` : undefined);
     },
 
     /** Sets the clip's loop length in ticks, or with null ends the loop, keeping its repeats as notes. */

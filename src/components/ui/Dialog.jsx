@@ -3,6 +3,13 @@
 import { useEffect, useId, useImperativeHandle, useRef } from 'react';
 import { cx, focusRing, panelShadow } from '@/design-systems/industrial/classes';
 
+/** True when pointer or mouse event `e` lands on the backdrop: it targets the dialog itself, outside its box. */
+function onBackdrop(e) {
+  if (e.target !== e.currentTarget) return false;
+  const r = e.currentTarget.getBoundingClientRect();
+  return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+}
+
 /**
  * Modal native <dialog> named by its heading (aria-labelledby).
  * `open` drives showModal()/close(). On open, focus moves inside: to
@@ -11,7 +18,9 @@ import { cx, focusRing, panelShadow } from '@/design-systems/industrial/classes'
  * focus returns to `returnFocusRef` when given, otherwise to the element that
  * had focus before the dialog opened. (Safari does not focus buttons on click,
  * so callers opening a dialog from a button pass it as `returnFocusRef`.)
- * `ref` exposes the <dialog> element.
+ * With `closeOnBackdrop`, a click whose press and release both land on the
+ * backdrop reports onClose; a press inside the dialog released over the
+ * backdrop does not. `ref` exposes the <dialog> element.
  */
 export default function Dialog({
   open,
@@ -28,6 +37,7 @@ export default function Dialog({
 }) {
   const dialogRef = useRef(null);
   const restoreFocusRef = useRef(null);
+  const backdropPressRef = useRef(false);
   const openRef = useRef(open);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -84,13 +94,19 @@ export default function Dialog({
         'backdrop:bg-[rgb(30_32_26/0.55)]',
         className,
       )}
+      onPointerDown={
+        closeOnBackdrop
+          ? (e) => {
+              backdropPressRef.current = onBackdrop(e);
+            }
+          : undefined
+      }
       onClick={
         closeOnBackdrop
           ? (e) => {
-              // A click on the backdrop targets the dialog itself, outside its box.
-              if (e.target !== e.currentTarget) return;
-              const r = e.currentTarget.getBoundingClientRect();
-              if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose?.();
+              const pressed = backdropPressRef.current;
+              backdropPressRef.current = false;
+              if (pressed && onBackdrop(e)) onClose?.();
             }
           : undefined
       }

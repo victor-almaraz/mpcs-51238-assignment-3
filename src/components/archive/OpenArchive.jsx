@@ -11,7 +11,8 @@ import { loadArchiveSources } from '@/lib/audio/decode';
 import { getEngine } from '@/lib/audio/engine-client';
 import { loadProject, saveProject } from '@/lib/project/store';
 import { migrate } from '@/lib/storage/migrate';
-import { isProjectDoc } from '@/lib/storage/schema';
+import { isArchiveProject } from '@/lib/storage/schema';
+import { discardPendingWrites } from '@/lib/storage/storage';
 import RestoreDialog from './RestoreDialog';
 
 export const NOT_A_PROJECT = 'project.json is not a Wrack project.';
@@ -20,7 +21,8 @@ export const NOT_A_PROJECT = 'project.json is not a Wrack project.';
  * "Open .wrack file" (assignment-3-scope.md, .wrack archive). A valid archive
  * whose project ID matches a saved project asks "Restore audio" or "Replace
  * project"; any other is imported as a new saved project and opened. A
- * failing archive imports nothing and lists its errors. `label` names the
+ * failing archive, or a project.json without a usable ID, dates, tempo or
+ * meter (isArchiveProject), imports nothing and lists its errors. `label` names the
  * button; `currentId` is the open project in the editor, where Restore audio
  * stays on the page. `inline` lays the button and its messages in a row;
  * `command` registers the Open command (Mod+O) — one instance per page does;
@@ -65,7 +67,7 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
         return;
       }
       const { project, audio } = result.value;
-      const migrated = isProjectDoc(project) ? migrate(project) : { ok: false };
+      const migrated = isArchiveProject(project) ? migrate(project) : { ok: false };
       if (!migrated.ok) {
         setErrors([NOT_A_PROJECT]);
         return;
@@ -107,6 +109,8 @@ export default function OpenArchive({ label = 'Open .wrack file', size = 'md', c
       setErrors([saved.error]);
       return;
     }
+    // Pending writes of the replaced project would otherwise be written back on page hide.
+    discardPendingWrites(project.id);
     await loadAudio(project, audio);
     // A full load reopens the editor on the replaced document.
     window.location.replace(`/projects/${project.id}`);

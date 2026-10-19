@@ -1,11 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Button from '@/components/ui/Button';
 import Dialog from '@/components/ui/Dialog';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
-import { displayKeys, getCommands, subscribeCommands } from '@/lib/commands/registry';
+import { displayKeys, getCommandOpener, getCommands, subscribeCommands } from '@/lib/commands/registry';
 import useCommands from './useCommands';
 
 const EMPTY = [];
@@ -93,15 +93,32 @@ function KeyList({ title, keys, note }) {
 /**
  * Shortcut overlay (HELP-02): `?` opens a dialog listing every registered
  * command's shortcut by group, then, in the editor, the keys of the focused editors.
+ * Run from the header button, the command's opener (getCommandOpener) receives
+ * focus on close; otherwise focus returns to the element focused before the
+ * overlay opened.
  */
 export default function ShortcutOverlay() {
   const all = useSyncExternalStore(subscribeCommands, getCommands, () => EMPTY);
   // The focused-editor keys apply only in the editor (/projects/<id>).
   const inEditor = /^\/projects\/[^/]+/.test(usePathname() ?? '');
   const [open, setOpen] = useState(false);
+  const [opener, setOpener] = useState(null);
+  const returnFocusRef = useMemo(() => ({ current: opener }), [opener]);
   const closeRef = useRef(null);
 
-  useCommands([{ id: 'help.shortcuts', group: 'Help', label: 'Keyboard shortcuts', keys: '?', global: true, run: () => setOpen(true) }]);
+  useCommands([
+    {
+      id: 'help.shortcuts',
+      group: 'Help',
+      label: 'Keyboard shortcuts',
+      keys: '?',
+      global: true,
+      run: () => {
+        setOpener(getCommandOpener());
+        setOpen(true);
+      },
+    },
+  ]);
 
   return (
     <Dialog
@@ -109,6 +126,7 @@ export default function ShortcutOverlay() {
       onClose={() => setOpen(false)}
       title="Keyboard shortcuts"
       initialFocusRef={closeRef}
+      returnFocusRef={returnFocusRef}
       className="w-[min(60rem,95vw)]"
       actions={
         <Button ref={closeRef} onClick={() => setOpen(false)}>Close</Button>

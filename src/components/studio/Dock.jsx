@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import IconButton from '@/components/ui/IconButton';
 import Icon from '@/components/ui/icons/Icon';
 import { cx, focusRing } from '@/design-systems/industrial/classes';
@@ -16,17 +16,36 @@ export const DOCK_MIN = 200;
 const DOCK_STEP = 40;
 
 /**
+ * Mounted content of the open panel. Its layout cleanup runs before the
+ * content leaves the DOM, so focus inside the panel moves to the tab that
+ * labels it instead of dropping to the document body.
+ */
+function PanelContent({ panelRef, children }) {
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    return () => {
+      if (!panel?.contains(document.activeElement)) return;
+      document.getElementById(panel.getAttribute('aria-labelledby'))?.focus();
+    };
+  }, [panelRef]);
+  return children;
+}
+
+/**
  * The editor's lower dock: a tablist (Editor, Devices, Mixer; WAI-ARIA APG
  * tabs with automatic activation) over the active panel, and a separator
  * above it that resizes the dock by pointer or by Up and Down keys. Only the
  * active panel is mounted. The dock collapses to its tab strip, giving the
  * arrangement the space: by the collapse button (aria-expanded) or a click on
  * the active tab; a click on any tab while collapsed expands it.
- * `onCollapse(collapsed)` reports the change.
+ * `onCollapse(collapsed)` reports the change. Collapsing with focus inside
+ * the panel moves focus to the selected tab. Only the selected tab carries
+ * aria-controls, since only its panel exists.
  */
 export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHeight, onHeight, children }) {
   const tabRefs = useRef([]);
   const drag = useRef(null);
+  const panelRef = useRef(null);
   const clamp = (h) => Math.max(DOCK_MIN, Math.min(maxHeight, Math.round(h)));
 
   function onTabKey(e, i) {
@@ -91,7 +110,7 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
                 role="tab"
                 id={`dock-tab-${t.id}`}
                 aria-selected={selected}
-                aria-controls={`dock-panel-${t.id}`}
+                aria-controls={selected ? `dock-panel-${t.id}` : undefined}
                 tabIndex={selected ? 0 : -1}
                 data-help={t.help}
                 onClick={() => {
@@ -130,11 +149,16 @@ export default function Dock({ tab, onTab, collapsed, onCollapse, height, maxHei
       <div
         hidden={collapsed}
         role="tabpanel"
+        ref={panelRef}
         id={`dock-panel-${tab}`}
         aria-labelledby={`dock-tab-${tab}`}
         className="relative flex min-h-0 flex-1 flex-col overflow-auto p-3"
       >
-        {collapsed ? null : children}
+        {collapsed ? null : (
+          <PanelContent panelRef={panelRef}>
+            {children}
+          </PanelContent>
+        )}
       </div>
     </div>
   );

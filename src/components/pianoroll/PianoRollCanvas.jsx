@@ -12,19 +12,24 @@ const DRUM_HIT_TICKS = PPQ / 4;
 /** Longest gap between redraws of an idle, unchanged piano roll, ms. */
 const IDLE_REDRAW_MS = 250;
 
+/** Opacity of the read-only repeats of a looping clip. */
+const REPEAT_ALPHA = 0.3;
+
 /**
  * Visual layer of the piano roll: row shading, bar and beat lines, notes and
  * the playhead, drawn on Canvas 2D for the visible area only. Hidden from the
  * accessibility tree and from pointer events; the grid mirror on top receives
  * all input. `ghost` is the provisional note of a drag, drawn dashed. `view` is { scrollX, scrollY, width, height }; the playhead is
  * read from the engine in a requestAnimationFrame loop, never React state.
+ * Notes starting before `editLength` are drawn; past it, a looping clip shows
+ * its repeats dimmed behind a loop-end line, as they play and read-only.
  */
-export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
+export default function PianoRollCanvas({ tickW, view, rows, clip, editLength, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor }) {
   const canvasRef = useRef(null);
   const props = useRef(null);
   const playheadRef = useRef(null);
   useEffect(() => {
-    props.current = { tickW, view, rows, clip, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
+    props.current = { tickW, view, rows, clip, editLength, clipStart, grid, barTicks, beatTicks, isDrums, selectedId, ghost, noteColor };
   });
 
   useEffect(() => {
@@ -101,7 +106,7 @@ export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, gr
         const rowOf = new Map(p.rows.map((pitch, i) => [pitch, i]));
         for (const n of p.clip.notes) {
           const r = rowOf.get(n.pitch);
-          if (r === undefined || r < firstRow || r > lastRow) continue;
+          if (n.tick >= p.editLength || r === undefined || r < firstRow || r > lastRow) continue;
           const x = n.tick * tickW - sx;
           const width = p.isDrums ? DRUM_HIT_TICKS * tickW - 2 : Math.max(3, n.length * tickW - 1);
           if (x + width < 0 || x > w) continue;
@@ -119,6 +124,27 @@ export default function PianoRollCanvas({ tickW, view, rows, clip, clipStart, gr
             ctx.fillRect(x + 3, r * ROW_H - sy + 8, 2, ROW_H - 16);
             ctx.fillRect(x + width - 3, r * ROW_H - sy + 8, 2, ROW_H - 16);
           }
+        }
+        const loop = p.editLength;
+        if (loop < length) {
+          // Repeats of the loop, from the first pass in view: each note cropped at its pass end, as it plays.
+          ctx.globalAlpha = REPEAT_ALPHA;
+          ctx.fillStyle = p.noteColor ?? colors.note;
+          const first = Math.max(loop, Math.floor(sx / tickW / loop) * loop);
+          for (let base = first; base < length && base * tickW - sx <= w; base += loop) {
+            const passEnd = Math.min(base + loop, length);
+            for (const n of p.clip.notes) {
+              const r = rowOf.get(n.pitch);
+              const tick = base + n.tick;
+              if (n.tick >= loop || tick >= length || r === undefined || r < firstRow || r > lastRow) continue;
+              const x = tick * tickW - sx;
+              const width = p.isDrums ? DRUM_HIT_TICKS * tickW - 2 : Math.max(3, Math.min(n.length, passEnd - tick) * tickW - 1);
+              if (x + width >= 0 && x <= w) ctx.fillRect(x + 1, r * ROW_H - sy + 3, width, ROW_H - 6);
+            }
+          }
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = colors.noteEdge;
+          ctx.fillRect(loop * tickW - sx - 1, 0, 2, h);
         }
       }
       if (p.ghost) {

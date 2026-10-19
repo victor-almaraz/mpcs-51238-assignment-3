@@ -29,14 +29,15 @@ const velocityAtY = (y) => Math.round(Math.min(VELOCITY_MAX, Math.max(VELOCITY_M
  * For the keyboard the lane is one slider, "Velocity C4 bar 1.1", on the
  * selected note: arrows step by 1, Page Up and Page Down by 10, Home and End
  * go to 1 and 127; Shift+Left and Shift+Right move to the previous or next note.
+ * `notes` are the notes the grid shows and edits.
  */
-export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, scrollX, selectedId, onSelect, commands, readOnly }) {
+export default function VelocityLane({ cellW, notes, isDrums, meter, grid, cols, scrollX, selectedId, onSelect, commands, readOnly }) {
   const [hover, setHover] = useState(null); // note id under the pointer
   const [focused, setFocused] = useState(false);
   // While painting: note ID → the velocity painted at its stem. The lane shows it; release commits it as one edit.
   const [painted, setPainted] = useState(null);
   const laneRef = useRef(null);
-  const list = useMemo(() => (clip ? stems(clip.notes, grid, cellW) : []), [clip, grid, cellW]);
+  const list = useMemo(() => stems(notes, grid, cellW), [notes, grid, cellW]);
   const velocityOf = (note) => painted?.get(note.id) ?? note.velocity;
   const current = list.find((s) => s.note.id === selectedId) ?? list[0] ?? null;
   const shown = list.find((s) => s.note.id === hover) ?? (focused ? current : null);
@@ -101,7 +102,8 @@ export default function VelocityLane({ cellW, clip, isDrums, meter, grid, cols, 
         onPointerDown={(e) => {
           if (readOnly || e.button !== 0 || pointAt(e).x - scrollX < LABEL_W) return;
           e.currentTarget.setPointerCapture(e.pointerId);
-          paint(e, new Map());
+          // The stroke starts here even between stems; the stems it then crosses are painted.
+          setPainted(paint(e, new Map()));
         }}
         onPointerMove={(e) => {
           if (painted) paint(e, painted);

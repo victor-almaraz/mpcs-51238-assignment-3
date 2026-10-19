@@ -25,6 +25,7 @@ export default function LiveInputControls({ onNote, inputTo }) {
   const keyboard = useRef(null);
   const onNoteRef = useRef(onNote);
   const disconnectMidi = useRef(null);
+  const connectRun = useRef(0); // the current connect attempt; unmounting or a newer attempt ends it
 
   useEffect(() => {
     onNoteRef.current = onNote;
@@ -47,7 +48,9 @@ export default function LiveInputControls({ onNote, inputTo }) {
     keyboard.current = input;
     return () => {
       input.detach();
+      connectRun.current += 1;
       disconnectMidi.current?.();
+      disconnectMidi.current = null;
     };
   }, [engine]);
 
@@ -63,9 +66,11 @@ export default function LiveInputControls({ onNote, inputTo }) {
   }
 
   async function connect() {
+    const run = ++connectRun.current;
     disconnectMidi.current?.();
+    disconnectMidi.current = null;
     try {
-      disconnectMidi.current = await connectMidi({
+      const disconnect = await connectMidi({
         onNoteOn: (pitch, velocity, isHeld) => {
           engine.noteOn(pitch, velocity, isHeld);
           onNoteRef.current?.(pitch);
@@ -74,9 +79,12 @@ export default function LiveInputControls({ onNote, inputTo }) {
         onAllOff: (hard) => engine.allLiveOff(hard),
         onStatus: setMidiStatus,
       });
+      // Handlers bound after the controls unmounted, or after a newer attempt, are released at once.
+      if (run !== connectRun.current) disconnect?.();
+      else disconnectMidi.current = disconnect;
     } catch (err) {
       console.error(err);
-      setMidiStatus('MIDI devices could not be opened.');
+      if (run === connectRun.current) setMidiStatus('MIDI devices could not be opened.');
     }
   }
 

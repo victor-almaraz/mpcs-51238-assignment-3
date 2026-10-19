@@ -18,6 +18,7 @@ import {
   trimStart,
 } from '@/lib/project/clip-commands';
 import { barText, trackClips } from './layout';
+import { gridStepsFrom, nextGridTick } from '@/lib/project/grid';
 
 /** Track kind that holds clips of `clip.kind`. */
 const trackKindFor = (clip) => (clip.kind === 'midi' ? 'instrument' : 'audio');
@@ -26,10 +27,13 @@ const trackKindFor = (clip) => (clip.kind === 'midi' ? 'instrument' : 'audio');
  * Timeline commands shared by the keyboard mirror and the pointer layer. Each
  * reads the latest document from a ref (async imports and quick key repeats
  * never act on a stale copy), applies clip commands, calls `onEdit` once and
- * announces the result. `selection` is the selected clip IDs in order;
- * `stepTicks` is the snap step that nudges and trims use.
+ * announces the result; an edit that changes nothing commits nothing, so it
+ * adds no undo step. `selection` is the selected clip IDs in order;
+ * `gridStep` is the snap step in ticks (Infinity for the Bar grid); nudges
+ * and trims step to the next point of the bar-anchored grid (grid.js).
+ * Moves, nudges and trims act on the selection, or on the clips `ids` when given.
  */
-export default function useTimelineCommands({ project, rowIds, meter, stepTicks, editCursor: stoppedCursor, selection, setSelection, onEdit, announce, readOnly }) {
+export default function useTimelineCommands({ project, rowIds, meter, gridStep, editCursor: stoppedCursor, selection, setSelection, onEdit, announce, readOnly }) {
   const docRef = useRef(project);
   useEffect(() => {
     docRef.current = project;
@@ -41,19 +45,13 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     if (message) announce(message);
   }
 
-  const selectedClips = (doc = docRef.current) => selection.map((id) => doc.clips[id]).filter(Boolean);
+  const selectedClips = (doc = docRef.current, ids = selection) => ids.map((id) => doc.clips[id]).filter(Boolean);
 
-  /** Audio frames in one grid step (a beat) at tick `tick`. */
-  function stepFrames(doc, tick) {
-    const tempo = audioTempo(doc);
-    return tempo.frameAt(tick + stepTicks) - tempo.frameAt(tick);
-  }
-
-  /** Moves the selection by `dTick` ticks and `dRow` tracks of the same kind. */
-  function move(dTick, dRow = 0) {
+  /** Moves the selection by `dTick` ticks and `dRow` tracks of the same kind (keyboard). */
+  function move(dTick, dRow = 0, ids) {
     if (readOnly) return;
     let doc = docRef.current;
-    const clips = selectedClips(doc);
+    const clips = selectedClips(doc, ids);
     if (clips.length === 0) return;
     for (const clip of clips) {
       let toTrackId;
@@ -73,47 +71,65 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
       }
       doc = result.doc;
     }
+    if (doc === docRef.current) return;
     const first = doc.clips[clips[0].id];
     commit(doc, `Moved ${first.name} to ${barText(first.start, meter)}, ${doc.tracks[first.trackId].name}`);
   }
 
-  /** Moves the dragged clips onto track row `row` (pointer drop). */
-  function moveToRow(dTick, row) {
+  /**
+   * Moves the selection by `dTick` ticks and `dRow` track rows (pointer drop): each clip
+   * lands `dRow` rows from its own, as the drag preview shows. Nothing moves when a
+   * clip would leave the rows or land on a track of another kind.
+   */
+  function moveToRow(dTick, dRow) {
+    if (readOnly) return;
     const doc = docRef.current;
     const clips = selectedClips(doc);
-    const target = rowIds[row];
-    if (!target || clips.length === 0) return;
-    if (clips.some((c) => doc.tracks[target].kind !== trackKindFor(c))) {
-      announce(clips[0].kind === 'midi' ? 'MIDI clips move between instrument tracks only.' : 'Audio clips move between audio tracks only.');
+    if (clips.length === 0) return;
+    const targets = clips.map((c) => rowIds[rowIds.indexOf(c.trackId) + dRow]);
+    const blocked = clips.findIndex((c, i) => !targets[i] || doc.tracks[targets[i]].kind !== trackKindFor(c));
+    if (blocked >= 0) {
+      const c = clips[blocked];
+      if (!targets[blocked]) announce(dRow < 0 ? 'No track above' : 'No track below');
+      else announce(c.kind === 'midi' ? 'MIDI clips move between instrument tracks only.' : 'Audio clips move between audio tracks only.');
       return;
     }
     let next = doc;
-    for (const clip of clips) next = moveClip(next, clip.id, dTick, clips.length === 1 ? target : undefined).doc;
+    clips.forEach((clip, i) => {
+      next = moveClip(next, clip.id, dTick, targets[i]).doc;
+    });
+    if (next === doc) return;
     const first = next.clips[clips[0].id];
     commit(next, `Moved ${first.name} to ${barText(first.start, meter)}, ${next.tracks[first.trackId].name}`);
   }
 
+  /** Moves the selection (or the clips `ids`) `sign` grid points: its first clip's start lands on the next grid point. */
+  function nudge(sign, ids) {
+    const first = selectedClips(docRef.current, ids)[0];
+    if (!first) return;
+    move(nextGridTick(first.start, meter, gridStep, sign) - first.start, 0, ids);
+  }
+
   /**
-   * Trims the selection's start (`edge` 'start') or end by `steps` grid steps, or by `dTick` ticks when given.
+   * Trims the selection's start (`edge` 'start') or end by `steps` grid points, or by `dTick` ticks when given.
    * Audio clips trim by frames, except the end of a looping clip, which lengthens or shortens the loop by ticks.
    */
-  function trim(edge, steps, dTick) {
+  function trim(edge, steps, dTick, ids) {
     if (readOnly) return;
     let doc = docRef.current;
-    const clips = selectedClips(doc);
+    const clips = selectedClips(doc, ids);
     for (const clip of clips) {
+      const at = edge === 'start' ? clip.start : clipEndTick(doc, clip);
+      const dt = dTick ?? gridStepsFrom(at, meter, gridStep, steps) - at;
       let delta;
-      if (clip.kind === 'midi' || (edge === 'end' && isLooping(clip))) delta = dTick ?? steps * stepTicks;
+      if (clip.kind === 'midi' || (edge === 'end' && isLooping(clip))) delta = dt;
       else {
-        const at = edge === 'start' ? clip.start : clipEndTick(doc, clip);
-        if (dTick !== undefined) {
-          const tempo = audioTempo(doc);
-          delta = tempo.frameAt(Math.max(0, at + dTick)) - tempo.frameAt(at);
-        } else delta = steps * stepFrames(doc, steps < 0 ? Math.max(0, at - stepTicks) : at);
+        const tempo = audioTempo(doc);
+        delta = tempo.frameAt(Math.max(0, at + dt)) - tempo.frameAt(at);
       }
       doc = (edge === 'start' ? trimStart : trimEnd)(doc, clip.id, delta).doc;
     }
-    if (clips.length === 0) return;
+    if (doc === docRef.current) return;
     const c = doc.clips[clips[0].id];
     commit(doc, `${c.name}: ${barText(c.start, meter)} to ${barText(clipEndTick(doc, c), meter)}`);
   }
@@ -124,7 +140,7 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     let doc = docRef.current;
     const clips = selectedClips(doc);
     for (const clip of clips) doc = loopEnd(doc, clip.id, dTick).doc;
-    if (clips.length === 0) return;
+    if (doc === docRef.current) return;
     const c = doc.clips[clips[0].id];
     commit(doc, `${c.name}: loops to ${barText(clipEndTick(doc, c), meter)}`);
   }
@@ -229,7 +245,6 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
   }
 
   const clipEnd = (clip) => clipEndTick(docRef.current, clip);
-  const snapStep = () => stepTicks;
 
   /** Moves track `trackId` up (−1) or down (+1) in the track order. */
   function moveTrack(trackId, dir) {
@@ -246,5 +261,5 @@ export default function useTimelineCommands({ project, rowIds, meter, stepTicks,
     commit({ ...doc, trackOrder: order }, `${doc.tracks[trackId].name} moved to position ${to + 1}`);
   }
 
-  return { docRef, commit, clipEnd, snapStep, moveTrack, move, moveToRow, trim, repeat, setLooping, split, join, joinPair, duplicate, remove };
+  return { docRef, commit, clipEnd, moveTrack, move, nudge, moveToRow, trim, repeat, setLooping, split, join, joinPair, duplicate, remove };
 }

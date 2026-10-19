@@ -12,7 +12,9 @@ export function safeFileName(name, ext) {
 
 /**
  * Saves `blob` as `name`. `type` is { description, accept } for the picker.
- * Resolves to 'saved' or 'cancelled'.
+ * Resolves to 'saved' when the picker wrote the file, 'cancelled' when the
+ * picker was dismissed, or 'started' when a download began: the browser does
+ * not report whether a download completes or is dismissed.
  */
 export async function saveFile(blob, name, type) {
   if (typeof window.showSaveFilePicker === 'function') {
@@ -36,5 +38,5 @@ export async function saveFile(blob, name, type) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-  return 'saved';
+  return 'started';
 }

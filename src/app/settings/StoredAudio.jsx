@@ -8,7 +8,7 @@ import StatusRegion from '@/components/ui/StatusRegion';
 import { errorText, sectionHeading } from '@/design-systems/industrial/classes';
 import { removeStoredSource, storedSources } from '@/lib/audio/source-cleanup';
 import { deleteDatabase, usage } from '@/lib/storage/audio-store';
-import { listWrackKeys, removeKey } from '@/lib/storage/storage';
+import { discardPendingWrites, listWrackKeys, removeKey } from '@/lib/storage/storage';
 import { focusAfterRemoval } from '@/components/ui/focusAfterRemoval';
 import IconButton from '@/components/ui/IconButton';
 
@@ -24,8 +24,8 @@ function isSafari() {
  * Stored audio in /settings (assignment-3-scope.md, Audio persistence):
  * origin usage from navigator.storage.estimate(), the stored sources with the
  * projects that use them and a Delete action each, the Safari 7-day note, and
- * "Clear all data", which removes every Wrack localStorage key and the
- * wrack IndexedDB database after confirmation.
+ * "Clear all data", which drops pending writes and removes every Wrack
+ * localStorage key and the wrack IndexedDB database after confirmation.
  */
 export default function StoredAudio() {
   const [estimate, setEstimate] = useState(null);
@@ -62,6 +62,7 @@ export default function StoredAudio() {
   }
 
   async function clearAll() {
+    discardPendingWrites();
     for (const key of listWrackKeys()) removeKey(key);
     const result = await deleteDatabase();
     setConfirming(false);

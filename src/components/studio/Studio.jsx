@@ -67,6 +67,8 @@ const UNDO_LIMIT = 200;
 const UNDO_GROUP_MS = 600;
 /** Milliseconds for grouping edits (read in event handlers only). */
 const clock = () => performance.now();
+/** The piano roll's focusable note-grid cell. */
+const NOTES_CELL = '[role="grid"][aria-label="Notes"] [tabindex="0"]';
 
 /**
  * The editor workspace, one screen tall: the header (name, save status, file
@@ -106,8 +108,17 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     document.title = `${project.name} · Wrack`;
   }, [project.name]);
 
-  const pruneTimer = useRef(0);
-  useEffect(() => () => clearTimeout(pruneTimer.current), []);
+  // A stored-audio cleanup still waiting when the editor closes runs at once.
+  const prune = useRef(null); // { timer, run } of the pending cleanup
+  useEffect(
+    () => () => {
+      const pending = prune.current;
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pending.run();
+    },
+    [],
+  );
 
   /*
    * Undo and redo (project-model.md, Commands and undo): documents are immutable, so the
@@ -136,13 +147,15 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     projectRef.current = saved;
     setProject(saved);
     if (Object.keys(prev.sources).some((id) => !saved.sources[id])) {
-      clearTimeout(pruneTimer.current);
-      pruneTimer.current = setTimeout(() => {
+      if (prune.current) clearTimeout(prune.current.timer);
+      const run = () => {
+        prune.current = null;
         flushSaves();
         // Audio that an undo step could bring back stays stored.
         const kept = new Set([projectRef.current, ...history.current.past, ...history.current.future].flatMap((d) => Object.keys(d.sources)));
         pruneStoredSources([...kept]).catch((err) => console.error('Stored audio cleanup failed', err));
-      }, SAVE_DELAY_MS + 100);
+      };
+      prune.current = { timer: setTimeout(run, SAVE_DELAY_MS + 100), run };
     }
   }
 
@@ -171,7 +184,14 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const panelTrackId = view.selectedTrackId ?? project.trackOrder.find((id) => project.tracks[id].kind === 'instrument');
   const panelTrack = panelTrackId ? project.tracks[panelTrackId] : null;
   const panelDevice = panelTrack?.kind === 'instrument' ? project.devices[panelTrack.deviceIds[0]] : null;
-  const liveTargetIndex = Math.max(0, mixerTrackIds.indexOf(panelTrackId));
+  // Live input and previews play on the panel's instrument track (the selected one, or the first while
+  // none is selected); with an audio track selected, on the last instrument track selected, else the
+  // first; -1 for none.
+  const playable = (id) => project.tracks[id]?.kind === 'instrument' && mixerTrackIds.includes(id);
+  const [lastInstrumentId, setLastInstrumentId] = useState(null);
+  if (playable(view.selectedTrackId) && lastInstrumentId !== view.selectedTrackId) setLastInstrumentId(view.selectedTrackId);
+  const liveTrackId = [panelTrackId, view.selectedTrackId ? lastInstrumentId : null, ...mixerTrackIds].find(playable) ?? null;
+  const liveTargetIndex = liveTrackId ? mixerTrackIds.indexOf(liveTrackId) : -1;
   const chainTrackId = view.selectedTrackId && project.tracks[view.selectedTrackId] ? view.selectedTrackId : panelTrackId;
 
   /** "File" menu items: the registered save, open and export commands. */
@@ -213,16 +233,18 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   useCommands([
     { id: 'view.zoom-in', group: 'View', label: 'Zoom in', keys: 'Alt+=', run: () => changeView({ zoom: stepZoom(view.zoom, 1) }), enabled: () => view.zoom < ZOOM_MAX },
     { id: 'view.zoom-out', group: 'View', label: 'Zoom out', keys: 'Alt+-', run: () => changeView({ zoom: stepZoom(view.zoom, -1) }), enabled: () => view.zoom > ZOOM_MIN },
-    { id: 'go.pianoroll', group: 'Go to', label: 'Piano roll', run: () => goTo('editor', '[role="grid"][aria-label="Notes"] [tabindex="0"]'), enabled: () => Boolean(panelDevice) },
+    { id: 'go.pianoroll', group: 'Go to', label: 'Piano roll', run: () => goTo('editor', NOTES_CELL), enabled: () => Boolean(panelDevice) },
     { id: 'go.mixer', group: 'Go to', label: 'Mixer', run: () => goTo('mixer', '[aria-label="Track strips"] input, [aria-label="Track strips"] button') },
     { id: 'go.effects', group: 'Go to', label: 'Track effects', run: () => goTo('devices', 'section[aria-labelledby^="chain-"] select, section[aria-labelledby^="chain-"] button') },
     { id: 'view.dock', group: 'View', label: view.dockCollapsed ? 'Expand the panels' : 'Collapse the panels', run: () => changeView({ dockCollapsed: !view.dockCollapsed }) },
   ]);
 
   // Alt+= and Alt+- zoom (ARR-06); Ctrl/Cmd with +/- stays with the browser. e.code, since Alt changes e.key on macOS.
+  // A handled key and an open modal dialog keep the keys from the timeline.
   const zoomKeys = useRef(null);
   useEffect(() => {
     zoomKeys.current = (e) => {
+      if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
       if (!e.altKey || e.ctrlKey || e.metaKey || e.target.closest?.('input:not([type="range"]), textarea, select')) return;
       if (e.code === 'Equal' && view.zoom < ZOOM_MAX) changeView({ zoom: stepZoom(view.zoom, 1) });
       else if (e.code === 'Minus' && view.zoom > ZOOM_MIN) changeView({ zoom: stepZoom(view.zoom, -1) });
@@ -271,7 +293,8 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   useEffect(() => {
     engine.setArmedTargets(armedKey ? armedKey.split(',').map(Number) : []);
   }, [engine, armedKey]);
-  const inputTo = armedIds.length > 0 ? armedIds.map((id) => project.tracks[id].name).join(', ') : panelTrack ? `${panelTrack.name} (selected)` : null;
+  const liveTrackName = liveTrackId ? `${project.tracks[liveTrackId].name}${liveTrackId === view.selectedTrackId ? ' (selected)' : ''}` : null;
+  const inputTo = armedIds.length > 0 ? armedIds.map((id) => project.tracks[id].name).join(', ') : liveTrackName;
 
   // Lower dock: the active tab is part of the working state; its height follows the window.
   const rootRef = useRef(null);
@@ -308,13 +331,22 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
   const selectedClip = lastClip && (!view.selectedTrackId || lastClip.trackId === view.selectedTrackId) ? lastClip : null;
   const statusFor = (clip) => sourceStatus(clip.sourceId, getSource, loading);
   const missing = audioClips.filter((c) => statusFor(c) === 'Audio not loaded');
+  // The missing-audio banner stays while focus is inside it, so a restore that loads the last
+  // missing file keeps its button, status and warnings until focus moves elsewhere.
+  const [bannerHeld, setBannerHeld] = useState(false);
+  const showMissing = missing.length > 0 || bannerHeld;
 
-  /** Opens the Editor tab and focuses one of its fields once it renders. */
+  /**
+   * Opens the Editor tab and focuses one of its fields once it renders: for
+   * 'name', an audio clip's name field, else the piano roll's note grid;
+   * otherwise, or without either, the Editor tab.
+   */
   function openProperties(field) {
     changeView({ dock: 'editor', dockCollapsed: false });
     setTimeout(() => {
       const id = view.selectedClipIds[view.selectedClipIds.length - 1];
-      document.getElementById(field === 'name' && id ? `clip-${id}-name` : 'dock-tab-editor')?.focus();
+      const fieldEl = field === 'name' ? ((id && document.getElementById(`clip-${id}-name`)) || document.querySelector(NOTES_CELL)) : null;
+      (fieldEl ?? document.getElementById('dock-tab-editor'))?.focus();
     }, 50);
   }
 
@@ -443,14 +475,14 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
             <MenuButton label="File" icon="file" items={fileItems} help="File: save or open a .wrack file, or export WAV." />
             <SaveArchive project={project} disabled={readOnly} trigger={false} />
             <OpenArchive inline trigger={false} currentId={project.id} />
-            <ExportDialog project={project} loop={loopRange(project, view)} trigger={false} />
+            <ExportDialog project={project} loop={loopRange(project, view)} trigger={false} onPause={(tick) => changeView({ playhead: tick })} />
           </>
         }
       />
 
       <Transport project={project} view={view} onViewChange={changeView} onEdit={edit} readOnly={readOnly} showExampleHint={unsavedCopy} />
 
-      {readOnly || faultNotices.length > 0 || failure || missing.length > 0 ? (
+      {readOnly || faultNotices.length > 0 || failure || showMissing ? (
         <div className="flex shrink-0 flex-col gap-1 border-b border-border-strong bg-warning-bg px-3 py-1.5 text-sm">
           {readOnly ? <p className={errorText}>{PROJECT_NEWER}</p> : null}
           {faultNotices.length > 0 ? (
@@ -468,11 +500,24 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
               <span>{failure.error}</span>
             </p>
           ) : null}
-          {missing.length > 0 ? (
-            <section aria-label="Missing audio" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p>
-                <strong>Audio not loaded</strong> for {missing.map((c) => c.name).join(', ')}.
-              </p>
+          {showMissing ? (
+            <section
+              aria-label="Missing audio"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              onFocus={() => setBannerHeld(true)}
+              onBlur={(e) => {
+                // Focus leaving the window keeps its element active; focus moving on, or to the page, does not.
+                const section = e.currentTarget;
+                setTimeout(() => setBannerHeld(section.contains(document.activeElement)), 0);
+              }}
+            >
+              {missing.length > 0 ? (
+                <p>
+                  <strong>Audio not loaded</strong> for {missing.map((c) => c.name).join(', ')}.
+                </p>
+              ) : (
+                <p>All audio is loaded.</p>
+              )}
               <OpenArchive label="Open .wrack file to restore audio" size="sm" inline command={false} currentId={project.id} />
             </section>
           ) : null}
