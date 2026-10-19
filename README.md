@@ -4,6 +4,10 @@ Wrack is a digital audio workstation that runs in the browser. It combines MIDI 
 
 ## User flows
 
+The main task, as one sentence:
+
+> I open an example or start a project → I add notes and clips and play them back → I come back later, and the project opens where I left it.
+
 The diagrams in this section are maintained in [`flows.md`](flows.md).
 
 Each flowchart describes one Wrack user flow. Rounded nodes are entry and exit points, rectangles are screens and actions, diamonds are decisions, and double-bordered nodes link to another flow. Text in curly quotes is interface copy.
