@@ -19,6 +19,9 @@ import VelocityLane from './VelocityLane';
 import IconButton from '@/components/ui/IconButton';
 import IconToggle from '@/components/ui/IconToggle';
 
+/** Empty space past the last column and row, CSS px, kept clear of overlay scrollbars. */
+const EDGE_GUTTER = 24;
+
 /** Initial viewport height before the scroller is measured. */
 const VIEW_HEIGHT = 480;
 const PIANO_ROLL_HELP =
@@ -317,6 +320,9 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
     }
   }
 
+  const contentW = LABEL_W + Math.max(cols * cellW, Math.ceil(length * (cellW / grid)));
+  const contentH = rows.length * ROW_H;
+
   function cellFromPoint(e) {
     const rect = gridRef.current.getBoundingClientRect();
     const c = Math.floor((e.clientX - rect.left - LABEL_W) / cellW);
@@ -592,8 +598,12 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
             setScroll({ scrollX: el.scrollLeft, scrollY: el.scrollTop, width: el.clientWidth, height: el.clientHeight });
           }}
         >
-          {/* Wide enough for the whole clip, so the repeats of a loop show past its editable columns. */}
-          <div className="relative" style={{ width: LABEL_W + Math.max(cols * cellW, Math.ceil(length * (cellW / grid))), height: rows.length * ROW_H }}>
+          {/*
+            Wide enough for the whole clip, so the repeats of a loop show past its editable columns,
+            plus an empty gutter on the right and below: overlay scrollbars cover the content's edge,
+            and the gutter keeps the last column's note ends and the lowest row clear of them.
+          */}
+          <div className="relative" style={{ width: contentW + EDGE_GUTTER, height: contentH + EDGE_GUTTER }}>
             <PianoRollCanvas
               tickW={cellW / grid}
               view={scroll}
@@ -616,8 +626,8 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
               aria-describedby="pianoroll-help"
               aria-rowcount={rows.length}
               aria-colcount={cols + 1}
-              className="absolute inset-0 select-none"
-              style={{ touchAction: 'none' }}
+              className="absolute top-0 left-0 select-none"
+              style={{ width: contentW, height: contentH, touchAction: 'none' }}
               onKeyDown={onKeyDown}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}

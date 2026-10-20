@@ -74,7 +74,8 @@ export default function Transport({ project, view, onViewChange, onEdit, readOnl
     engine.setLoop(view.loopEnabled, loop.start, loop.end);
   }, [engine, view.loopEnabled, loop.start, loop.end]);
 
-  useEffect(() => () => engine.stop(), [engine]);
+  // Closing the editor ends every sound: playback, held and previewed notes, and effect tails.
+  useEffect(() => () => engine.panic(), [engine]);
 
   function play() {
     engine.requestSound(() => {

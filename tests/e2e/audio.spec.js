@@ -581,3 +581,16 @@ test('a track changes instrument in place; clips and effects stay, and Undo rest
   await expect.poll(async () => (await bassOf()).type).toBe('subtractive');
   expect((await bassOf()).clips).toBe(swapped.clips);
 });
+
+test('leaving the editor ends every sound at once, effect tails included', async ({ page }) => {
+  await openExample(page, 'Ambient');
+  await playPause(page).click();
+  await notice(page).getByRole('button', { name: 'Continue' }).click();
+  const peak = () => page.evaluate(() => globalThis.__wrackEngine.getMasterLevel().peakL);
+  await expect.poll(peak, { timeout: 5000 }).toBeGreaterThan(0.001);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Wrack');
+  // Without the panic, Ambient's reverb and delay ring on for about a second.
+  await expect.poll(peak, { timeout: 500, intervals: [50] }).toBeLessThan(0.0001);
+  expect(await page.evaluate(() => globalThis.__wrackEngine.getState().playing)).toBe(false);
+});

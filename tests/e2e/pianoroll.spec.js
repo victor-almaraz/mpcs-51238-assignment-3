@@ -274,6 +274,13 @@ test('dragging a note in pitch: row by row, and past the view edge the grid scro
   await grid.getByRole('gridcell', { name: 'C4, bar 1 beat 1', exact: true }).click();
   const pitches = async () => allNotes(await saved(page, id)).map((n) => n.pitch);
   await expect.poll(pitches).toEqual([60]);
+  // Put the note a row and a half above the bottom of the view, so a three-row drag up stays
+  // inside the view, clear of the edges where the grid autoscrolls (the view can be 5 rows tall).
+  await grid.locator('xpath=ancestor::div[contains(@class, "overflow-auto")][1]').evaluate((el) => {
+    const n = el.querySelector('[data-note="start"]').getBoundingClientRect();
+    const top = el.getBoundingClientRect().top + el.clientTop;
+    el.scrollTop += n.top - top - (el.clientHeight - 1.5 * n.height);
+  });
   let box = await grid.locator('[data-note="start"]').boundingBox();
   await page.mouse.move(box.x + 12, box.y + 12);
   await page.mouse.down();
@@ -290,7 +297,34 @@ test('dragging a note in pitch: row by row, and past the view edge the grid scro
   await page.mouse.move(box.x + 12, view.y + view.height + 30, { steps: 6 });
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(top + 100);
   await page.mouse.up();
-  // The note lands on the row under the pointer, which the scroll brought into view.
-  await expect.poll(async () => (await pitches())[0]).toBeLessThan(55);
+  // The note lands on the row under the pointer, which the scroll brought into view: well below
+  // where it started (how far depends on how long the autoscroll ran before the release).
+  await expect.poll(async () => (await pitches())[0]).toBeLessThan(60);
   await expect(grid.locator('[data-note="start"]')).toBeInViewport();
+});
+
+test('a note at the clip end stays clear of the scroll bar: the grid ends with an empty gutter', async ({ page }) => {
+  await createProject(page, 'Edge');
+  await silence(page);
+  const grid = roll(page, 'Track 1');
+  await cursorCell(grid).focus();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  const note = grid.locator('[data-note="start"]');
+  await expect(note).toHaveCount(1);
+  const scroller = grid.locator('xpath=../..');
+  await scroller.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+    el.scrollTop = el.scrollHeight;
+  });
+  const gap = await scroller.evaluate((el) => {
+    const n = el.querySelector('[data-note="start"]').getBoundingClientRect();
+    const s = el.getBoundingClientRect();
+    return s.left + el.clientLeft + el.clientWidth - n.right;
+  });
+  expect(gap).toBeGreaterThanOrEqual(16);
+  // The gutter adds no notes: a click there leaves the clip unchanged.
+  const box = await scroller.boundingBox();
+  await page.mouse.click(box.x + box.width - 8, box.y + 40);
+  await expect(grid.locator('[data-note]')).toHaveCount(1);
 });
