@@ -404,11 +404,11 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
         </div>
       ) : (
         // DEV-01: the instrument, then its effects, left to right. The effects keep their width and the
-        // instrument card gives way, its control groups wrapping, so both start in view; past the
-        // instrument's narrowest the panel scrolls sideways.
+        // instrument card gives way, its control groups wrapping, down to its narrowest layout
+        // (min-content), never past it: then the panel scrolls sideways instead of the cards overlapping.
         <div className="flex items-start gap-3">
           {panelDevice && chainTrackId === panelTrackId ? (
-            <div className="w-fit min-w-0 shrink">
+            <div className="w-fit min-w-min shrink">
               <InstrumentPanel
                 project={project}
                 track={panelTrack}

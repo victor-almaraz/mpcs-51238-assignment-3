@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { groupHeading } from '@/design-systems/industrial/classes';
+import { groupHeading, sectionHeading } from '@/design-systems/industrial/classes';
 import IconButton from '@/components/ui/IconButton';
 import Field from '@/components/ui/Field';
 import Select from '@/components/ui/Select';
@@ -95,7 +95,7 @@ export default function ClipProperties({ project, clip, status, editCursor, onEd
 
   return (
     <section aria-labelledby={`${id}-heading`} className="flex w-fit max-w-full flex-col gap-3 rounded-ds border border-border-strong bg-surface p-3">
-      <h3 id={`${id}-heading`} className={groupHeading}>
+      <h3 id={`${id}-heading`} className={sectionHeading}>
         Clip properties: {clip.name}
       </h3>
       {audio ? <p className="text-sm">{status}</p> : null}

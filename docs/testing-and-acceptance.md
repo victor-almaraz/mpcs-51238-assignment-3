@@ -70,6 +70,7 @@ Shared helpers are in `tests/support/`:
 | `effects.spec.js` | Track and master chains, the four-reverb limit, playback through chains, Distortion |
 | `export.spec.js` | Bit-identical 16-bit exports, WAV header sizes, float peak at most −1 dBFS, silent clips, range limit, Cancel |
 | `home.spec.js` | First and return visits, example copies, unreadable saved data |
+| `layout.spec.js` | The Devices panel with a full effect chain: the instrument and effect cards never overlap and every control stays reachable, at 1024 and 1440 px |
 | `levels.spec.js` | Track clip indicators, the safety limiter at the end of the master chain |
 | `loop.spec.js` | Loop band in the ruler, drawing a loop, keyboard loop handles, playback past the loop end |
 | `new-project.spec.js` | New-project defaults, validation, focus on errors, blur validation, the empty instrument track, full storage |
