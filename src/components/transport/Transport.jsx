@@ -14,6 +14,7 @@ import { cx, errorText } from '@/design-systems/industrial/classes';
 import { MASTER_VOLUME } from '@/dsp/engine/engine';
 import { getEngine } from '@/lib/audio/engine-client';
 import { setTempo, setTimeSignature, ticksPerBar } from '@/lib/project/model';
+import { NEW_CLIP_BARS } from '@/lib/project/midi-commands';
 import LoopToggle from './LoopToggle';
 import TimeSignatureSelect from './TimeSignatureSelect';
 import MetronomeToggle from './MetronomeToggle';
@@ -35,11 +36,11 @@ function focusVisible(el) {
   }
 }
 
-/** The loop range in ticks: the saved one, else the first four bars. */
+/** The loop range in ticks: the saved one, else the length of a new clip from bar 1 (NEW_CLIP_BARS). */
 export function loopRange(project, view) {
   if (view.loop) return view.loop;
   const { numerator, denominator } = project.meter[0];
-  return { start: 0, end: 4 * ticksPerBar(numerator, denominator) };
+  return { start: 0, end: NEW_CLIP_BARS * ticksPerBar(numerator, denominator) };
 }
 
 /**

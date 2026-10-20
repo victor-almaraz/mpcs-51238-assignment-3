@@ -14,7 +14,7 @@ const STEP = 240;
 /** A four-bar clip with notes of `length` ticks at `ticks`; returns the document, clip ID and note IDs. */
 function clipWith(ticks, length = BEAT) {
   const doc0 = createProject({ name: 'x', tempo: 120, timeSignature: '4/4', now: '2026-01-01T00:00:00.000Z', makeId });
-  const made = createClip(doc0, doc0.trackOrder[0], {}, makeId);
+  const made = createClip(doc0, doc0.trackOrder[0], { length: 4 * BAR }, makeId);
   let doc = made.doc;
   const ids = [];
   for (const tick of ticks) {

@@ -42,7 +42,7 @@ The working state holds how the editor shows the project. It is never archived, 
 | `snapOn` | Boolean | `true` |
 | `armedTrackIds` | Array; IDs that are not instrument tracks in the document are dropped | `[]` |
 
-- With `loop` `null`, the editor uses the first four bars as the loop range until a range is set.
+- With `loop` `null`, the editor uses the first two bars, the length of a new clip, as the loop range until a range is set.
 - Unreadable stored working state falls back to the defaults and is replaced on the next view change.
 - A `.wrack` file imported as a new project opens with the default working state. "Replace project" keeps the stored working state, normalized against the replacement document.
 

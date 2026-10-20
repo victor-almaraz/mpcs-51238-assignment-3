@@ -15,8 +15,11 @@ export const PITCH_MAX = 127;
 export const VELOCITY_MIN = 1;
 export const VELOCITY_MAX = 127;
 
-/** Length of a clip created by the first note on an empty track, in bars. */
-export const NEW_CLIP_BARS = 4;
+/**
+ * Length of a clip created by the first note on an empty track, in bars: the length of the
+ * examples' clips, and of the loop range until one is set, so a first sketch loops as written.
+ */
+export const NEW_CLIP_BARS = 2;
 
 function requireTick(value, name) {
   if (!Number.isInteger(value)) throw new Error(`${name} must be an integer tick count, got ${value}`);

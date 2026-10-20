@@ -26,13 +26,13 @@ Menus follow the WAI-ARIA APG menu button pattern (`src/components/ui/MenuButton
 ### Dock
 - The dock is an APG tablist with automatic activation; Left, Right, Home and End move between tabs. Only the active panel is mounted.
 - The `Panels` button (`aria-expanded`) collapses the dock to its tab strip, giving the arrangement the space. A click on the open tab also collapses it; a click on any tab while collapsed expands it.
-- A separator above the tab strip resizes the dock by pointer drag, or by Up and Down in 40 px steps, with Home and End to the limits. The dock is at least 200 px tall, leaves the workspace at least 340 px, and opens at 42 % of the workspace height.
+- A separator above the tab strip resizes the dock by pointer drag, or by Up and Down in 40 px steps, with Home and End to the limits. The dock is at least 200 px tall, leaves the workspace at least 340 px, and opens at 55 % of the workspace height.
 - The active tab and the collapsed state are part of the working state (`dock`, `dockCollapsed`).
 
 | Tab | Panel |
 |---|---|
 | Editor | The selected audio clip's properties; otherwise the piano roll of the selected instrument track, or of the first instrument track when no track is selected |
-| Devices | A `Chain` choice between the selected track and `Master`. The track chain shows the instrument, then its effects, left to right; the master chain ends with the safety limiter. Each device card is as wide as its controls, and the panel scrolls sideways. |
+| Devices | A `Chain` choice between the selected track and `Master`. The track chain shows the instrument, then its effects, left to right; the master chain ends with the safety limiter. Effect cards are as wide as their controls; the instrument card narrows, wrapping its control groups, so the effects start in view, and past its narrowest the panel scrolls sideways. |
 | Mixer | Vertical track strips with the master strip at the right (`mixer-and-routing.md`) |
 
 ### Info strip
@@ -109,7 +109,7 @@ Each header shows the track colour, position and name, the kind ("Subtractive sy
 - Selecting a MIDI clip opens it in the piano roll, which names the clip it edits ("Track 1, bar 5 to bar 9"). A duplicate is a separate clip: the copy is selected after Duplicate, and edits to it leave the original as it was.
 
 ### Tracks
-- `Add` offers `MIDI clip on <track> at edit cursor` (the selected instrument track, else the first; also "Add MIDI clip at edit cursor" in the command palette), then creates an instrument track of the chosen type with a four-bar MIDI clip, opens it in the piano roll and focuses its first cell; or an audio track; or imports audio files at the edit cursor onto the selected audio track or a new one.
+- `Add` offers `MIDI clip on <track> at edit cursor` (the selected instrument track, else the first; also "Add MIDI clip at edit cursor" in the command palette), then creates an instrument track of the chosen type with a two-bar MIDI clip, opens it in the piano roll and focuses its first cell; or an audio track; or imports audio files at the edit cursor onto the selected audio track or a new one.
 - Rename: the `Rename` dialog (track or clip name, validated with the error under the field) opens from F2 on a focused row, a double-click on a track header, or the `Edit` menu.
 - Delete track: Delete on a focused track row, the `Edit` menu or the command palette. A track with clips asks first ("Delete Bass?", initial focus on `Cancel`). Undo restores the track, its clips and its devices. Focus moves to the next track, or to the empty timeline's `Add instrument track`.
 - Arm for live input: the arm button or R on a focused instrument track row (`midi.md`, Live input routing).

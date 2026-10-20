@@ -51,13 +51,13 @@ The first-run check (`a3-agent-plan.md`, Phase 15 task 2) has two parts: an agen
 | Deployed site: the editor marked no header link, so the way back to the project list was not apparent | In the editor, the header marks Projects as the current section (`aria-current="true"`, underlined) |
 | Deployed site: a decimal tempo (120.5) got "Enter a tempo between 40 and 240.", and the range showed only after an error | The tempo field describes its range ("A whole number from 40 to 240.") and the error reads "Enter a whole-number tempo from 40 to 240." |
 | Deployed site: the clip toolbar's Join line, "No clip touches this clip.", read as an error | The line gives the next step: "Join: Move a clip against this one to join them." |
+| Deployed site: the first note of a new project made a 4-bar clip under a 4-bar loop, while the examples use 2-bar clips | A new clip and the default loop range are 2 bars (`NEW_CLIP_BARS`) |
+| Deployed site: at 1440 px the instrument card filled the Devices panel and the effects card started out of view | The instrument card narrows and wraps its control groups, so the effects start in view |
+| Keyboard, deployed site: about 34 Tab stops preceded the piano roll | In the editor, `Skip to tracks and clips` and `Skip to the piano roll` follow the site header (about 9 Tab stops from the top of the page) |
+| Deployed site: the piano roll showed 8 pitches at the default dock height | The dock opens at 55 % of the workspace, about 12 pitches in a 900 px window |
 
 ## Open items
 - Recent and Projects have no sort or search.
 - Track meters reach red while the master is at −12 dB; the master limiter, not the track meter, sets the output level.
 - Narrow and mobile viewports are not checked.
-- The first note of a new project creates a 4-bar clip under a 4-bar loop, while the examples use 2-bar clips; a shorter sketch needs the clip and loop ends dragged.
-- The Devices panel scrolls sideways at 1440 px with an instrument and its effects, so the effects card can start out of view.
-- About 34 Tab stops precede the piano roll; the command palette's "Go to: Piano roll" reaches it directly.
-- The piano roll shows 8 pitches at the default dock height.
 - The volume notice opens on the first sound of each browser session until "Don't show again" is checked (`SAFE-01`).

@@ -20,6 +20,7 @@ import SaveArchive from '@/components/archive/SaveArchive';
 import ExportDialog from '@/components/export/ExportDialog';
 import MenuButton from '@/components/ui/MenuButton';
 import { commandEnabled, runCommand } from '@/lib/commands/registry';
+import { SkipButton } from '@/components/nav/SkipLink';
 import { effectFor } from '@/dsp/effects/registry';
 import { setEffectBypass } from '@/lib/project/effect-commands';
 import { sourceStatus } from '@/components/timeline/layout';
@@ -305,10 +306,11 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     let sized = false;
     const observer = new ResizeObserver(() => {
-      // The arrangement keeps room for about three tracks; the dock opens at 42 % of the workspace.
+      // The arrangement keeps room for about three tracks; the dock opens at 55 % of the workspace,
+      // about an octave of piano-roll rows in a 900 px window.
       const max = Math.max(DOCK_MIN, el.clientHeight - 340);
       setMaxDock(max);
-      if (!sized) setDockHeight(Math.min(max, Math.max(DOCK_MIN, Math.round(el.clientHeight * 0.42))));
+      if (!sized) setDockHeight(Math.min(max, Math.max(DOCK_MIN, Math.round(el.clientHeight * 0.55))));
       else setDockHeight((h) => Math.min(h, max));
       sized = true;
     });
@@ -401,10 +403,12 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
           </div>
         </div>
       ) : (
-        // DEV-01: the instrument, then its effects, left to right; each card is as wide as its controls and the panel scrolls sideways.
+        // DEV-01: the instrument, then its effects, left to right. The effects keep their width and the
+        // instrument card gives way, its control groups wrapping, so both start in view; past the
+        // instrument's narrowest the panel scrolls sideways.
         <div className="flex items-start gap-3">
           {panelDevice && chainTrackId === panelTrackId ? (
-            <div className="w-fit max-w-full shrink-0">
+            <div className="w-fit min-w-0 shrink">
               <InstrumentPanel
                 project={project}
                 track={panelTrack}
@@ -463,6 +467,9 @@ export default function Studio({ project: initialProject, unsavedCopy, readOnly 
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+      {/* Past the header, two Tabs reach the arrangement and the piano roll, ahead of the toolbars. */}
+      <SkipButton onClick={() => runCommand('timeline.focus')}>Skip to tracks and clips</SkipButton>
+      {panelDevice ? <SkipButton onClick={() => runCommand('go.pianoroll')}>Skip to the piano roll</SkipButton> : null}
       <EditorHeader
         name={project.name}
         tempo={tempo}

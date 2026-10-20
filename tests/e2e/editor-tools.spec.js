@@ -165,33 +165,33 @@ test('the top of a MIDI clip right edge loops the clip; the lower part and the C
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Loops');
   const id = new URL(page.url()).pathname.split('/').pop();
   await page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Preview notes' }).click();
-  // The first note makes a four-bar clip on row 0 (x 0 to 512 at 128 px per bar).
+  // The first note makes a two-bar clip on row 0 (x 0 to 256 at 128 px per bar).
   const cell = page.getByRole('grid', { name: 'Notes' }).locator('[tabindex="0"]');
   await cell.focus();
   await page.keyboard.press('Enter');
   const midi = async () => Object.values((await saved(page, id))?.clips ?? {}).find((c) => c.kind === 'midi');
-  await expect.poll(async () => (await midi())?.length).toBe(4 * 3840);
+  await expect.poll(async () => (await midi())?.length).toBe(2 * 3840);
 
-  const from = await canvasPoint(page, 510, 0, 8);
+  const from = await canvasPoint(page, 254, 0, 8);
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(from.x + 128, from.y, { steps: 4 });
   await page.mouse.move(from.x + 256, from.y, { steps: 4 });
   await page.mouse.up();
-  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength]).toEqual([6 * 3840, 4 * 3840]);
-  await expect(clipRows(page).first()).toHaveAccessibleName(/loops every 4 bars/);
+  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength]).toEqual([4 * 3840, 2 * 3840]);
+  await expect(clipRows(page).first()).toHaveAccessibleName(/loops every 2 bars/);
 
   await clipRows(page).first().press('ContextMenu');
   await page.getByRole('menu').getByRole('menuitem', { name: 'Stop looping clip' }).click();
   await expect.poll(async () => [(await midi()).loopLength, (await midi()).notes.length]).toEqual([undefined, 2]);
-  // The lower part of the edge lengthens without repeating: the clip is now six bars (x 768).
-  const low = await canvasPoint(page, 766, 0, 40);
+  // The lower part of the edge lengthens without repeating: the clip is four bars (x 512).
+  const low = await canvasPoint(page, 510, 0, 40);
   await page.mouse.move(low.x, low.y);
   await page.mouse.down();
   await page.mouse.move(low.x + 64, low.y, { steps: 4 });
   await page.mouse.move(low.x + 128, low.y, { steps: 4 });
   await page.mouse.up();
-  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength, (await midi()).notes.length]).toEqual([7 * 3840, undefined, 2]);
+  await expect.poll(async () => [(await midi()).length, (await midi()).loopLength, (await midi()).notes.length]).toEqual([5 * 3840, undefined, 2]);
   await clipRows(page).first().press('ContextMenu');
   await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Loop clip' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -249,14 +249,14 @@ test('a duplicated MIDI clip is edited on its own: selecting the copy opens it i
   await expect.poll(async () => (await midi()).length).toBe(1);
   await clipRows(page).first().click();
   await page.keyboard.press('ControlOrMeta+d');
-  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 5 to bar 9', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 3 to bar 5', { exact: true })).toBeVisible();
   // The copy is selected, so the piano roll edits it and the original keeps one note.
   await grid.locator('[tabindex="0"]').focus();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await midi()).map((c) => c.notes.length)).toEqual([1, 2]);
   await clipRows(page).first().click();
-  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 1 to bar 5', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Piano roll: Track 1' }).getByText('Track 1, bar 1 to bar 3', { exact: true })).toBeVisible();
 });
 
 test('adding clips: double-click an empty lane, the Add menu at the edit cursor, or drop audio files', async ({ page }) => {

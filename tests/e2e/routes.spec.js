@@ -82,6 +82,28 @@ test('in the editor the header marks Projects as the current section and leads b
   await expect(projects).toHaveAttribute('aria-current', 'page');
 });
 
+test('editor skip links lead past the toolbars to the tracks and the piano roll', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  const tree = page.getByRole('treegrid', { name: 'Tracks and clips' });
+  await expect(tree).toBeVisible();
+  const toTracks = page.getByRole('button', { name: 'Skip to tracks and clips' });
+  const toRoll = page.getByRole('button', { name: 'Skip to the piano roll' });
+  // Both come right after the site header, ahead of the editor header and the transport.
+  const goToStart = page.getByRole('toolbar', { name: 'Transport' }).getByRole('button', { name: 'Go to start' });
+  const [a, b, c] = await Promise.all([toTracks, toRoll, goToStart].map((l) => l.elementHandle()));
+  const precedes = (x, y) => x.evaluate((el, other) => Boolean(el.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING), y);
+  expect(await precedes(a, b)).toBe(true);
+  expect(await precedes(b, c)).toBe(true);
+  await toTracks.focus();
+  await expect(toTracks).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('[role="treegrid"]')))).toBe(true);
+  await toRoll.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('[role="grid"][aria-label="Notes"]')))).toBe(true);
+});
+
 test('header links navigate between routes', async ({ page }) => {
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Main' });

@@ -307,9 +307,11 @@ The agent's usability feedback is addressed as follows:
 - In the editor, the header marks Projects as the current section, which shows where the project sits and how to get back to the list.
 - The tempo field states its range, and its error says what to enter: "Enter a whole-number tempo from 40 to 240."
 - The clip toolbar's Join line gives the next step ("Move a clip against this one to join them") instead of reading as an error.
+- A new clip and the default loop are 2 bars, as in the examples; the dock opens taller, with about an octave of piano-roll rows; the instrument card in Devices narrows so the effects start in view.
+- In the editor, skip links after the site header lead to the tracks and the piano roll, ahead of the toolbars.
 - From earlier reviews: an empty clip opens with Step input on, so pressing a key adds a note; the editor fits one screen with the transport and arrangement first; the timeline has a bar ruler and track names; the `.wrack` controls explain what a `.wrack` file is; each instrument and effect shows its current preset; Split and Join are disabled until the project has clips.
 
-The full results, the feedback and the items left open, including the 4-bar default clip and the number of Tab stops before the piano roll, are in [`docs/first-run-check.md`](docs/first-run-check.md).
+The full results, the feedback and the items left open are in [`docs/first-run-check.md`](docs/first-run-check.md).
 
 ## Features
 

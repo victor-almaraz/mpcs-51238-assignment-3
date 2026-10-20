@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compileModel } from '../../src/lib/audio/compile-model.js';
 import {
-  addNote, createClip, deleteNote, expandClipNotes, moveNote, noteAt, notesStartingIn, quantize, resizeNote, setLoopLength, setVelocity,
+  NEW_CLIP_BARS, addNote, createClip, deleteNote, expandClipNotes, moveNote, noteAt, notesStartingIn, quantize, resizeNote, setLoopLength, setVelocity,
 } from '../../src/lib/project/midi-commands.js';
 import { setClipLooping } from '../../src/lib/project/clip-commands.js';
 import { createProject } from '../../src/lib/project/model.js';
@@ -12,17 +12,21 @@ const makeId = (prefix) => `${prefix}_${++counter}`;
 const BAR = 3840;
 const BEAT = 960;
 
+/** A project with one four-bar clip on its first track. */
 function setup() {
   const doc = createProject({ name: 'x', tempo: 120, timeSignature: '4/4', now: '2026-01-01T00:00:00.000Z', makeId });
   const trackId = doc.trackOrder[0];
-  const created = createClip(doc, trackId, {}, makeId);
+  const created = createClip(doc, trackId, { length: 4 * BAR }, makeId);
   assert.equal(created.ok, true);
   return { doc: created.doc, trackId, clipId: created.clipId };
 }
 
-test('createClip: a four-bar clip on the track, linked from the track', () => {
-  const { doc, trackId, clipId } = setup();
-  assert.equal(doc.clips[clipId].length, 4 * BAR);
+test('createClip: by default a two-bar clip on the track, linked from the track', () => {
+  const doc0 = createProject({ name: 'x', tempo: 120, timeSignature: '4/4', now: '2026-01-01T00:00:00.000Z', makeId });
+  const trackId = doc0.trackOrder[0];
+  const { doc, clipId } = createClip(doc0, trackId, {}, makeId);
+  assert.equal(doc.clips[clipId].length, NEW_CLIP_BARS * BAR);
+  assert.equal(NEW_CLIP_BARS, 2);
   assert.deepEqual(doc.tracks[trackId].clipIds, [clipId]);
   assert.equal(createClip(doc, doc.masterTrackId).ok, false, 'not on the master bus');
 });

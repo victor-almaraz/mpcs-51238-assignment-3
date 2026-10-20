@@ -20,7 +20,7 @@ const saved = (page, id) => page.evaluate((key) => JSON.parse(localStorage.getIt
 const clipTools = (page) => page.getByRole('toolbar', { name: 'Clip commands' });
 const transport = (page) => page.getByRole('toolbar', { name: 'Transport' });
 
-test('an empty timeline offers its next steps; Add instrument track opens a four-bar clip in the piano roll', async ({ page }) => {
+test('an empty timeline offers its next steps; Add instrument track opens a two-bar clip in the piano roll', async ({ page }) => {
   const id = await createProject(page);
   // An empty track goes without a question.
   await trackRow(page, 'Track 1: Track 1').focus();
@@ -38,7 +38,7 @@ test('an empty timeline offers its next steps; Add instrument track opens a four
   await expect(page.getByRole('tab', { name: 'Editor' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('region', { name: /^Piano roll: / })).toBeVisible();
   await expect(page.getByRole('grid', { name: 'Notes' }).locator(':focus')).toHaveCount(1);
-  await expect.poll(async () => Object.values((await saved(page, id)).clips).map((c) => [c.kind, c.length])).toEqual([['midi', 4 * 4 * 960]]);
+  await expect.poll(async () => Object.values((await saved(page, id)).clips).map((c) => [c.kind, c.length])).toEqual([['midi', 2 * 4 * 960]]);
 
   // A track with clips asks first; Cancel keeps it.
   const row = page.getByRole('treegrid', { name: 'Tracks and clips' }).locator('[role="row"][aria-level="1"]').first();

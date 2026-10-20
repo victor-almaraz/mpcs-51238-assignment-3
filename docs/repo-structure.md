@@ -33,7 +33,7 @@ mpcs-51238-assignment-3/
       input/                # live input controls (computer keyboard, Web MIDI)
       instruments/          # instrument panels, parameter controls and sections, drum machine, granular source
       mixer/                # track and master strips, pan knob, clip indicator
-      nav/                  # site header, skip link
+      nav/                  # site header, skip links
       pianoroll/            # piano-roll canvas, grid mirror, velocity lane, commands
       presets/              # preset picker, list and Save preset dialog
       projects/             # project summary rows

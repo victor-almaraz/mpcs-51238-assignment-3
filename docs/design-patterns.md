@@ -115,7 +115,7 @@ This library defines interaction patterns for Wrack, derived from web DAWs (Band
 
 ### `ONB-02` One action to a playable surface
 - **Problem:** Setup steps delay the first sound.
-- **Solution:** `Add instrument track` with an instrument choice (subtractive, FM, additive, pluck and granular synths, drum machine, sampler) creates the track with default settings and a four-bar MIDI clip, and opens the piano roll in the Editor tab with note preview on.
+- **Solution:** `Add instrument track` with an instrument choice (subtractive, FM, additive, pluck and granular synths, drum machine, sampler) creates the track with default settings and a two-bar MIDI clip, and opens the piano roll in the Editor tab with note preview on.
 - **Prior art:** Song Maker shows a playable grid on load. BandLab starts new users from a loop.
 - **Wrack application:** The clip toolbar's `Add` menu and the empty timeline's `Add instrument track` menu. The first note passes through `SAFE-01`.
 - **Accessibility:** Focus moves to the first piano-roll mirror cell; the result is announced: "Pluck track added, clip open in piano roll".
@@ -363,7 +363,7 @@ This library defines interaction patterns for Wrack, derived from web DAWs (Band
 - **Problem:** Hidden order and unclear bypass produce unexpected sound.
 - **Solution:** Devices run left to right: instrument, then up to eight effects. Each effect header shows bypass, name, move left, move right and remove, with the preset picker below. At eight, `Add effect` is disabled with "Chain full (8 of 8)".
 - **Prior art:** Ableton Live's device view exposes each device as a group with keyboard navigation; Logic Pro lists inserts in order.
-- **Wrack application:** The dock's Devices tab, showing the selected track's chain or the master chain; the master ends with `SAFE-02`. Each device card is as wide as its controls, and the panel scrolls sideways.
+- **Wrack application:** The dock's Devices tab, showing the selected track's chain or the master chain; the master ends with `SAFE-02`. Effect cards are as wide as their controls; the instrument card narrows, wrapping its control groups, so the effects start in view, and past its narrowest the panel scrolls sideways.
 - **Accessibility:** Devices are `group`s named "Delay, 3 of 5"; move buttons are named "Move Delay left" (WCAG 2.5.7); bypass uses `aria-pressed` and shows "Bypassed".
 - **Anti-patterns:** Drag-only reordering; bypass shown only by greying.
 

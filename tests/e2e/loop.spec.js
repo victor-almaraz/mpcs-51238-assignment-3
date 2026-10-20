@@ -105,7 +105,7 @@ test('in 7/8 the 1/4 grid restarts at each bar line, for loop handles and clip l
   await page.keyboard.press('ArrowLeft');
   await expect(end).toHaveAttribute('aria-valuetext', `bar ${bar} beat 7`);
 
-  // Dragging a clip's loop handle near a bar line lands on it: the clip loops to bar 6 (5 bars of 3360 ticks).
+  // Dragging a clip's loop handle near a bar line lands on it: the two-bar clip loops to bar 4 (3 bars of 3360 ticks).
   await addInstrumentTrack(page, 'Pluck synth');
   const id = new URL(page.url()).pathname.split('/').pop();
   const canvas = page.locator('section[aria-labelledby="studio-timeline"] canvas');
@@ -113,7 +113,7 @@ test('in 7/8 the 1/4 grid restarts at each bar line, for loop handles and clip l
   const box = await canvas.boundingBox();
   const px = (tick) => (tick * 32) / PPQ; // zoom 1: 32 px per quarter note
   const y = box.y + 24 + 56 + 3 + 8; // the top half of row 1, where the loop handle is
-  const clipEnd = box.x + px(4 * 3360) - 2;
+  const clipEnd = box.x + px(2 * 3360) - 2;
   await page.mouse.move(clipEnd, y);
   await page.mouse.down();
   await page.mouse.move(clipEnd + px(3200) / 2, y, { steps: 4 });
@@ -124,5 +124,5 @@ test('in 7/8 the 1/4 grid restarts at each bar line, for loop handles and clip l
       const doc = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `wrack:v1:project:${id}`);
       return Object.values(doc.clips).map((c) => [c.loopLength, c.length]);
     })
-    .toEqual([[4 * 3360, 5 * 3360]]);
+    .toEqual([[2 * 3360, 3 * 3360]]);
 });

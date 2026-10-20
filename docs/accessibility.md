@@ -6,6 +6,7 @@
 - The command palette (`Mod+K` or `Mod+Shift+P`; the `Commands` button in the site header) lists every registered command with its shortcut. Typed words filter the list by label and group; Up, Down, Home and End move; Enter runs a command; Escape closes. Unavailable commands are listed as disabled. The match count is announced.
 - `?` (or the `Keyboard shortcuts` button) opens the shortcut overlay: every registered shortcut by group and, in the editor, the keys of the focused editors.
 - Shortcuts are fixed (`design-patterns.md`, Keyboard shortcuts). No operation requires a pointer.
+- Skip links, visible while focused, bypass repeated blocks: `Skip to main content` on every page and, in the editor after the site header, `Skip to tracks and clips` and `Skip to the piano roll` (while an instrument track is selected), ahead of the editor header and the toolbars.
 
 ## Screen-reader model
 A structured DOM parallel to each canvas exposes the same content. The canvas has `aria-hidden="true"`.
@@ -58,6 +59,7 @@ Track rows are named "Track 2: Bass, FM synth, 3 clips"; clip rows "Clip: Vox 1,
 | WCAG 1.4.3 Contrast (Minimum) | Text ≥ 4.5:1 (≥ 3:1 for large text) |
 | WCAG 1.4.11 Non-text Contrast | Controls, clip borders and meter scales ≥ 3:1 |
 | WCAG 2.1.1 Keyboard | Every function operable by keyboard |
+| WCAG 2.4.1 Bypass Blocks | Skip links to the main content and, in the editor, to the arrangement and the piano roll |
 | WCAG 2.2.2 Pause, Stop, Hide | Playhead follow runs only during playback, which Space, Pause and Stop end |
 | WCAG 2.3.1 Three Flashes or Below Threshold | No content flashes more than 3 times per second; the clip indicator latches and the limiter readout holds instead of flashing |
 | WCAG 2.4.7 Focus Visible, 2.4.11 Focus Not Obscured (Minimum) | Focus indicator always visible and not covered; ring ≥ 2 CSS px (project requirement) |

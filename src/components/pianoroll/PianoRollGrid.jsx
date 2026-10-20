@@ -9,7 +9,7 @@ import { cx, focusRing, groupHeading, sectionHeading } from '@/design-systems/in
 import { PPQ } from '@/dsp/core/constants';
 import { MeterMap } from '@/dsp/timing/meter-map';
 import { getEngine } from '@/lib/audio/engine-client';
-import { editableLength, noteAt, notesStartingIn } from '@/lib/project/midi-commands';
+import { NEW_CLIP_BARS, editableLength, noteAt, notesStartingIn } from '@/lib/project/midi-commands';
 import { ticksPerBar } from '@/lib/project/model';
 import PianoRollCanvas from './PianoRollCanvas';
 import { barText, spanText } from '@/components/timeline/layout';
@@ -95,7 +95,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
   const { numerator, denominator } = project.meter[0];
   const barTicks = ticksPerBar(numerator, denominator);
   const beatTicks = (4 * PPQ) / denominator;
-  const newClipLength = 4 * barTicks;
+  const newClipLength = NEW_CLIP_BARS * barTicks;
   const length = clip?.length ?? newClipLength;
   // Only the notes that play are edited: a looping clip's loop, not its repeats.
   const editLength = clip ? editableLength(clip) : length;
