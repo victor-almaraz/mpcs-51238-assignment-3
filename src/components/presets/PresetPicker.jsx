@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import StatusRegion from '@/components/ui/StatusRegion';
-import { cx, fieldLabel, focusRing, panelShadow } from '@/design-systems/industrial/classes';
+import { cx, fieldLabel, focusRing, groupHeading, panelShadow } from '@/design-systems/industrial/classes';
 import { getEngine } from '@/lib/audio/engine-client';
 import { engineTrackIds } from '@/lib/audio/param-changes';
 import { applyPreset, getPresets, presetLabel, subscribePresets } from '@/lib/presets/store';
@@ -243,7 +243,7 @@ export default function PresetPicker({ kind, device, onApply, disabled, label = 
               {groups.length === 0 ? <p className="px-2 py-1 text-muted">No matching presets.</p> : null}
               {groups.map(([group, list]) => (
                 <ul key={group} role="group" aria-labelledby={`${listId}-${group.replace(' ', '-')}`}>
-                  <li role="presentation" id={`${listId}-${group.replace(' ', '-')}`} className="px-2 pt-1 text-[0.6875rem] text-muted uppercase">
+                  <li role="presentation" id={`${listId}-${group.replace(' ', '-')}`} className={cx('px-2 pt-1', groupHeading)}>
                     {group}
                   </li>
                   {list.map((entry) => {

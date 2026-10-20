@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useImperativeHandle, useRef } from 'react';
-import { cx, focusRing, panelShadow } from '@/design-systems/industrial/classes';
+import { cx, focusRing, panelShadow, sectionHeading } from '@/design-systems/industrial/classes';
 
 /** True when pointer or mouse event `e` lands on the backdrop: it targets the dialog itself, outside its box. */
 function onBackdrop(e) {
@@ -115,7 +115,7 @@ export default function Dialog({
       <div className="flex flex-col gap-4">
         <h2
           id={titleId}
-          className={cx('rounded-ds font-sans text-sm leading-tight font-bold uppercase', focusRing)}
+          className={cx('rounded-ds', sectionHeading, focusRing)}
         >
           {title}
         </h2>

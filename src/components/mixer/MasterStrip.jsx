@@ -49,7 +49,7 @@ export default function MasterStrip({ volumeDb, pan, onVolume, onPan, disabled }
   return (
     <section aria-labelledby="master-strip-heading" className="flex h-full w-28 shrink-0 flex-col items-center gap-1.5 rounded-ds border-2 border-fg bg-surface px-1.5 py-2">
       <PanKnob id="master-pan" name="Master" value={pan} onChange={onPan} disabled={disabled} />
-      <p ref={reductionRef} aria-hidden="true" className="min-h-6 text-center text-[0.625rem] leading-6 text-muted tabular-nums" />
+      <p ref={reductionRef} aria-hidden="true" className="min-h-6 text-center text-[0.6875rem] leading-6 text-muted tabular-nums" />
       <Fader
         id="master-volume"
         label="Master volume"

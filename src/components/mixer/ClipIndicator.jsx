@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import StatusRegion from '@/components/ui/StatusRegion';
+import { cx, groupHeading } from '@/design-systems/industrial/classes';
 
 /**
  * Clip indicator (MIX-02): latches once a peak from `read()` ([left, right]
@@ -42,11 +43,11 @@ export default function ClipIndicator({ name, read, focusId }) {
   return (
     <>
       {clipped ? (
-        <Button size="sm" variant="danger" className="px-1 text-[0.625rem]" onClick={clear} aria-label={`Clear clip indicator, ${name} clipped`} data-help="Clip: the level passed 0 dB. Press to clear.">
+        <Button size="sm" variant="danger" className="px-1 text-[0.6875rem] uppercase tracking-[0.06em]" onClick={clear} aria-label={`Clear clip indicator, ${name} clipped`} data-help="Clip: the level passed 0 dB. Press to clear.">
           Clip
         </Button>
       ) : (
-        <span aria-hidden="true" className="inline-flex min-h-6 items-center rounded-ds border border-border px-1 text-[0.625rem] text-muted uppercase">
+        <span aria-hidden="true" className={cx('inline-flex min-h-6 items-center rounded-ds border border-border px-1', groupHeading)}>
           Clip
         </span>
       )}

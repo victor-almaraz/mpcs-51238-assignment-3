@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { cx, focusRing } from '@/design-systems/industrial/classes';
+import { cx, focusRing, groupHeading } from '@/design-systems/industrial/classes';
 import { LABEL_W, barBeatText, rowLabel, rowShortLabel } from './layout';
 
 export const LANE_H = 48;
@@ -89,7 +89,7 @@ export default function VelocityLane({ cellW, notes, isDrums, meter, grid, cols,
         className="absolute top-0 left-0 z-10 flex h-full flex-col justify-center border-r border-border bg-surface-2 px-2 text-xs"
         style={{ width: LABEL_W }}
       >
-        <span className="uppercase tracking-[0.06em]">Velocity</span>
+        <span className={groupHeading}>Velocity</span>
         <span aria-hidden="true" className="truncate tabular-nums text-muted">
           {shown ? `${velocityOf(shown.note)} · ${rowShortLabel(shown.note.pitch, isDrums)} ${barBeatText(shown.note.tick, meter, grid)}` : list.length ? 'Drag across the bars' : 'No notes'}
         </span>

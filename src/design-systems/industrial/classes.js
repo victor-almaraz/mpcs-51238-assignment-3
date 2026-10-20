@@ -91,14 +91,20 @@ export const readout = 'rounded-ds bg-window text-lamp tabular-nums';
 /** A plain value readout (parameters, track levels): ink digits on the panel. */
 export const valueReadout = 'rounded-ds bg-bg text-fg tabular-nums';
 
-/** Page title (h1 of a route page): the wide display face, like a panel's model legend. Only page titles and the wordmark use it. */
+/**
+ * Type: page titles in the display face; panel and dialog titles in bold sentence case; small
+ * capitals (groupHeading) only for structure and status badges; 0.625rem only for meter and
+ * fader scales.
+ */
+
+/** Page title (h1 of a route page): the display face, like a panel's model legend. Only page titles and the wordmark use it. */
 export const pageHeading =
   'font-display text-[1.75rem] leading-none font-bold uppercase tracking-[0.01em] sm:text-5xl';
 
-/** Panel heading (h2): compact bold capitals. */
-export const sectionHeading = 'font-sans text-sm leading-tight font-bold uppercase';
+/** Panel and dialog heading (h2): compact bold, sentence case. */
+export const sectionHeading = 'font-sans text-sm leading-tight font-bold';
 
-/** Group heading (h3, h4, legends inside a panel): small regular capitals, muted. */
+/** Group heading (h3, h4, legends inside a panel, list group labels, status badges): small regular capitals, muted. */
 export const groupHeading = 'font-sans text-[0.6875rem] leading-tight uppercase tracking-[0.06em] text-muted';
 
 /** Error text: danger ink on the danger tint (4.9:1); danger ink on the page ground is 4.4:1. */

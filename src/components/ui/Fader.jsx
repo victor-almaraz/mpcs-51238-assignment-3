@@ -53,7 +53,7 @@ export default function Fader({ id, label, value, min, max, step = 0.1, onChange
 
   return (
     <div className={cx('relative flex min-h-16 flex-1 items-stretch gap-1 py-2', disabled && 'opacity-40', className)}>
-      <div aria-hidden="true" className="relative w-6 shrink-0 text-right font-mono text-[0.5625rem] text-muted">
+      <div aria-hidden="true" className="relative w-6 shrink-0 text-right font-mono text-[0.625rem] text-muted">
         {MARKS.filter((m) => m >= min && m <= max).map((m) => (
           <span key={m} className="absolute right-0 -translate-y-1/2 leading-none" style={{ top: `${(1 - fraction(m)) * 100}%` }}>
             {m > 0 ? `+${m}` : m === min ? '−∞' : String(m).replace('-', '−')}

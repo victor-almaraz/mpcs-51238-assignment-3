@@ -668,7 +668,7 @@ export default function PianoRollGrid({ project, trackId, view, onViewChange, on
                         {rowShortLabel(pitch, isDrums)}
                       </button>
                       {isDrums && inChokeGroup(pitch) ? (
-                        <span className="ml-auto shrink-0 pr-1 text-[0.625rem] whitespace-nowrap text-muted uppercase" title="Hi-hat choke group: one cuts the others off">
+                        <span className={cx('ml-auto shrink-0 pr-1 whitespace-nowrap', groupHeading)} title="Hi-hat choke group: one cuts the others off">
                           Choke<span className="sr-only"> group</span>
                         </span>
                       ) : null}

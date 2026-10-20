@@ -58,7 +58,7 @@ function Waveform({ source, markers, loopOn, crossfade }) {
       }
     }
     ctx.fillStyle = cssVar('--ds-lamp', '#ffb330');
-    ctx.font = '10px ui-monospace, monospace';
+    ctx.font = `10px ${cssVar('--ds-font-sans', 'ui-monospace, monospace')}`;
     for (const { id, label } of MARKERS) {
       if (!loopOn && (id === 'loopStart' || id === 'loopEnd')) continue;
       // The line stays on the canvas at the last frame; its label sits right of it, or left where it would run off.

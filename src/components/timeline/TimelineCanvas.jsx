@@ -177,6 +177,8 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
       clip: cssVar('--ds-bg', '#e5e3de'),
       lamp: cssVar('--ds-lamp', '#ffb330'),
       lampOff: cssVar('--ds-lamp-off', '#a7a49f'),
+      // The interface face, so the ruler and clip names match the rest of the editor.
+      font: cssVar('--ds-font-sans', 'ui-monospace, monospace'),
     };
     const engine = getEngine();
     let frame = 0;
@@ -259,7 +261,7 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
         }
       });
       const g = p.ghost;
-      ctx.font = '11px ui-monospace, monospace'; // clip names, set once for every clip
+      ctx.font = `11px ${colors.font}`; // clip names, set once for every clip
       p.rowIds.forEach((trackId, r) => {
         const track = p.project.tracks[trackId];
         for (const original of trackClips(p.project, track)) {
@@ -393,7 +395,7 @@ export default function TimelineCanvas({ canvasRef, project, rowIds, zoom, meter
         ctx.fillRect(loopStart, 3, 2, RULER_H - 6);
         ctx.fillRect(loopStart + loopW - 2, 3, 2, RULER_H - 6);
       }
-      ctx.font = '11px ui-monospace, monospace';
+      ctx.font = `11px ${colors.font}`;
       eachBar((t, bar) => {
         ctx.fillStyle = colors.bar;
         ctx.fillRect(t * k - sx, 0, 1, RULER_H);
