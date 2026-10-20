@@ -13,7 +13,7 @@ import {
 test('error texts match the scope exactly', () => {
   assert.equal(NAME_EMPTY, 'Enter a project name.');
   assert.equal(NAME_TOO_LONG, 'Use 60 characters or fewer.');
-  assert.equal(TEMPO_INVALID, 'Enter a tempo between 40 and 240.');
+  assert.equal(TEMPO_INVALID, 'Enter a whole-number tempo from 40 to 240.');
 });
 
 test('project name: 1–60 characters after trimming', () => {

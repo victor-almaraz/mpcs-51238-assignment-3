@@ -50,7 +50,8 @@ test('pending working state is written when the page is hidden', async ({ page }
 
 test('playhead, loop and open panel are restored from stored working state', async ({ page }) => {
   const id = await createProject(page, 'Seeded');
-  const view = { playhead: 2 * 3840 + 960, loop: { start: 0, end: 7680 }, loopEnabled: true, zoom: 0.5, openPanel: 'pianoroll' };
+  // The playhead lies inside the loop: one at or past the loop end opens at the loop start (view-state.js).
+  const view = { playhead: 2 * 3840 + 960, loop: { start: 0, end: 4 * 3840 }, loopEnabled: true, zoom: 0.5, openPanel: 'pianoroll' };
   await write(page, `wrack:v1:view:${id}`, JSON.stringify(view));
   await page.reload();
   await expect(page.getByTestId('position')).toHaveText('3.2.1');

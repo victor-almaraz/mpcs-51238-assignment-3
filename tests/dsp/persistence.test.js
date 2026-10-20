@@ -109,6 +109,16 @@ test('normalizeView drops invalid fields and references to deleted items', () =>
   assert.deepEqual([ok.loopEnabled, ok.openPanel, ok.panelClipId], [true, 'pianoroll', null]);
 });
 
+test('with the loop on, a project saved past the loop end opens at the loop start', () => {
+  const doc = createProject({ name: 'x', tempo: 120, timeSignature: '4/4', now: '2026-01-01T00:00:00.000Z' });
+  const open = (playhead, loopEnabled) => viewState.normalizeView({ playhead, loop: { start: 3840, end: 7680 }, loopEnabled }, doc).playhead;
+  assert.equal(open(7680, true), 3840); // at the loop end
+  assert.equal(open(9000, true), 3840); // past it
+  assert.equal(open(5000, true), 5000); // inside the loop
+  assert.equal(open(960, true), 960); // before it: playback runs into the loop
+  assert.equal(open(9000, false), 9000); // loop off
+});
+
 test('unreadable working state falls back to the default view', () => {
   const doc = store.createProject({ name: 'Song', tempo: 120, timeSignature: '4/4' }).value;
   localStorage.setItem(`wrack:v1:view:${doc.id}`, '{broken');

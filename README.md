@@ -2,6 +2,8 @@
 
 Wrack is a digital audio workstation that runs in the browser. It combines MIDI tracks played by built-in instruments, audio tracks with imported clips, track and master effects, WAV export and `.wrack` project files. The site is static: all audio processing and storage happen on the user's device.
 
+Live site: <https://mpcs-51238-assignment-3.vercel.app/>
+
 ## User flows
 
 The main task, as one sentence:
@@ -56,7 +58,7 @@ flowchart TD
 | Field | Rule | Error text |
 |---|---|---|
 | Name | 1–60 characters after trimming | “Enter a project name.” / “Use 60 characters or fewer.” |
-| Tempo | Integer 40–240 | “Enter a tempo between 40 and 240.” |
+| Tempo | Integer 40–240 | “Enter a whole-number tempo from 40 to 240.” |
 | Time signature | 1–32 beats per bar over a note value of 1, 2, 4, 8, 16 or 32 | — |
 
 ### Return visit
@@ -297,16 +299,17 @@ The full study, with sources and confidence labels, is in [`docs/onboarding-rese
 
 ## First-run check
 
-The main flow was run in Chromium, Firefox and WebKit with empty profiles against the production build: no sound before a user action, Home, an example played after the volume notice, a new project, a saved preset, a return visit with the working state restored, WAV export and a `.wrack` round trip. Every step passed, and the site made no third-party requests. The review as a brand-new and as a returning user is addressed as follows:
+An agent tried the deployed site (<https://mpcs-51238-assignment-3.vercel.app/>) as a brand-new user with the goal "Make a short 2-bar beat or melody you'd want to come back to, then come back later and keep working on it", then reopened the browser with the same profile as a returning user and repeated the main path with the keyboard only. The first visit, the new-project form and its errors, the main task, saving, the return visit and the keyboard path all passed. The main flow also runs as a scripted checklist in Chromium, Firefox and WebKit with empty profiles: no sound before a user action, an example played after the volume notice, a new project, a saved preset, a return visit with the working state restored, WAV export and a `.wrack` round trip, with no third-party requests.
 
-- An empty clip opens with Step input on, so pressing a key adds a note, as the empty-editor hint says.
-- The editor fits one screen: the transport and the arrangement come first, and the dock below holds the Editor, Devices and Mixer tabs.
-- The timeline has a bar-number ruler and track names.
-- The `.wrack` controls explain what a `.wrack` file is and that edits save in the browser automatically.
-- Each instrument and effect shows its current preset.
-- Split and Join are disabled until the project has clips.
+The agent's usability feedback is addressed as follows:
 
-The full results, the feedback and the items left open are in [`docs/first-run-check.md`](docs/first-run-check.md).
+- With the loop on, a project saved past the loop end opens at the loop start, so the first Play after coming back sounds the loop instead of empty bars.
+- In the editor, the header marks Projects as the current section, which shows where the project sits and how to get back to the list.
+- The tempo field states its range, and its error says what to enter: "Enter a whole-number tempo from 40 to 240."
+- The clip toolbar's Join line gives the next step ("Move a clip against this one to join them") instead of reading as an error.
+- From earlier reviews: an empty clip opens with Step input on, so pressing a key adds a note; the editor fits one screen with the transport and arrangement first; the timeline has a bar ruler and track names; the `.wrack` controls explain what a `.wrack` file is; each instrument and effect shows its current preset; Split and Join are disabled until the project has clips.
+
+The full results, the feedback and the items left open, including the 4-bar default clip and the number of Tab stops before the piano roll, are in [`docs/first-run-check.md`](docs/first-run-check.md).
 
 ## Features
 

@@ -70,6 +70,9 @@ export function normalizeView(raw, doc) {
     view.loop = raw.loop && { start: raw.loop.start, end: raw.loop.end };
   }
   view.loopEnabled = raw.loopEnabled === true && view.loop !== null;
+  // Playback that starts past the loop end plays on without wrapping, so with the loop on a
+  // project opens there at the loop start instead: the first Play sounds the loop.
+  if (view.loopEnabled && view.playhead >= view.loop.end) view.playhead = view.loop.start;
   if (typeof raw.zoom === 'number' && raw.zoom >= ZOOM_MIN && raw.zoom <= ZOOM_MAX) view.zoom = raw.zoom;
   if (Number.isFinite(raw.scrollX) && raw.scrollX >= 0) view.scrollX = raw.scrollX;
   if (Number.isFinite(raw.scrollY) && raw.scrollY >= 0) view.scrollY = raw.scrollY;

@@ -20,8 +20,9 @@ function normalize(path) {
 
 /**
  * Shared header on every route. The link for the current route carries
- * aria-current="page" and the pressed (ink) look; the others are quiet links.
- * Other routes (the editor) match none. The Commands and Keyboard shortcuts
+ * aria-current="page" and the pressed look; the link whose section holds the
+ * route (Projects, for the editor at /projects/<id>) carries aria-current="true"
+ * and an underline; the others are quiet links. The Commands and Keyboard shortcuts
  * buttons pass themselves as the opener, so focus returns to them on close.
  */
 export default function SiteHeader() {
@@ -37,15 +38,17 @@ export default function SiteHeader() {
           <ul className="flex gap-2">
             {LINKS.map(({ href, label }) => {
               const current = pathname === href;
+              const section = !current && href !== '/' && pathname.startsWith(`${href}/`);
               return (
                 <li key={href}>
                   <Link
                     href={href}
-                    aria-current={current ? 'page' : undefined}
+                    aria-current={current ? 'page' : section ? 'true' : undefined}
                     className={cx(
                       controlBase,
                       controlSizes.md,
                       current ? selectedLook : 'border-transparent bg-transparent text-fg hover:bg-hover',
+                      section && 'underline decoration-2 underline-offset-4',
                     )}
                   >
                     {label}

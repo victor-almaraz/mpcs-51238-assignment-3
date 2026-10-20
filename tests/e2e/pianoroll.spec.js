@@ -104,9 +104,11 @@ test('step input: computer-keyboard notes insert at the cursor and advance it', 
   await expect(page.getByRole('toolbar', { name: 'Piano roll tools' }).getByRole('button', { name: 'Step input' })).toHaveAttribute('aria-pressed', 'true');
   const grid = roll(page, 'Track 1');
   await cursorCell(grid).focus();
-  await page.keyboard.press('KeyA');
-  await page.keyboard.press('KeyD');
-  await page.keyboard.press('KeyG');
+  // Notes within 40 ms of each other form a chord on one tick (CHORD_MS), so the presses are spaced apart.
+  for (const key of ['KeyA', 'KeyD', 'KeyG']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(80);
+  }
   await expect.poll(async () => allNotes(await saved(page, id)).map((n) => [n.tick, n.pitch])).toEqual([[0, 60], [240, 64], [480, 67]]);
 });
 

@@ -71,6 +71,17 @@ test('any /projects/<id> serves the editor shell', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Project not found');
 });
 
+test('in the editor the header marks Projects as the current section and leads back to the list', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Open Beat' }).click();
+  await expect(page.getByRole('treegrid', { name: 'Tracks and clips' })).toBeVisible();
+  const projects = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Projects' });
+  await expect(projects).toHaveAttribute('aria-current', 'true');
+  await projects.click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(projects).toHaveAttribute('aria-current', 'page');
+});
+
 test('header links navigate between routes', async ({ page }) => {
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Main' });

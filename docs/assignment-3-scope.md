@@ -97,7 +97,7 @@ One column; every field has a visible label.
 | Field | Control | Rule | Error text |
 |---|---|---|---|
 | Name | Text input | 1–60 characters after trimming; prefilled "Untitled project N", where N is the lowest unused number | "Enter a project name." / "Use 60 characters or fewer." |
-| Tempo | Number input | Integer 40–240; default 120 | "Enter a tempo between 40 and 240." |
+| Tempo | Number input | Integer 40–240; default 120 | "Enter a whole-number tempo from 40 to 240." |
 | Time signature | Two selects: beats per bar (1–32) over a note value (1, 2, 4, 8, 16 or 32) | Default 4/4 | — |
 
 - Validation runs on submit and on blur of an edited field.

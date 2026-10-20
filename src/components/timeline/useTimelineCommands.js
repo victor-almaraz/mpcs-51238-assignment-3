@@ -200,7 +200,7 @@ export default function useTimelineCommands({ project, rowIds, meter, gridStep, 
       const next = others.find((c) => c.start === end);
       const prev = others.find((c) => clipEndTick(doc, c) === a.start);
       const pairs = [next && { a, b: next }, prev && { a: prev, b: a }].filter(Boolean).map((p) => ({ ...p, reason: joinBlocker(doc, p.a.id, p.b.id) }));
-      return pairs.find((p) => !p.reason) ?? pairs[0] ?? { a, b: null, reason: 'No clip touches this clip.' };
+      return pairs.find((p) => !p.reason) ?? pairs[0] ?? { a, b: null, reason: 'Move a clip against this one to join them.' };
     }
     return { a: null, b: null, reason: 'Select one or two clips to join.' };
   }

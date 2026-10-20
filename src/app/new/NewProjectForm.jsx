@@ -102,6 +102,7 @@ export default function NewProjectForm() {
         id="project-tempo"
         name="tempo"
         label="Tempo (BPM)"
+        description="A whole number from 40 to 240."
         inputMode="numeric"
         autoComplete="off"
         value={tempo}

@@ -50,7 +50,7 @@ flowchart TD
 | Field | Rule | Error text |
 |---|---|---|
 | Name | 1–60 characters after trimming | “Enter a project name.” / “Use 60 characters or fewer.” |
-| Tempo | Integer 40–240 | “Enter a tempo between 40 and 240.” |
+| Tempo | Integer 40–240 | “Enter a whole-number tempo from 40 to 240.” |
 | Time signature | 2/4, 3/4, 4/4 or 6/8 | — |
 
 ## Return visit

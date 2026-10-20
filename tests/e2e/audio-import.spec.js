@@ -184,9 +184,9 @@ test('join explains why it is unavailable', async ({ page }) => {
   await createProject(page, 'No join');
   await importFixtures(page, [FIXTURES[0]]);
   await clipRows(page).first().click();
-  await expect(page.getByText('Join: No clip touches this clip.')).toBeVisible();
+  await expect(page.getByText('Join: Move a clip against this one to join them.')).toBeVisible();
   await page.keyboard.press('Control+j');
-  await expect(page.getByRole('status').filter({ hasText: 'Cannot join: No clip touches this clip.' })).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: 'Cannot join: Move a clip against this one to join them.' })).toHaveCount(1);
 });
 
 test('clip properties edit gain, fades and the envelope', async ({ page }) => {

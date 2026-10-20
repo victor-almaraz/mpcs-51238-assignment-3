@@ -4,7 +4,7 @@ import { menuItem } from '../support/editor.js';
 
 const NAME_EMPTY = 'Enter a project name.';
 const NAME_TOO_LONG = 'Use 60 characters or fewer.';
-const TEMPO_INVALID = 'Enter a tempo between 40 and 240.';
+const TEMPO_INVALID = 'Enter a whole-number tempo from 40 to 240.';
 
 async function form(page) {
   await page.goto('/new');

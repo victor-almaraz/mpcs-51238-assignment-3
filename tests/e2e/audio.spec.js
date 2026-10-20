@@ -232,7 +232,7 @@ test('an invalid tempo shows the form error and changes nothing', async ({ page 
   const tempo = page.getByRole('textbox', { name: 'Tempo (BPM)' });
   await tempo.fill('500');
   await tempo.press('Enter');
-  await expect(page.getByText('Enter a tempo between 40 and 240.')).toBeVisible();
+  await expect(page.getByText('Enter a whole-number tempo from 40 to 240.')).toBeVisible();
   await expect(tempo).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByText('100 BPM · 4/4')).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.includes(':project:')))).toEqual([]);

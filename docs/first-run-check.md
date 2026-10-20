@@ -1,13 +1,27 @@
 # First-run check
 
-The first-run check (`a3-agent-plan.md`, Phase 15 task 2) runs the main flow in Chromium, Firefox and WebKit with empty profiles, then reviews the result as a brand-new user and as a returning user.
+The first-run check (`a3-agent-plan.md`, Phase 15 task 2) has two parts: an agent tries the deployed site as a brand-new user and then as a returning user, and the main flow runs as a scripted checklist in Chromium, Firefox and WebKit with empty profiles.
 
-## Environment
+## Deployed site, as a new user
+- Target: <https://mpcs-51238-assignment-3.vercel.app/>, checked on 19 October 2026.
+- Method: an agent drove headless Chromium (1440 × 900) through a persistent, initially empty profile, read the screen from screenshots and the accessibility tree, and closed and reopened the browser with the same profile to come back.
+- Goal given to the agent: "Make a short 2-bar beat or melody you'd want to come back to, then come back later and keep working on it."
+
+| Step | Result |
+|---|---|
+| First visit with nothing saved: Home shows the description, Create, Load and three examples; Projects shows "No saved projects on this device" with "Create a project" | Pass |
+| New project form: an empty name and tempo 999 show "Enter a project name." and the tempo error under their fields; the fields are marked invalid and linked to the messages, focus moves to the first invalid field, and the typed values stay; fixing a field clears only its error | Pass |
+| Main task: a click on the empty grid adds a note in a new clip; a melody, a drum-machine track with kick, snare and hats, a 2-bar loop and Play, with the status "Playing", moving meters and a looping playhead | Pass |
+| Saving: "Saving…" then "Saved on this device"; an edit followed at once by closing the tab is kept | Pass |
+| Return visit: Home shows Recent with "Continue My first beat"; the tracks, notes, loop, selected track and the volume-notice choice are restored | Pass |
+| Keyboard only: the skip link, the header, the shortcut overlay (`?`) and the command palette (Mod+K) work and return focus; the piano roll adds, moves and lengthens notes from the keyboard; Space plays and pauses; the Add and File menus open with Enter and move with the arrow keys | Pass |
+| Deployment: every route returns 200, `/projects/<id>` is rewritten to the editor, `/worklets/` is served with `Cache-Control: no-cache`, and an unknown path returns 404 | Pass |
+
+## Browser checklist
 - Target: the production build (`pnpm build`, static export in `out/`) served by `scripts/serve-out.mjs` with the `vercel.json` rewrites and headers. A deployment is checked with `BASE_URL=<url> pnpm test:e2e`.
 - Browsers: Playwright Chromium, Firefox and WebKit, each in fresh contexts.
 - Audio is verified through the engine's post-limiter level (`getMasterLevel()`), not by listening.
 
-## Checklist
 | Step | Chromium | Firefox | WebKit |
 |---|---|---|---|
 | No `AudioContext` before a sound-producing action (`/`, `/new`, `/projects`, `/settings`, an opened example, the Recent Home) | Pass | Pass | Pass |
@@ -33,8 +47,17 @@ The first-run check (`a3-agent-plan.md`, Phase 15 task 2) runs the main flow in 
 | Compressor value readouts overflowed their card; toggle lamps overlapped capital letters | Each device card is as wide as its controls; lamps sit only on the transport toggles (Loop, Metronome) |
 | Split and Join were enabled with no clips; the Join help line was always visible | Both are disabled without clips; the Join reason shows in the clip toolbar once a clip is selected |
 | Returning user: the instrument showed "Choose a preset…" after a preset was applied | Each picker shows "Preset: <name>", "<name> (edited)" after changes, or "none" |
+| Returning user, deployed site: after pausing past the loop end and reopening, the first Play started there and played empty bars, outside the loop | With the loop on, a project whose saved position is at or past the loop end opens at the loop start |
+| Deployed site: the editor marked no header link, so the way back to the project list was not apparent | In the editor, the header marks Projects as the current section (`aria-current="true"`, underlined) |
+| Deployed site: a decimal tempo (120.5) got "Enter a tempo between 40 and 240.", and the range showed only after an error | The tempo field describes its range ("A whole number from 40 to 240.") and the error reads "Enter a whole-number tempo from 40 to 240." |
+| Deployed site: the clip toolbar's Join line, "No clip touches this clip.", read as an error | The line gives the next step: "Join: Move a clip against this one to join them." |
 
 ## Open items
 - Recent and Projects have no sort or search.
 - Track meters reach red while the master is at −12 dB; the master limiter, not the track meter, sets the output level.
 - Narrow and mobile viewports are not checked.
+- The first note of a new project creates a 4-bar clip under a 4-bar loop, while the examples use 2-bar clips; a shorter sketch needs the clip and loop ends dragged.
+- The Devices panel scrolls sideways at 1440 px with an instrument and its effects, so the effects card can start out of view.
+- About 34 Tab stops precede the piano roll; the command palette's "Go to: Piano roll" reaches it directly.
+- The piano roll shows 8 pitches at the default dock height.
+- The volume notice opens on the first sound of each browser session until "Don't show again" is checked (`SAFE-01`).

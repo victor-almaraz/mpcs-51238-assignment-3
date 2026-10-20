@@ -6,7 +6,7 @@ import { NAME_MAX, TEMPO_MAX, TEMPO_MIN, parseTimeSignature } from './model.js';
 
 export const NAME_EMPTY = 'Enter a project name.';
 export const NAME_TOO_LONG = `Use ${NAME_MAX} characters or fewer.`;
-export const TEMPO_INVALID = `Enter a tempo between ${TEMPO_MIN} and ${TEMPO_MAX}.`;
+export const TEMPO_INVALID = `Enter a whole-number tempo from ${TEMPO_MIN} to ${TEMPO_MAX}.`;
 
 /** Validates a raw project name: 1–60 characters (code points) after trimming. */
 export function validateProjectName(raw) {
