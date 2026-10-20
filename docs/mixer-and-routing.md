@@ -50,7 +50,7 @@ The `Mixer` tab of the dock shows one vertical strip per track, side by side and
 | Strip | Top to bottom |
 |---|---|
 | Track (`TrackStrip.jsx`) | Pan knob ("C", "L20", "R20"); fader with its dB scale beside the stereo peak meter; dB readout ("−6.0 dB"); `M`, `S` and the clip indicator in one row; track name. The strip's top edge carries the track colour. |
-| Master (`MasterStrip.jsx`) | Master pan knob; limiter readout; master volume fader beside the post-limiter meter; dB readout in an amber window; "Master" |
+| Master (`MasterStrip.jsx`) | Master pan knob; limiter readout; master volume fader beside the post-limiter meter; dB readout in a readout window; "Master" |
 
 ### Faders
 - A fader (`src/components/ui/Fader.jsx`) is a vertical track and cap over a visually hidden native range input with `aria-orientation="vertical"`, named "Bass volume" or "Master volume", with value text such as "−6.0 dB".

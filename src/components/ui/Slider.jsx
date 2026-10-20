@@ -10,7 +10,7 @@ import { clamp } from '@/dsp/core/math';
  * `display` replaces the readout text when it should be shorter ("L20" for "Left 20").
  * PageUp/PageDown jump by `pageStep` (default 10 % of the range). With `onReset`,
  * Delete and double-click reset the value. `windowed` draws the readout as an
- * amber window (transport only). `className` goes on the row, other
+ * readout window (transport only). `className` goes on the row, other
  * props on the <input>.
  */
 export default function Slider({

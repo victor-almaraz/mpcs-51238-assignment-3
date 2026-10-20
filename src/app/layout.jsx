@@ -4,7 +4,8 @@ import VolumeNotice from '@/components/VolumeNotice';
 import CommandPalette from '@/components/commands/CommandPalette';
 import ShortcutOverlay from '@/components/commands/ShortcutOverlay';
 import TooltipLayer from '@/components/ui/TooltipLayer';
-import { fontClassName } from '@/design-systems/industrial/fonts';
+// Lighting Desk's font class includes Industrial's (its interface face), so either system switches on with data-ds alone.
+import { fontClassName } from '@/design-systems/lighting-desk/fonts';
 import './globals.css';
 
 export const metadata = {
@@ -22,7 +23,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" data-ds="industrial" className={fontClassName}>
+    <html lang="en" data-ds="lighting-desk" className={fontClassName}>
       <body className="min-h-dvh bg-bg font-sans text-fg antialiased">
         <SkipLink />
         <SiteHeader />

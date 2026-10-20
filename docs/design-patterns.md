@@ -514,7 +514,7 @@ This library defines interaction patterns for Wrack, derived from web DAWs (Band
   - Each icon control has an `aria-label`, with the names used before the icons ("Split at edit cursor", "Bypass Delay").
   - A shortcut is the control's description through `aria-describedby`; a control without one has no description, so the name is not read twice.
   - Tooltips are dismissible with Escape, hoverable and persistent (WCAG 1.4.13).
-  - Targets are at least 24 × 24 px. Toggles expose `aria-pressed` and show an ink-filled cap while pressed (transport toggles add a lit lamp), never colour alone.
+  - Targets are at least 24 × 24 px. Toggles expose `aria-pressed` and show a filled cap while pressed (transport toggles add a lit lamp), never colour alone.
 - **Anti-patterns:** Hover-only tooltips; tooltips that repeat the label.
 
 ### `HELP-02` Command palette and shortcut overlay
@@ -526,20 +526,21 @@ This library defines interaction patterns for Wrack, derived from web DAWs (Band
 - **Anti-patterns:** Shortcuts documented only outside the app.
 
 ## Visual hierarchy
-The industrial design system draws attention by mechanical importance. Flair marks only the controls that act on sound in real time or keep it safe.
+The Lighting Desk design system (`src/design-systems/lighting-desk/`) draws attention by mechanical importance. It sets the control surface of the Industrial system (assignment 2, mood board 1) in the dark house of Contrast/Form (mood board 2): a theatre lighting console. Flair marks only the controls that act on sound in real time or keep it safe.
 
 | Tier | Elements | Treatment |
 |---|---|---|
-| 1. Transport and safety | Play/Pause, Stop, Loop, Metronome, Position, master volume and meter, Panic | Indicator lamps on toggles, amber readout windows, emergency-stop Panic, signal orange on Play while it is the next step |
-| 2. Working toggles | Mute, Solo, Arm, Snap, Bypass, step input, dock tabs | Ink-filled pressed state; tabs underline the open panel |
+| 1. Transport and safety | Play/Pause, Stop, Loop, Metronome, Position, master volume and meter, Panic | Indicator lamps on toggles, readout windows with yellow digits, emergency-stop Panic, the pink accent on Play while it is the next step |
+| 2. Working toggles | Mute, Solo, Arm, Snap, Bypass, step input, dock tabs | Lit pressed state (a limelight cap with a dark legend); tabs underline the open panel |
 | 3. Everything else | Menus, selects, zoom, navigation, parameter values, cards | Quiet: regular sentence-case legends, plain value readouts, thin card borders |
 
-- The display face is reserved for page titles (Home, Projects, New project, Settings) and the Wrack wordmark. The editor's project name is the text face in bold, so it never competes with a page title.
+- The display face, Ostrich Sans Black, is reserved for page titles (Home, Projects, New project, Settings) and the Wrack wordmark; a stepped rule in the three inks sits under each page title. Every control, value and text uses League Mono Narrow. The editor's project name is the text face in bold, so it never competes with a page title.
 - Bold is reserved for page, editor, dialog and panel titles (h1, h2), project names in lists, missing-audio warnings and the example hint "Press Play to hear this example".
 - Small regular capitals mark structure: group headings and legends inside a panel. Controls use sentence case.
-- Signal orange marks the primary action, the selected velocity and the export progress bar only; knob arcs and other values use ink.
-- Hues are reserved: blue is focus, red is danger and Panic, orange is the primary action, amber is the transport lamps and readouts. Track and clip colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) use none of them, and piano-roll notes take their track's colour.
-- Neutrals are a warm grey in three elevations: the ground; the bars (transport, dock tab strip, ruler corner, piano-roll row headers) one step lighter; and the lanes, cards, headers and clip toolbar lightest.
+- The pink accent marks the primary action, the selected velocity and the export progress bar only; knob arcs and other values use the limelight text colour.
+- Colours are reserved: blue is focus, vermilion is danger and Panic, pink is the primary action, yellow is the transport lamps and readouts. Levels run cyan, yellow, vermilion from low to high. Track and clip colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) are mid-tones, darker than every reserved colour, and piano-roll notes take their track's colour with a limelight outline.
+- Neutrals are an achromatic dark grey in three elevations: the ground; the lanes, cards, headers and clip toolbar one step lighter; and the bars (transport, dock tab strip, ruler corner, piano-roll row headers) lightest. Instrument windows (meters, readouts, fader slots) are darker than the ground and edged with a hairline.
+- Geometry is square: no rounded corners, slider thumbs are tall narrow posts on a hairline track, and floating panels (menus, dialogs, tooltips) cast a stepped hard shadow. A faint sunburst sits behind the page.
 
 ## Conflicts and decisions
 | Topic | Product behavior | Wrack decision | Pattern |

@@ -386,13 +386,13 @@ Wrack targets WCAG 2.2 AA. Canvas views have DOM mirrors: the timeline is a `tre
 
 | Pair | Contrast |
 |---|---|
-| Text on background | 13.6:1 |
-| Muted text on background | 5.7:1 |
-| Control boundaries on background | 3.6:1 |
-| Focus ring on background | 4.8:1 |
-| Primary button text on signal orange | 5.6:1 |
-| Panic text on red | 5.8:1 |
-| Track colours on the lanes | 3.5:1 or more |
+| Text on background | 15.5:1 |
+| Muted text on background | 8.6:1 |
+| Control boundaries on background | 6.1:1 |
+| Focus ring on background | 8.2:1 |
+| Primary button text on the pink accent | 6.8:1 |
+| Panic text on vermilion | 6.4:1 |
+| Note outlines on the lanes | 14.6:1 |
 
 The checks, keyboard paths and known gaps are recorded in [`docs/a11y-check.md`](docs/a11y-check.md).
 

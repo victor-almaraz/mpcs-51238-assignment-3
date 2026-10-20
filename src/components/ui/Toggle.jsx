@@ -13,7 +13,7 @@ import {
 /**
  * Toggle button; `lamp` adds an indicator lamp that lights while pressed (transport only). The visible
  * text is the constant name; state is exposed only through aria-pressed.
- * `highlighted` draws an unpressed toggle as the primary action (signal orange).
+ * `highlighted` draws an unpressed toggle as the primary action (the accent colour).
  */
 export default function Toggle({ pressed = false, highlighted = false, lamp: lit = false, size = 'md', className, ref, ...rest }) {
   let look = unselectedLook;

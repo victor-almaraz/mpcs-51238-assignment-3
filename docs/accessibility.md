@@ -64,7 +64,7 @@ Track rows are named "Track 2: Bass, FM synth, 3 clips"; clip rows "Clip: Vox 1,
 | WCAG 2.5.8 Target Size (Minimum) | Targets ≥ 24 × 24 CSS px or spaced per the criterion |
 | Reduced motion | `prefers-reduced-motion` disables smooth scrolling and animated transitions |
 
-Contrast values for the design tokens are in `src/design-systems/industrial/tokens.css` and `a11y-check.md`.
+Contrast values for the design tokens are in `src/design-systems/lighting-desk/tokens.css` and `a11y-check.md`.
 
 ## Sources
 - WCAG 2.2 — https://www.w3.org/TR/WCAG22/

@@ -1,15 +1,16 @@
 /*
- * Shared class strings for the Industrial components (not a component).
+ * Shared class strings for the UI components (not a component), used by both
+ * design systems: Industrial and Lighting Desk (the app's), whose tokens set the colours.
  * Class names are written out in full so Tailwind's scanner finds them.
  * Selected (pressed/checked) styling is chosen in JS from the component's
  * props rather than with aria-pressed:/peer-checked: variants, so it can never
  * lose a specificity tie against hover:/active: (both would be 0-2-0).
  *
- * The look: flat panel faces and light key caps. Flair follows mechanical
- * importance (design-patterns.md, Visual hierarchy): indicator lamps, amber
- * readout windows and the emergency-stop Panic belong to the transport, the
- * master level and safety; everything else is quiet: sentence-case regular
- * legends, ink-filled pressed states and plain values. Bold is kept for page
+ * The look: flat panel faces and key caps. Flair follows mechanical
+ * importance (design-patterns.md, Visual hierarchy): indicator lamps, readout
+ * windows and the emergency-stop Panic belong to the transport, the master
+ * level and safety; everything else is quiet: sentence-case regular legends,
+ * filled pressed caps and plain values. Bold is kept for page
  * and panel titles; small capitals mark structure (group headings), not controls.
  */
 
@@ -48,26 +49,27 @@ export const iconSizes = {
 /** Indicator lamp along the top edge of a transport toggle (tier 1 only); pair with lampOn or lampOff. */
 export const lamp =
   "relative before:pointer-events-none before:absolute before:top-[3px] before:left-1/2 before:h-[3px] before:w-3 before:-translate-x-1/2 before:rounded-full before:content-['']";
-export const lampOn = 'before:bg-lamp';
+/* A lit lamp sits in a window-coloured bezel, so it holds on a light pressed cap as on a dark one. */
+export const lampOn = 'before:bg-lamp before:shadow-[0_0_0_1px_var(--ds-window)]';
 export const lampOff = 'before:bg-lamp-off';
 
-/** Hard, short shadow under floating panels (menus, toasts, dialogs). */
-export const panelShadow = 'shadow-[3px_3px_0_rgb(30_32_26/0.22)]';
+/** Hard shadow under floating panels (menus, toasts, dialogs); each system sets --ds-panel-shadow. */
+export const panelShadow = 'shadow-(--ds-panel-shadow)';
 
 export const buttonVariants = {
-  /* Signal orange with an ink outline, so its edge holds on the light ground. */
+  /* The accent with an fg outline, so its edge holds where the accent alone is low on the ground. */
   primary:
     'border-fg bg-accent text-accent-fg enabled:hover:bg-accent-hover enabled:active:bg-accent enabled:active:shadow-[inset_0_2px_4px_rgb(0_0_0/0.35)]',
   secondary:
     'border-border-strong bg-surface text-fg enabled:hover:border-fg enabled:hover:bg-hover enabled:active:bg-active',
   ghost: 'border-transparent bg-transparent text-fg enabled:hover:bg-hover enabled:active:bg-active',
   /*
-   * Panic: an emergency stop. Red cap, white legend, and a yellow collar drawn inside the
+   * Panic: an emergency stop. Red cap, light legend (danger-fg), and a yellow collar drawn inside the
    * button's own 44 px box (a 2 px border) with a 1 px dark edge, so Panic matches the height
    * of its neighbours; the focus ring sits just outside the edge.
    */
   danger:
-    'border-2 border-collar bg-danger text-white shadow-[0_0_0_1px_var(--ds-fg)] focus-visible:outline-offset-[3px]! enabled:hover:bg-[color-mix(in_oklch,var(--ds-danger)_88%,white)] enabled:active:shadow-[inset_0_2px_5px_rgb(0_0_0/0.4),0_0_0_1px_var(--ds-fg)]',
+    'border-2 border-collar bg-danger text-danger-fg shadow-[0_0_0_1px_var(--ds-fg)] focus-visible:outline-offset-[3px]! enabled:hover:bg-[color-mix(in_oklch,var(--ds-danger)_88%,white)] enabled:active:shadow-[inset_0_2px_5px_rgb(0_0_0/0.4),0_0_0_1px_var(--ds-fg)]',
 };
 
 /** Pressed / checked look: ink cap, light legend. Transport toggles add a lit lamp. */
@@ -83,7 +85,7 @@ export const fieldLabel = 'w-24 shrink-0 text-xs text-muted';
 /** Field labels above their control (one-column forms). */
 export const fieldLabelStacked = 'text-xs text-muted';
 
-/** A readout window: dark glass, amber digits. Tier 1 only: transport position, master level. */
+/** A readout window: dark glass, lamp-coloured digits. Tier 1 only: transport position, master level. */
 export const readout = 'rounded-ds bg-window text-lamp tabular-nums';
 
 /** A plain value readout (parameters, track levels): ink digits on the panel. */

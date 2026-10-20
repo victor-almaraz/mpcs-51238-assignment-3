@@ -46,6 +46,8 @@ mpcs-51238-assignment-3/
     design-systems/
       industrial/           # tokens.css (palette and contrast table), classes.js, fonts.js
         fonts/              # League Mono WOFF2 files and OFL licence
+      lighting-desk/        # tokens.css (palette and contrast table) and fonts.js; uses Industrial's classes.js
+        fonts/              # Ostrich Sans Black and OFL licence
     dsp/                    # audio-thread code, independent of the host environment
       protocol.js           # main-thread ↔ worklet messages and shared limits
       clips/                # audio clip player, fades, gain envelopes

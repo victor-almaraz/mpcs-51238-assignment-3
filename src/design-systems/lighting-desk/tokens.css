@@ -1,0 +1,207 @@
+/*
+ * Lighting Desk design system. A page opts in with data-ds="lighting-desk" on its root
+ * element, together with the class from fonts.js (fontClassName), which defines
+ * --font-ld-display and Industrial's --font-ind-sans.
+ *
+ * The console in the booth of a Deco theatre: Industrial's control surface, set in
+ * Contrast/Form's dark house and lit like its stage. The desk keeps Industrial's usability:
+ *   Hierarchy: flair follows mechanical importance (design-patterns.md, Visual hierarchy).
+ *     Lamps, readout windows and the emergency-stop Panic belong to the transport, the master
+ *     level and safety; everything else is quiet, with sentence-case regular legends.
+ *   Reserved hues: blue is focus only, vermilion is danger and Panic, magenta is the
+ *     primary action only, yellow is the transport lamps and readouts.
+ *   Levels keep the meter convention, cool → warm → hot: cyan → yellow → vermilion.
+ *   Elevations: ground, then bars a step lighter, then lanes and cards; instrument windows
+ *     are darker than the ground and edged with a hairline, so they read as cut into the panel.
+ *   Type: League Mono Narrow for every control and value (compact, tabular figures).
+ * The stage supplies the flair:
+ *   Contrast: a dark house and one warm light. Text and pressed controls are limelight;
+ *     a pressed control is a lit cap with dark legend, its lamp set in a dark bezel.
+ *   Colour: Contrast/Form's CMYK inks (cyan, magenta, yellow, with the dark ground as key)
+ *     as the desk's gels, on neutral greys under one warm light (H 80).
+ *   Form: square edges; sliders are a hairline track with a tall, narrow post.
+ *   Geometry: a faint sunburst behind the page (Metropolis), a stepped rule in the three
+ *     inks under each page title, and stepped hard shadows under floating panels.
+ *   Type: Ostrich Sans Black capitals for page titles and the wordmark only.
+ *
+ * Colour is set in OKLCH (L, C, H) and written as hex. Neutrals are achromatic (C 0):
+ * window L 0.115, ground L 0.175, lanes L 0.205, bars L 0.235. Cyan and yellow share
+ * L 0.80-0.84 and C 0.095-0.115; magenta sits darker (L 0.70), so the primary action holds
+ * its weight against the light; vermilion is the magenta-over-yellow overprint (H 36). Track and clip
+ * colours (COLORS in clip-commands.js) are >= 2.9:1 on the clip fill (the ground).
+ *
+ * Contrast (WCAG 2.2):
+ *   fg: 15.5:1 on bg, 14.6:1 on surface, 10.8:1 on active
+ *   muted: 8.6:1 on bg, 6.8:1 on hover, 6.0:1 on active (text >= 4.5:1)
+ *   border-strong: 6.1:1 on bg, 5.8:1 on surface, 4.9:1 on hover (controls >= 3:1)
+ *   focus: 8.2:1 on bg, 7.2:1 on surface-2
+ *   accent-fg on accent 6.8:1, on accent-hover 8.8:1; accent 6.4:1 on surface
+ *   danger-fg on danger (Panic) 6.4:1; the collar (yellow) sits inside Panic's 44 px box,
+ *   and its boundary is a 1 px limelight edge (15.5:1 on bg)
+ *   lamp (yellow) 12.5:1 in the window; on a pressed (limelight) cap its bezel is the
+ *   window colour (16.6:1 on the cap)
+ *   levels in the window: cyan 11.3:1, yellow 12.5:1, vermilion 6.9:1
+ *   danger 5.6:1, warning 10.1:1, success 9.1:1 on their backgrounds
+ *   border is a divider only (1.8:1), never a control boundary.
+ * Status meaning never depends on colour: components add a word and glyph.
+ *
+ * Inside @layer base so Tailwind utilities on the same element still win.
+ */
+@layer base {
+  [data-ds="lighting-desk"] {
+    color-scheme: dark;
+
+    /* The house: neutral grey, C 0. Ground (bg), lanes and cards (surface), bars (surface-2). */
+    --ds-bg: #101010;
+    --ds-surface: #171717;
+    --ds-surface-2: #1e1e1e;
+    --ds-hover: #262626;
+    --ds-active: #303030;
+
+    /* The light: L 0.93, C 0.020, H 80. */
+    --ds-fg: #efe7d9;
+    --ds-muted: #aeaeae;
+
+    --ds-border: #424242;
+    --ds-border-strong: #929292;
+
+    /* Gels: Fuller's tinted blue (H 210), Toulouse-Lautrec's pink (H 2), Moser's yellow (H 92). */
+    --ds-ink-c: #6dcfdf;
+    --ds-ink-m: #d97f99;
+    --ds-ink-y: #e4c973;
+
+    /* Magenta: the primary action only. */
+    --ds-accent: var(--ds-ink-m);
+    --ds-accent-fg: #101010;
+    --ds-accent-hover: #ea99af;
+
+    /* Pressed controls are lit: limelight cap, dark legend; transport toggles add a lamp. */
+    --ds-selected: var(--ds-fg);
+    --ds-selected-fg: #101010;
+
+    /* Booth blue: focus only (L 0.74, C 0.12, H 262); no ink or track colour shares its hue. */
+    --ds-focus: #81aaf7;
+
+    /* Instrument windows and indicator lamps. */
+    --ds-window: #050505;
+    --ds-lamp: var(--ds-ink-y);
+    --ds-lamp-off: #555555;
+
+    /* Levels: cyan → yellow → vermilion. */
+    --ds-level-low: var(--ds-ink-c);
+    --ds-level-mid: var(--ds-ink-y);
+    --ds-level-high: #eb7353;
+
+    /* Emergency stop: vermilion cap, yellow collar, dark legend. */
+    --ds-danger: #eb7353;
+    --ds-danger-fg: #101010;
+    --ds-danger-bg: #311710;
+    --ds-collar: var(--ds-ink-y);
+    --ds-warning: var(--ds-ink-y);
+    --ds-warning-bg: #251f0a;
+    --ds-success: var(--ds-ink-c);
+    --ds-success-bg: #0c2327;
+
+    /* Stepped shadow under floating panels: two hard offsets in the house greys (black would vanish). */
+    --ds-panel-shadow: 4px 4px 0 var(--ds-border), 8px 8px 0 var(--ds-hover);
+
+    /*
+     * Rays: a faint Art Deco sunburst fanning from above the page (Metropolis).
+     * Steps: a stepped rule in the three inks, under page titles.
+     */
+    --ds-rays: repeating-conic-gradient(from 180deg at 50% -40%, rgb(239 231 217 / 0.022) 0deg 1.5deg, transparent 1.5deg 7deg);
+    --ds-steps: linear-gradient(var(--ds-ink-c), var(--ds-ink-c)) left 0 / 100% 3px no-repeat, linear-gradient(var(--ds-ink-m), var(--ds-ink-m)) left 6px / 66% 3px no-repeat, linear-gradient(var(--ds-ink-y), var(--ds-ink-y)) left 12px / 33% 3px no-repeat;
+
+    --ds-radius: 0px;
+
+    --ds-font-display: var(--font-ld-display), "Arial Narrow", sans-serif;
+    --ds-font-sans: var(--font-ind-sans), ui-monospace, monospace;
+    --ds-font-mono: var(--font-ind-sans), ui-monospace, monospace;
+
+    background: var(--ds-bg);
+    color: var(--ds-fg);
+    font-family: var(--ds-font-sans);
+  }
+
+  /* The sunburst sits behind the page; the body paints only its colour. */
+  [data-ds="lighting-desk"] body {
+    background-image: var(--ds-rays);
+    background-attachment: fixed;
+  }
+
+  /* Instrument windows (meters, readouts, fader slots) are edged, so they read as cut into the panel. */
+  [data-ds="lighting-desk"] .bg-window {
+    box-shadow: inset 0 0 0 1px var(--ds-border);
+  }
+
+  /* A stepped rule in the three inks under each page title (the display face marks page titles). */
+  [data-ds="lighting-desk"] h1.font-display::after {
+    content: "";
+    display: block;
+    width: min(16rem, 100%);
+    height: 15px;
+    margin-top: 0.75rem;
+    background: var(--ds-steps);
+  }
+
+  /*
+   * Range inputs: a hairline track and a tall, narrow limelight post with a dark index
+   * line, which lights yellow under the pointer. The input element keeps the 24 px hit
+   * height from Slider.
+   */
+  [data-ds="lighting-desk"] input[type="range"] {
+    appearance: none;
+    background: transparent;
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--ds-border-strong);
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: var(--ds-border-strong);
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]::-moz-range-progress {
+    height: 2px;
+    background: var(--ds-fg);
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 22px;
+    margin-top: -10px;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(to right, var(--ds-fg) 0 4px, var(--ds-window) 4px 6px, var(--ds-fg) 6px);
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 22px;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(to right, var(--ds-fg) 0 4px, var(--ds-window) 4px 6px, var(--ds-fg) 6px);
+  }
+
+  @media (hover: hover) {
+    [data-ds="lighting-desk"] input[type="range"]:enabled:hover::-webkit-slider-thumb {
+      background: linear-gradient(to right, var(--ds-fg) 0 4px, var(--ds-lamp) 4px 6px, var(--ds-fg) 6px);
+    }
+
+    [data-ds="lighting-desk"] input[type="range"]:enabled:hover::-moz-range-thumb {
+      background: linear-gradient(to right, var(--ds-fg) 0 4px, var(--ds-lamp) 4px 6px, var(--ds-fg) 6px);
+    }
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]:enabled:active::-webkit-slider-thumb {
+    background: linear-gradient(to right, var(--ds-muted) 0 4px, var(--ds-lamp) 4px 6px, var(--ds-muted) 6px);
+  }
+
+  [data-ds="lighting-desk"] input[type="range"]:enabled:active::-moz-range-thumb {
+    background: linear-gradient(to right, var(--ds-muted) 0 4px, var(--ds-lamp) 4px 6px, var(--ds-muted) 6px);
+  }
+}

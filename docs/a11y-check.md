@@ -12,22 +12,23 @@ This checklist records how Wrack is checked against WCAG 2.2 AA and the Labeling
 | axe-core per route, panels and features | `routes.spec.js`, `home.spec.js`, `new-project.spec.js`, `persistence.spec.js`, `project-list.spec.js`, `audio.spec.js`, `audio-import.spec.js`, `editor-tools.spec.js`, `effects.spec.js`, `loop.spec.js`, `pianoroll.spec.js`, `velocity.spec.js`, `workspace.spec.js`, `smoke.spec.js` | No violations |
 
 ## Contrast
-Values come from the industrial tokens (`src/design-systems/industrial/tokens.css`).
+Values come from the Lighting Desk tokens (`src/design-systems/lighting-desk/tokens.css`).
 
 | Pair | Ratio | Requirement |
 |---|---|---|
-| Text on background, surface, active surface | 13.6:1, 16.5:1, 11.4:1 | 4.5:1 |
-| Muted text on background, hover and active surfaces | 5.7:1, 5.4:1, 4.8:1 | 4.5:1 |
-| Control boundaries (`border-strong`) on background, surface and hover surface | 3.6:1, 4.4:1, 3.5:1 | 3:1 |
-| Focus ring on background and surface | 4.8:1, 5.9:1 | 3:1 |
-| Primary button text (ink) on signal orange, on its hover colour | 5.6:1, 7.2:1 | 4.5:1 |
-| Panic text on red | 5.8:1 | 4.5:1 |
-| Panic boundary (1 px ink edge) on background | 12.4:1 | 3:1 |
-| Danger, warning and success text on their backgrounds | 5.2:1, 5.3:1, 5.7:1 | 4.5:1 |
-| Lit lamp on a pressed control, in a readout window | 9.7:1, 10.3:1 | 3:1 |
-| Track colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) on the lanes | 3.5:1 or more | 3:1 |
+| Text on background, surface, active surface | 15.5:1, 14.6:1, 10.8:1 | 4.5:1 |
+| Muted text on background, hover and active surfaces | 8.6:1, 6.8:1, 6.0:1 | 4.5:1 |
+| Control boundaries (`border-strong`) on background, surface and hover surface | 6.1:1, 5.8:1, 4.9:1 | 3:1 |
+| Focus ring on background and surface | 8.2:1, 7.7:1 | 3:1 |
+| Primary button text on the pink accent, on its hover colour | 6.8:1, 8.8:1 | 4.5:1 |
+| Panic text on vermilion | 6.4:1 | 4.5:1 |
+| Panic boundary (1 px limelight edge) on background | 15.5:1 | 3:1 |
+| Danger, warning and success text on their backgrounds | 5.6:1, 10.1:1, 9.1:1 | 4.5:1 |
+| Lit lamp's bezel on a pressed (limelight) control; lamp in a readout window | 16.6:1, 12.5:1 | 3:1 |
+| Note and clip outlines on the lanes | 14.6:1 (notes), 5.8:1 (clips) | 3:1 |
+| Track colours (teal, violet, olive, rose, copper, slate, plum, steel, mustard, pine, taupe) on the lanes | 2.7:1 to 4.3:1 | None: each colour sits beside its track name |
 
-The `border` token (1.6:1) is a divider only and never a control boundary. The primary button is outlined in ink, since signal orange alone has low contrast on the background.
+The `border` token (1.8:1) is a divider only and never a control boundary. The primary button carries a limelight outline.
 
 Status never depends on color alone: pressed toggles expose `aria-pressed` and a lamp, bypassed effects show "Bypassed", and clip storage states are words.
 

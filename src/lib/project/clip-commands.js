@@ -30,8 +30,9 @@ const requireInt = (v, name) => {
 };
 
 /**
- * Track and clip colours (tokens.css): hues no semantic colour uses (focus blue,
- * danger red, primary orange, lamp amber), each at least 3.5:1 on the lanes.
+ * Track and clip colours: mid-tone hues, darker than every semantic colour of
+ * Lighting Desk (focus blue, the inks, vermilion), each at least 2.7:1 on its
+ * lanes and 3.5:1 on Industrial's. Notes and clips are outlined as well.
  */
 export const COLORS = [
   { value: '#20857b', label: 'Teal' },

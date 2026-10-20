@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../design-systems/industrial/tokens.css";
+@import "../design-systems/lighting-desk/tokens.css";
 
 /*
  * Semantic theme names. Components use only these utilities
@@ -23,6 +24,7 @@
   --color-selected-fg: var(--ds-selected-fg);
   --color-focus: var(--ds-focus);
   --color-danger: var(--ds-danger);
+  --color-danger-fg: var(--ds-danger-fg);
   --color-danger-bg: var(--ds-danger-bg);
   --color-success: var(--ds-success);
   --color-success-bg: var(--ds-success-bg);

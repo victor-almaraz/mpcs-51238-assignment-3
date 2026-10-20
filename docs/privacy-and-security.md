@@ -9,7 +9,7 @@ This document describes the full design. In the Assignment 3 build, the Network 
 ## Network policy
 - After the initial load, the app requests only same-origin assets.
 - No analytics, telemetry, crash or error reporting, fingerprinting or advertising.
-- No CDNs, external scripts or remote fonts. Fonts are self-hosted: the font files live in `src/design-systems/industrial/fonts/` and load through `next/font/local`, which serves them from the app's own origin.
+- No CDNs, external scripts or remote fonts. Fonts are self-hosted: the font files live in `src/design-systems/industrial/fonts/` and `src/design-systems/lighting-desk/fonts/` and load through `next/font/local`, which serves them from the app's own origin.
 - Plugins load from same-origin installed copies only (ADR-8).
 - Host analytics products are disabled. The host's request logs are outside app control and contain only static-asset requests.
 

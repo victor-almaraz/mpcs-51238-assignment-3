@@ -90,7 +90,7 @@ The timeline is `src/components/timeline/Timeline.jsx`: a canvas picture (`Timel
 - Moving a loop edge by keyboard scrolls it into view.
 
 ### Ruler and loop range
-- The ruler shows bar numbers and the loop range as a band: lit amber while the loop is on, grey while it is off. While on, the band's edges continue down the lanes over a light wash.
+- The ruler shows bar numbers and the loop range as a band: lit in the lamp colour while the loop is on, grey while it is off. While on, the band's edges continue down the lanes over a light wash.
 - Dragging empty ruler space draws a loop and turns the loop on. Dragging the band's edges resizes it; dragging its body moves it while the loop is on. Edges snap to the grid while snap is on; Alt bypasses snap. A click without a drag moves the edit cursor.
 - The loop is at least one grid step long.
 - The keyboard handles "Loop start" and "Loop end" are `slider`s on the band's edges, valued in bars ("bar 3 beat 2"): arrows move by the grid step, Page Up and Page Down by a bar, Home and End to the limits. Changes are announced ("Loop bar 3 to bar 5, on").
@@ -141,7 +141,7 @@ The piano roll (`src/components/pianoroll/PianoRollGrid.jsx`) is a canvas (`Pian
 Arrows move the cursor; Left from the first column reaches the row header. Enter adds or removes a note; Delete removes it; Alt+arrows move it; Shift+Left and Shift+Right change its length; Shift+Up and Shift+Down change its velocity by 8; `Q` quantizes the clip. With step input on, each computer-keyboard or MIDI note is added at the cursor, which advances one grid step.
 
 ### Velocity lane
-The lane under the grid shows a stem per note (1–127), the selected one in signal orange. A drag paints velocities across the stems it passes: each stem takes the height the pointer crossed it at, so a rising stroke paints a ramp, and release commits the stroke as one edit. The value under the pointer or in focus shows beside the lane. For the keyboard the lane is one `slider` on the selected note ("Velocity C4 bar 1.1"): arrows step by 1, Page Up and Page Down by 10, Home and End go to 1 and 127, and Shift+Left and Shift+Right move to the previous or next note.
+The lane under the grid shows a stem per note (1–127), the selected one in the accent colour. A drag paints velocities across the stems it passes: each stem takes the height the pointer crossed it at, so a rising stroke paints a ramp, and release commits the stroke as one edit. The value under the pointer or in focus shows beside the lane. For the keyboard the lane is one `slider` on the selected note ("Velocity C4 bar 1.1"): arrows step by 1, Page Up and Page Down by 10, Home and End go to 1 and 127, and Shift+Left and Shift+Right move to the previous or next note.
 
 ## Devices
 - The instrument panel (`InstrumentPanel.jsx`) is generated from the instrument's parameter definitions: sections with a heading (Oscillator, Filter, Envelope, Tuning and others), a segmented radio group per enum and a knob per number. Its `Instrument` select changes the track's instrument type in place: clips, effects, mixer settings, name and colour stay, the instrument starts at its defaults, and Undo restores the previous one.

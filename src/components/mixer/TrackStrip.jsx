@@ -39,7 +39,7 @@ export default function TrackStrip({ track, readMeter, onChange, disabled }) {
       >
         <Meter read={readMeter} scale={[TRACK_GAIN.min, TRACK_GAIN.max]} className="h-full w-3" />
       </Fader>
-      {/* A plain value: the amber window is the master's (design-patterns.md, Visual hierarchy). */}
+      {/* A plain value: the readout window is the master's (design-patterns.md, Visual hierarchy). */}
       <output aria-hidden="true" className={cx('min-h-6 w-full text-center font-mono text-xs leading-6', valueReadout)}>
         {faderText(track.gainDb)}
       </output>

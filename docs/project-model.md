@@ -104,7 +104,7 @@ A clip loops while `loopLength` is set. It repeats every `loopLength` ticks from
 - Split, a start trim and Join write a loop out first. An audio split then splits the pass at the split point; at a pass boundary, the passes on either side are the two parts. A start trim trims the first pass. Join joins the last pass of the first clip with the first pass of the second.
 
 ## Track colours
-New tracks take the next colour of this list in order (track count modulo 11). A clip has the colour of its track unless `color` is set; the clip properties offer the same list. The values are in `src/lib/project/clip-commands.js` (`COLORS`); each reaches at least 3.5:1 contrast on the track lanes, and none uses a hue reserved for a semantic colour (focus blue, danger red, primary orange, lamp amber).
+New tracks take the next colour of this list in order (track count modulo 11). A clip has the colour of its track unless `color` is set; the clip properties offer the same list. The values are in `src/lib/project/clip-commands.js` (`COLORS`); each reaches at least 2.7:1 contrast on the track lanes and is darker than every reserved colour of the design system (focus blue, the inks, vermilion); notes and clips also carry an outline.
 
 | Colour | Value |
 |---|---|
