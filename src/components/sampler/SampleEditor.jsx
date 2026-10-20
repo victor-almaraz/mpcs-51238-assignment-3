@@ -190,7 +190,8 @@ export default function SampleEditor({ deviceId, source, params, loopMode, onMar
         min={0}
         max={Math.max(1, Math.floor(maxCrossfadeMs))}
         step={1}
-        value={Math.round(crossfadeMs)}
+        // Whole milliseconds, never past the slider's end (a 9.6 ms limit ends the slider at 9).
+        value={Math.min(Math.round(crossfadeMs), Math.max(1, Math.floor(maxCrossfadeMs)))}
         valueText={`${Math.round(crossfadeMs)} ms, ${crossfadeFrames} frames`}
         display={`${Math.round(crossfadeMs)} ms`}
         disabled={disabled || loopMode !== LOOP_FORWARD}

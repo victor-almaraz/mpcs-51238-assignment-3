@@ -371,9 +371,9 @@ This library defines interaction patterns for Wrack, derived from web DAWs (Band
 - **Problem:** Unfamiliar control shapes slow recognition; unitless values mislead.
 - **Solution:**
   - Device parameters are rotary knobs in a grid, grouped in sections with a heading (Oscillator, Filter, Envelope, Tuning).
-  - Each knob shows its caption above and its value with units below ("−6.0 dB", "1.2 kHz", "250 ms").
+  - Each knob shows its caption above and its value with units below ("−6.0 dB", "1.2 kHz", "250 ms", "4.5 Hz", "0.15×"). The readout keeps the precision the value needs, and its unit follows the rounded value, so it never reads "1000 ms" or "10.0 ms".
   - Vertical drag changes the value; Shift gives fine steps. Double-click or Delete resets to the default.
-  - Clicking the value, or Enter on the knob, opens a text field that accepts a number with or without a unit ("2 kHz", "40 ms").
+  - Clicking the value, or Enter on the knob, opens a text field that accepts a number with or without a unit ("2 kHz", "2k", "40 ms", "1.5 s"). A unit that does not belong to the parameter is rejected. A bare number takes the unit of the readout ("5" on "2.0 kHz" is 5 kHz), or the finest unit when that is out of range ("500" is 500 Hz). Leaving the field unchanged keeps the exact value.
   - Enums are segmented buttons.
 - **Prior art:** Knobs in Ableton Live's devices, Logic Pro's plug-in windows, FL Studio and Reason; DAWproject records parameter units.
 - **Wrack application:** Instrument panels, the sampler, the drum machine, effect devices and mixer pan.

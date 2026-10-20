@@ -46,6 +46,7 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
   const drag = useRef(null);
   const inputRef = useRef(null);
   const fieldOpen = useRef(false); // the first of Enter, Escape and blur closes the field
+  const openedWith = useRef(''); // the field's text when it opened
   const typeable = Boolean(parse || onTyped);
   const snap = (v) => clamp(Number((step > 0 ? min + Math.round((v - min) / step) * step : v).toFixed(10)), min, max);
   const set = (v) => {
@@ -79,15 +80,19 @@ export default function Knob({ id, label, caption, captionLines = 2, value, min,
 
   function openField() {
     fieldOpen.current = true;
-    setEditing(display ?? valueText);
+    openedWith.current = display ?? valueText;
+    setEditing(openedWith.current);
   }
 
-  /** Closes the value field, applying `text` unless it is null; `refocus` returns focus to the knob. */
+  /**
+   * Closes the value field, applying `text` unless it is null or unchanged (the readout is
+   * rounded, so committing it would move the value); `refocus` returns focus to the knob.
+   */
   function closeField(text, refocus) {
     if (!fieldOpen.current) return;
     fieldOpen.current = false;
     setEditing(null);
-    if (text !== null) {
+    if (text !== null && text.trim() !== openedWith.current.trim()) {
       if (onTyped) onTyped(text);
       else {
         const parsed = parse(text);

@@ -154,7 +154,7 @@ A knob (`src/components/ui/Knob.jsx`) shows its caption above, an SVG arc, and i
 |---|---|
 | Vertical drag | Changes the value over 160 px for the full range; Shift divides the speed by 10 |
 | Double-click, Delete | Resets to the default |
-| Click on the value, Enter | Opens a text field that accepts a number with or without a unit ("2 kHz", "40 ms"); Enter or leaving the field commits, Escape cancels |
+| Click on the value, Enter | Opens a text field that accepts a number with or without a unit ("2 kHz", "40 ms"; `DEV-02`); Enter or leaving the field commits a changed entry, Escape cancels |
 | Arrows | Step |
 | Page Up, Page Down | 10 % of the range |
 | Home, End | The ends of the range |

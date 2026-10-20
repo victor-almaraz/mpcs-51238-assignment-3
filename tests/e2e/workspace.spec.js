@@ -178,6 +178,24 @@ test('icon controls name themselves and show a tooltip with their shortcut', asy
   await expect(page.getByText('Loop (L)', { exact: true })).toHaveCount(0);
 });
 
+test('opening a knob value field and leaving it unchanged keeps the exact value', async ({ page }) => {
+  await page.goto('/new');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('tab', { name: 'Devices' }).click();
+  const panel = page.getByRole('region', { name: /^Subtractive synth: / });
+  const cutoff = panel.getByRole('slider', { name: 'Cutoff' });
+  await cutoff.focus();
+  // A few steps up: a value between two readout roundings ("2.1 kHz" is not exactly 2100 Hz).
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
+  const before = await cutoff.inputValue();
+  const shown = await cutoff.getAttribute('aria-valuetext');
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('textbox', { name: 'Cutoff value' })).toHaveValue(shown);
+  await page.keyboard.press('Tab'); // leaves the field without typing
+  await expect(panel.getByRole('textbox', { name: 'Cutoff value' })).toHaveCount(0);
+  expect(await cutoff.inputValue()).toBe(before);
+});
+
 test('knobs take a typed value with units, follow a vertical drag and reset on double-click', async ({ page }) => {
   await page.goto('/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('Knobs');

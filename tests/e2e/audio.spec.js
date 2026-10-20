@@ -315,7 +315,7 @@ test('the Additive panel groups eight harmonic sliders and shows the envelope an
   await expect(harmonics.getByRole('slider', { name: 'Harmonic 2' })).toHaveAttribute('aria-valuetext', '50 %');
   await expect(panel.getByRole('slider', { name: 'Release' })).toHaveAttribute('aria-valuetext', '500 ms');
   await expect(panel.getByRole('slider', { name: 'Decay', exact: true })).toHaveAttribute('aria-valuetext', '500 ms');
-  await expect(panel.getByRole('slider', { name: 'Vibrato rate' })).toHaveAttribute('aria-valuetext', '5 Hz');
+  await expect(panel.getByRole('slider', { name: 'Vibrato rate' })).toHaveAttribute('aria-valuetext', '5.0 Hz');
   const vibrato = panel.getByRole('slider', { name: 'Vibrato', exact: true });
   await expect(vibrato).toHaveAttribute('aria-valuetext', '0 cents');
   await vibrato.focus();
